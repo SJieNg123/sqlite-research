@@ -52,10 +52,17 @@ gcc -O2 -Wall -o prefetch prefetch.c
 ```
 
 **Output (stdout):** CSV row with strategy, interior page count, syscall count,
-and prefetch time in microseconds.
+prefetch time, resident pages before prefetch, resident pages after prefetch,
+and residency percentage.
 
-**Output (stderr):** Human-readable summary of interior pages found, strategy
-used, syscall count, and prefetch time.
+**Output (stderr):** Human-readable summary including interior pages found,
+strategy, syscall count, prefetch time, and interior page residency before and
+after a 500 ms wait for async I/O to complete.
+
+> The tool waits 500 ms after calling `madvise()` before checking residency.
+> This gives the OS time to finish the async I/O so the residency check
+> reflects the actual result of the prefetch, not just the state immediately
+> after the syscall returns.
 
 ---
 
@@ -181,15 +188,34 @@ Workload: `workloadc.txt` — 100% random point reads, 100000 operations
 
 ### Week 9: Strategy Comparison
 
-| Strategy | Syscalls | Prefetch time | First query latency | Improvement |
-|----------|----------|--------------|-------------------|-------------|
-| Baseline (no prefetch) | 0 | 0 μs | 73.06 μs | — |
-| `range` | 87 | 2242 μs | 53.59 μs | -26.6% |
-| `perpage` | 92 | 2934 μs | 47.97 μs | -34.3% |
+| Strategy | Syscalls | Prefetch time | Interior resident after 500ms | First query latency | Improvement |
+|----------|----------|--------------|-------------------------------|-------------------|-------------|
+| Baseline (no prefetch) | 0 | 0 μs | 0/92 (0%) | 73.06 μs | — |
+| `range` | 87 | 3068 μs | 91/92 (98.9%) | 53.59 μs | -26.6% |
+| `perpage` | 92 | 2569 μs | 91/92 (98.9%) | 47.97 μs | -34.3% |
 
-`perpage` performs better than `range` because interior pages are almost
-entirely non-contiguous — there are virtually no adjacent interior pages to
-merge, so the range strategy provides no syscall reduction benefit.
+**Syscall count:** `range` merges 92 interior pages into only 87 ranges,
+saving 5 syscalls. The saving is tiny because interior pages have a scatter
+score of 0.96 — almost completely non-contiguous. There are barely any
+adjacent interior pages to merge.
+
+**Prefetch time:** `perpage` is faster (2569 μs vs 3068 μs) despite more
+syscalls. `range` covers large contiguous byte spans that include many leaf
+pages between interior pages, causing the kernel to read unnecessary data.
+`perpage` only touches the exact 92 pages needed.
+
+**Page residency:** After waiting 500 ms for async I/O to finish, both
+strategies successfully load 91/92 (98.9%) of interior pages. The residency
+outcome is the same — the difference is only in how fast each strategy
+completes the load. `perpage` finishes faster, which is why it produces lower
+first-query latency when the benchmark starts immediately after prefetch.
+
+**Why file layout matters:** If interior pages were clustered at the start of
+the file, `range` would merge all of them into 1–2 syscalls covering a small
+contiguous region. The kernel's sequential readahead would load them all in a
+single efficient I/O pass. With the current scattered layout, this advantage
+disappears entirely. A type-aware VACUUM that places interior pages together
+would make `range` significantly more effective than `perpage`.
 
 ### Week 10: Layer Sweep
 
@@ -235,6 +261,14 @@ contiguous `madvise(MADV_WILLNEED)` call to prefetch all of them efficiently.
   cold-start first-query latency by **54%** with just 5 syscalls and ~94 μs
   of prefetch overhead.
 - Interior pages are highly scattered throughout the file (scatter score ~1.0),
-  so range merging provides no meaningful syscall reduction.
+  so range merging provides no meaningful syscall reduction. Both strategies
+  load 91/92 interior pages successfully after 500 ms — the difference is only
+  in how fast the load completes.
+- File layout directly determines which prefetch strategy is more efficient.
+  With clustered interior pages, `range` would require only 1–2 syscalls and
+  benefit from sequential readahead. With scattered pages, `perpage` wins
+  because it avoids loading unnecessary leaf pages between interior pages.
 - VACUUM does not improve interior page locality — it actively worsens it.
   `sqlite3RunVacuum()` is type-unaware and should be considered for improvement.
+  A type-aware VACUUM would make `range` prefetch far more effective than it
+  currently is.

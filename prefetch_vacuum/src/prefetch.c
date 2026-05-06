@@ -4,7 +4,6 @@
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
-#include <sys/time.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -14,6 +13,25 @@ static long long now_ns() {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return (long long)ts.tv_sec * 1000000000LL + ts.tv_nsec;
+}
+
+/* Check how many of the given offsets are resident using mincore() */
+static int count_resident(void *map, size_t db_size,
+                           long long *offsets, int n, int page_size) {
+    size_t n_os_pages = (db_size + page_size - 1) / page_size;
+    unsigned char *vec = calloc(n_os_pages, 1);
+    if (!vec) return -1;
+
+    mincore(map, db_size, vec);
+
+    int resident = 0;
+    for (int i = 0; i < n; i++) {
+        size_t os_page_idx = offsets[i] / page_size;
+        if (os_page_idx < n_os_pages && (vec[os_page_idx] & 1))
+            resident++;
+    }
+    free(vec);
+    return resident;
 }
 
 int main(int argc, char *argv[]) {
@@ -37,6 +55,8 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
+    int page_size = sysconf(_SC_PAGESIZE);
+
     /* --- 1. mmap the database --- */
     int fd = open(db_path, O_RDONLY);
     if (fd < 0) { perror("open"); return 1; }
@@ -58,7 +78,7 @@ int main(int argc, char *argv[]) {
     int header = 1;
 
     while (fgets(line, sizeof(line), f)) {
-        if (header) { header = 0; continue; }  /* skip header */
+        if (header) { header = 0; continue; }
         int page_number;
         char page_type[64];
         long long file_offset;
@@ -72,24 +92,27 @@ int main(int argc, char *argv[]) {
     }
     fclose(f);
 
-    fprintf(stderr, "interior pages found: %d\n", n_interior);
+    fprintf(stderr, "interior_pages_found: %d\n", n_interior);
     fprintf(stderr, "strategy: %s\n", strategy);
 
-    /* --- 3. execute prefetch strategy, measure time and syscall count --- */
+    /* --- 3. check residency BEFORE prefetch --- */
+    int before = count_resident(map, db_size, offsets, n_interior, page_size);
+    fprintf(stderr, "interior_resident_before_prefetch: %d/%d\n",
+            before, n_interior);
+
+    /* --- 4. execute prefetch, measure time and syscall count --- */
     long long t0 = now_ns();
     int syscall_count = 0;
-    int page_size = 4096;  /* SQLite default */
+    int sqlite_page_size = 4096;
 
     if (use_perpage) {
-        /* Strategy B: one madvise per interior page */
         for (int i = 0; i < n_interior; i++) {
             void *addr = (char *)map + offsets[i];
-            madvise(addr, page_size, MADV_WILLNEED);
+            madvise(addr, sqlite_page_size, MADV_WILLNEED);
             syscall_count++;
         }
     } else {
-        /* Strategy A: merge contiguous pages into ranges */
-        /* First sort offsets */
+        /* sort offsets first */
         for (int i = 0; i < n_interior - 1; i++)
             for (int j = i + 1; j < n_interior; j++)
                 if (offsets[j] < offsets[i]) {
@@ -98,28 +121,22 @@ int main(int argc, char *argv[]) {
                     offsets[j] = tmp;
                 }
 
-        /* Merge contiguous ranges and madvise each */
         long long range_start = offsets[0];
-        long long range_end   = offsets[0] + page_size;
+        long long range_end   = offsets[0] + sqlite_page_size;
 
         for (int i = 1; i < n_interior; i++) {
             if (offsets[i] == range_end) {
-                /* contiguous, extend range */
-                range_end += page_size;
+                range_end += sqlite_page_size;
             } else {
-                /* gap found, flush current range */
-                void *addr = (char *)map + range_start;
-                size_t len = range_end - range_start;
-                madvise(addr, len, MADV_WILLNEED);
+                madvise((char *)map + range_start,
+                        range_end - range_start, MADV_WILLNEED);
                 syscall_count++;
                 range_start = offsets[i];
-                range_end   = offsets[i] + page_size;
+                range_end   = offsets[i] + sqlite_page_size;
             }
         }
-        /* flush last range */
-        void *addr = (char *)map + range_start;
-        size_t len = range_end - range_start;
-        madvise(addr, len, MADV_WILLNEED);
+        madvise((char *)map + range_start,
+                range_end - range_start, MADV_WILLNEED);
         syscall_count++;
     }
 
@@ -128,10 +145,20 @@ int main(int argc, char *argv[]) {
     fprintf(stderr, "syscall_count: %d\n", syscall_count);
     fprintf(stderr, "prefetch_time_us: %.2f\n", (t1 - t0) / 1000.0);
 
-    /* stdout: machine-readable summary */
-    printf("strategy,interior_pages,syscall_count,prefetch_time_us\n");
-    printf("%s,%d,%d,%.2f\n",
-           strategy, n_interior, syscall_count, (t1 - t0) / 1000.0);
+    /* --- 5. wait for async I/O to complete, then check residency --- */
+    fprintf(stderr, "waiting 500ms for async I/O...\n");
+    usleep(500000);  /* 500 ms */
+
+    int after = count_resident(map, db_size, offsets, n_interior, page_size);
+    fprintf(stderr, "interior_resident_after_prefetch: %d/%d (%.1f%%)\n",
+            after, n_interior, 100.0 * after / n_interior);
+
+    /* stdout: machine-readable */
+    printf("strategy,interior_pages,syscall_count,prefetch_time_us,"
+           "resident_before,resident_after,resident_pct\n");
+    printf("%s,%d,%d,%.2f,%d,%d,%.1f\n",
+           strategy, n_interior, syscall_count, (t1 - t0) / 1000.0,
+           before, after, 100.0 * after / n_interior);
 
     munmap(map, db_size);
     close(fd);
