@@ -3,9 +3,13 @@
 對照 [overall_workloads.md](overall_workloads.md) 裡定義的四個 workload。本檔
 列出**目前實際跑過的策略對每個 workload 的結果**，以及還沒測的組合。
 
-> Workload B（uniform，全 cold leaf）只在**策略 4 (2f SLRU)** 跑過（見
-> [第五維](#第五維--策略-4-2f-slru) ），其他策略尚未在 B 上量。Workload D 是
-> churn generator，沒有自己的 latency 結果。
+> **主表**只列原始 prefetch_vacuum 時期跑過的 Workload A + Workload C。Workload
+> B 的全策略結果見[第五維](#第五維--策略-4-2f-slru)（2f SLRU）、
+> [第六維](#第六維--策略-1b-sqlite-vacuum--workload-b--c)（1b VACUUM）、
+> [第七維](#第七維--策略-1c-type-aware-layout--workload-b--c)（1c type-aware）、
+> [第八維](#第八維--2c-layers_n-sweep--workload-b--c原始-layout)（N sweep）、
+> [第九維](#第九維--layout-1b-vacuum-補測n-sweep--2f-slru--abc)（vacuum × N sweep + 2f）。
+> Workload D 是 churn generator，沒有自己的 latency 結果。
 >
 > 不同實驗用的 cold-start 機制不同（`sudo drop_caches` vs
 > `posix_fadvise(POSIX_FADV_DONTNEED)`），絕對 µs **不能跨表比較**，但

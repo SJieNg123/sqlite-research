@@ -34,11 +34,14 @@ warm；唯一還是 cold 的是 interior page**。所以這個 workload 是 pref
 
 **用在哪：**
 - `prefetch_vacuum/` 第 9–11 週的全部實驗（baseline / range / perpage / layers N）
-- `layout_rewriter/` 的 type-aware vacuum 端到端驗證
+- `layout_rewriter/` 的 type-aware vacuum 端到端驗證（-69%）
+- `layout_rewriter/runs/` 的 1b VACUUM 補測、N sweep × {orig, vacuum} 全矩陣（找到 A vac 新甜蜜點 N=20）
+- `prefetch_slru/` 的 2f SLRU 驗證（orig + vacuum DB，first-q -94%、全 workload -39%）
 
-**為什麼這個 workload 會給「-54%」、「-69%」這種看起來很漂亮的數字：** 因為
-冷啟動成本被拆成「interior fault + leaf fault + CPU」，Zipfian 下 leaf 部分
-被反覆查詢拉進 cache，**剩下的瓶頸只有 interior**，prefetch 一解就見效。
+**為什麼這個 workload 會給「-54%」、「-69%」、甚至「-94%」這種看起來很漂亮的
+數字：** 因為冷啟動成本被拆成「interior fault + leaf fault + CPU」，Zipfian 下
+leaf 部分被反覆查詢拉進 cache，**剩下的瓶頸只有 interior**，prefetch 一解就
+見效。而 2f SLRU 連 leaf 一起 preload，連那點 leaf cold fault 都消掉。
 
 ---
 
@@ -55,10 +58,14 @@ warm；唯一還是 cold 的是 interior page**。所以這個 workload 是 pref
 **模擬什麼：** 沒有熱點的 OLTP/批次掃描情境，例如「按 id 一筆筆檢查」、隨機
 sampling、爬蟲式存取。**每筆 query 都打到沒看過的 leaf**，leaf fault 不可避免。
 
-**用在哪：** 對照組。當 Workload A 量出來「prefetch 省了 54%」，我們需要
-Workload B 來回答「這效益是不是只在熱點工作負載下才有意義」 — 答案是 prefetch
-仍然有效，但比例會被「無法被解決的 leaf fault」攤薄（章節 8 的 prefetch_churn
-結果就是這個現象）。
+**用在哪：**（最初是對照組，後來變成完整實測 workload）
+- `layout_rewriter/runs/` 的 1b VACUUM 補測、1c type-aware 補測、N sweep × {orig, vacuum} 全矩陣
+  - **發現一**：B 上 N sweep 從 N=5 開始全 plateau（沒有 A 的 U 型曲線）
+  - **發現二**：ta + layers_5 在 B 上反而 +8%（不是 universal best）
+- `prefetch_slru/` 的 2f SLRU 驗證（orig + vacuum DB，first-q -94%、全 workload -38%）
+- 原始定位：當 Workload A 量出「prefetch 省了 54%」，B 回答「這效益只在熱點下
+  才有意義嗎」 — 答案是 prefetch 仍然有效，但比例會被「無法被解決的 leaf
+  fault」攤薄
 
 ---
 
@@ -74,13 +81,21 @@ push 的 commit。**重點不是熱點，而是 id 落在哪個 file region**。
 INSERT 會把新資料放在檔尾，這個 workload 就在量「檔尾新資料的冷啟動 latency
 怎麼隨 churn 累積而漂移」。
 
-**用在哪：** `prefetch_churn/` 的 10 個 checkpoint，每個 checkpoint 之間先用
-Workload D 製造寫入壓力，然後 drop cache，再跑這個 workload 量 cold-start
-latency。
+**用在哪：**
+- `prefetch_churn/` 的 10 個 checkpoint：每個 checkpoint 之間先用 Workload D
+  製造寫入壓力，然後 drop cache，再跑這個 workload 量 cold-start latency
+- `layout_rewriter/runs/` 的 1b VACUUM、1c type-aware、N sweep × {orig, vacuum}
+  全矩陣
+  - **關鍵發現**：C 上 layers_N 必須 N=92（載全部 interior）才有 -46% 改善，
+    N≤46 只有 ~15%。原因：C 走的 interior path 不在 file 前段，按 offset 排
+    top-N 完全選錯 page。**這直接證明「layers_N 是 zipfian-friendly 啟發式」**
+- `prefetch_slru/` 的 2f SLRU 驗證（C 上 hot set 只 1.6 MB，prefetch 開銷
+  只 1.9 ms vs A/B 的 7.5 ms — 是 2f 的甜蜜情境）
 
 **為什麼選 high-key 而不是低 key：** 因為 prefetch_churn 想觀察 layout 隨寫入
 漂移的效果，而新 interior page 都會配在檔尾（id 590k+），打這段最能看到 layout
-惡化的影響。
+惡化的影響。**意外副作用**：因 leaves 高度集中在檔尾，C 也成了 2f SLRU 的最
+小 hot set 對照點。
 
 ---
 
@@ -119,11 +134,14 @@ layout 上還剩多少效益」。
 | 實驗 | 用的 workload | 想回答的問題 |
 |---|---|---|
 | `prefetch_vacuum/` (Week 9–11) | A (Zipfian) | Prefetch interior pages 在熱點 workload 下能省多少？甜蜜點是 N=幾個 page？|
-| `layout_rewriter/` (type-aware vacuum 驗證) | A (Zipfian) | 把 interior 重排到檔頭，能不能救回 prefetch 效益？|
+| `layout_rewriter/` (type-aware vacuum 端到端) | A (Zipfian) | 把 interior 重排到檔頭，能不能救回 prefetch 效益？(-69%) |
+| `layout_rewriter/runs/` (1b VACUUM × B/C) | B + C | VACUUM 對 baseline 和 prefetch 的影響在非 Zipfian workload 上是什麼樣 |
+| `layout_rewriter/runs/` (1c type-aware × B/C) | B + C | ta layout 是否 universal best？(答案：B 上反效果) |
+| `layout_rewriter/runs/` (N sweep × A/B/C × {orig, vacuum}) | A + B + C | 「N=5 甜蜜點」是 zipfian-friendly 還是 universal？(答案：zipfian-only) |
+| `prefetch_slru/` (2f SLRU × A/B/C × {orig, vacuum}) | A + B + C | mincore-dumped resident set preload 在三種 workload 的效益 (first-q -94%、全 workload A/B -38%、C -7%) |
 | `prefetch_churn/` 量測 | C (high-key uniform) | Layout 隨 churn 漂移後，prefetch 效益怎麼變？|
 | `prefetch_churn/` churn 生成 | D (mixed write) | 製造真實的 layout 漂移壓力（不量 latency）|
 | `multiprocess/` | 不用 workload（只測 residency / RSS）| MAP_SHARED 是否真的跨 process 共享 page cache？|
-| Workload B (uniform read) | — | 對照用：證明「prefetch 效益」不是只在熱點下才出現的假象 |
 
 ---
 
@@ -149,11 +167,33 @@ layout 上還剩多少效益」。
 
 ---
 
-## 已知缺口（README 第 9 章列的 TODO）
+## 已知缺口（workload 層級）
 
 - **Zipfian「low-key hotspot」變體**：目前的 Workload A 雖然 Zipfian，但熱點
   分佈在 8..99k 整個區段裡。若把熱點壓到 [1, 1000] 這種極窄區，prefetch 效益
   會跟 [99k, 100k] 完全不同（前者 ≈ append-only churn pattern，後者 ≈ random
   churn pattern）。**這兩個變體還沒測**。
 - **N 在 churned DB 上的曲線**：`prefetch_churn` 只用了 N=5；缺 N=1/10/20
-  在 Workload C 上的對照曲線。
+  在 Workload C 上的對照曲線。（已知乾淨 DB 上 C 需要 N=92 才有 -46%，churned
+  DB 上的曲線形狀未知）
+- **RAM 緊縮場景的 workload**：目前的 A/B/C 都是 ~16 MB hot set in unlimited RAM。
+  缺一個 cgroup 限制下、hot set > RAM 的 workload，才能看出 2f SLRU vs
+  access-count（2d/2e）的差別。
+
+> 策略層級的缺口（2d/2e access-pattern、2f × layout 1c）見
+> [overall_results.md](overall_results.md) 的「還沒跑的策略 × workload 組合」表。
+
+## 已完成的覆蓋（A/B/C 三維 × 全策略矩陣）
+
+對照原本只有「A → prefetch_vacuum + layout_rewriter; C → prefetch_churn; B 只
+是對照組」的設計，目前實際已跑：
+
+| | A (Zipfian) | B (Uniform) | C (high-key) |
+|---|---|---|---|
+| **Layout 1a (orig)** | ✅ 全策略 | ✅ 全策略 | ✅ 全策略 |
+| **Layout 1b (VACUUM)** | ✅ baseline + range/perpage/layers_5 + **N sweep + 2f SLRU** | ✅ 全策略 | ✅ 全策略 |
+| **Layout 1c (type-aware)** | ✅ baseline + range/perpage/layers_5 | ✅ baseline + range/perpage/layers_5 | ✅ baseline + range/perpage/layers_5 |
+| **Churn 漂移** | — | — | ✅ 10 checkpoints × layers_5 |
+
+B 早就不再只是「對照組」 — 它是 prefetch 失敗模式（leaf fault 主導）和 ta
+layout 反效果（+8%）的主要證據來源。
