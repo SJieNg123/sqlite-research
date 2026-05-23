@@ -1,0 +1,44 @@
+# --- Compiled binaries (sit next to .c sources) ---
+benchmark_harness/benchmark_harness
+classify_pages/classify_pages
+residency_checker/residency_checker
+layout_rewriter/layout_rewriter
+layout_rewriter/runs/evict
+layout_rewriter/runs/check_resident
+multiprocess/src/multiprocess_buffer_pool
+multiprocess/src/multiprocess_residency
+prefetch_vacuum/src/prefetch
+prefetch_vacuum/src/prefetch_layers
+prefetch_slru/src/prefetch_slru
+prefetch_slru/runs/benchmark_harness
+prefetch_slru/runs/evict
+prefetch_slru/runs/prefetch_layers
+prefetch_slru/runs/prefetch_slru
+prefetch_slru/runs/residency_checker
+
+# --- Object files / static libs ---
+*.o
+*.so
+*.a
+
+# NOTE: benchmark_harness/sqlite3.c and sqlite3.h are vendored and DO get
+# committed — pinning the SQLite version is essential for benchmark
+# reproducibility (a 3.x → 3.y bump could shift latencies).
+
+# --- Test databases (regeneratable from testdb_builder.py) ---
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# --- Benchmark run artifacts ---
+bench_records/
+bench_records_*/
+ops_csv/
+ops_csv_*/
+rec_*/
+warmup_records/
+
+# --- Log / stderr dumps ---
+*.log
+*.err

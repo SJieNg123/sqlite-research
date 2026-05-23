@@ -1,0 +1,13 @@
+db_layout,scatter_score,strategy,first_query_us_median,first_query_us_min,first_query_us_max
+orig,0.9606,baseline,318.21,300.32,322.87
+orig,0.9606,range,370.31,298.04,370.41
+orig,0.9606,perpage,319.28,296.60,359.62
+orig,0.9606,layers5,223.56,217.70,227.32
+vacuum,1.1303,baseline,333.42,332.45,342.40
+vacuum,1.1303,range,330.26,321.68,375.14
+vacuum,1.1303,perpage,338.32,336.89,342.56
+vacuum,1.1303,layers5,234.05,231.60,236.27
+ta,0.0001,baseline,404.01,398.68,409.76
+ta,0.0001,range,387.28,345.61,397.41
+ta,0.0001,perpage,272.61,270.71,297.06
+ta,0.0001,layers5,127.14,126.62,127.42

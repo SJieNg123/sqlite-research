@@ -1,0 +1,9 @@
+workload,db,strategy,first_q_us_median,first_q_us_min,first_q_us_max
+B,ta,baseline,408.23,404.87,416.69
+B,ta,layers5,439.79,438.77,442.79
+B,ta,perpage,352.00,327.26,378.34
+B,ta,range,366.17,335.58,367.38
+C,ta,baseline,466.60,460.13,488.95
+C,ta,layers5,316.92,310.47,317.02
+C,ta,perpage,294.07,284.77,345.13
+C,ta,range,520.28,469.17,531.65
