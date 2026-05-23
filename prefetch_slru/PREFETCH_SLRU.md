@@ -60,6 +60,7 @@ Reference DB：600,000 rows, 26,331 × 4 KB pages (其中 92 interior)。
 > Workload 命名沿用 [overall_workloads.md](../overall_workloads.md)：
 > - **Workload A** = Zipfian point-read (`workloadc.txt`)
 > - **Workload B** = Uniform random point-read (`workload_uniform.txt`)
+> - **Workload C** = High-key uniform read (`page_churn_benchmark_high.txt`)
 
 ### Hot set 大小（warmup 後的 resident page 分佈）
 
@@ -67,14 +68,20 @@ Reference DB：600,000 rows, 26,331 × 4 KB pages (其中 92 interior)。
 |---|---:|---:|---:|---:|---:|
 | **A (Zipfian)** | 4,048 | 3,328 | 702 | 10 | 8 |
 | **B (Uniform)** | 4,122 | 3,331 | 775 | 10 | 6 |
+| **C (high-key)** | **420** | 357 | 59 | 2 | 2 |
 
-**觀察 1：兩個 workload 的 resident set 大小幾乎一樣（4,048 vs 4,122）**，但組成
-邏輯不同 — A 是「23k unique key、最熱的被打 7,752 次」、B 是「63k unique key、
-每個只被打 1-2 次」。共同點：**兩者都打 DB 前 1/6 的 id 區段**，所以 touch 到
-的 leaf 頁面大致相同。
+**觀察 1：A 和 B 的 resident set 幾乎一樣（4,048 vs 4,122）**，但組成邏輯不
+同 — A 是「23k unique key、最熱的被打 7,752 次」、B 是「63k unique key、
+每個只被打 1-2 次」。共同點：**兩者都打 DB 前 1/6 的 id 區段**，所以 touch
+到的 leaf 頁面大致相同。
 
-**觀察 2：92 interior pages 只有 16 個 resident**。因為 workload 只查 id ∈ [1,
-99999]（DB 前 1/6），剩下 5/6 區段的 interior 從沒被 traverse 到。
+**觀察 2：A/B 上 92 interior pages 只有 16 個 resident**。因為 workload 只查
+id ∈ [1, 99999]（DB 前 1/6），剩下 5/6 區段的 interior 從沒被 traverse 到。
+
+**觀察 3：C 的 hot set 比 A/B 小 10×（420 vs 4,000+）**。C 查 id ∈ [590k, 610k]
+（高度集中的 20k 區段、且半數落在 600k 後的不存在 id），leaf 高度共享 →
+**hot set 只有 1.6 MB（A/B 各 ~16 MB）**。這直接決定了 2f 在 C 上的 prefetch
+overhead 縮水到 1/4。
 
 ### Latency 矩陣（first query / 平均 / 全 workload 總時間 / prefetch 開銷）
 
@@ -86,46 +93,59 @@ Reference DB：600,000 rows, 26,331 × 4 KB pages (其中 92 interior)。
 | B (Uniform) | 1a baseline | 255 | 4.13 | 413 | 0 | 0 |
 | B (Uniform) | 2c Layers N=5 | 137 | 4.11 | 411 | 15 | 5 |
 | B (Uniform) | **2f SLRU** | **15** | **2.55** | **255** | 7,478 | 4,122 |
+| C (high-key) | 1a baseline | 250 | 2.62 | 262 | 0 | 0 |
+| C (high-key) | 2c Layers N=5 | 185 | 2.66 | 266 | 13 | 5 |
+| C (high-key) | **2f SLRU** | **16** | **2.45** | **245** | **1,881** | **420** |
 
 ### 與 baseline 比的相對改善
 
 | Workload | Strategy | first-q 改善 | 全 workload 總時間改善 | 端到端 cold start (prefetch+first) |
 |---|---|---:|---:|---:|
 | A (Zipfian) | 2c Layers N=5 | -47% | ≈ 0% | 148 µs（vs 251 baseline，**-41%**）|
-| A (Zipfian) | **2f SLRU** | **-94%** | **-39%** | 7,269 µs（**+2,800%**，比 baseline 慢 29×）|
+| A (Zipfian) | **2f SLRU** | **-94%** | **-39%** | 7,269 µs（比 baseline 慢 29×）|
 | B (Uniform) | 2c Layers N=5 | -46% | ≈ 0% | 152 µs（vs 255 baseline，**-40%**）|
-| B (Uniform) | **2f SLRU** | **-94%** | **-38%** | 7,493 µs（**+2,840%**，比 baseline 慢 30×）|
+| B (Uniform) | **2f SLRU** | **-94%** | **-38%** | 7,493 µs（比 baseline 慢 30×）|
+| C (high-key) | 2c Layers N=5 | -26% | ≈ 0% | 198 µs（vs 250 baseline，**-21%**）|
+| C (high-key) | **2f SLRU** | **-94%** | **-7%** | 1,897 µs（比 baseline 慢 7.6×）|
 
-## 四個發現
+## 六個發現
 
-### 1. 策略 2f 第一筆 query 把 2c 打到地上（-94% vs -46%）
+### 1. 策略 2f 第一筆 query 把 2c 打到地上（-94% on all workloads）
 
 `madvise(MADV_WILLNEED)` 對單一 leaf page 是 kernel 確實會 load 的。SLRU 把
-4,000 個 leaf 全 prefetch 進來，第一筆 query 不管打哪個 id 都打到熱 leaf。
-2c 只 prefetch interior，leaf 還是 cold-fault → 落在 130–137 µs。
+所有 touched leaf 全 prefetch 進來，第一筆 query 不管打哪個 id 都打到熱 leaf。
+2c 只 prefetch interior，leaf 還是 cold-fault → A/B 落在 130–137 µs，**C 更
+落在 185 µs（layers_5 在 C 上的 -26% 是三個 workload 中最差的）**。
 
-### 2. **但** 2f 的 prefetch 自己花 7.5 ms — cold start 端到端慢 30×
+### 2. **但** 2f 的 prefetch 開銷由 hot set 大小決定 — A/B 慢 30×、C 慢 7.6×
 
-4,000+ 個 madvise syscall 在這台機器上花 1.8 µs/個。對使用者來說，
-**cold-tap 到「螢幕看到第一筆結果」的時間反而從 251 µs → 7,269 µs**。
+A/B 各 4,000+ syscalls × 1.8 µs/個 = 7.5 ms；**C 只 420 syscalls × 4.5 µs/個
+= 1.9 ms（4× 便宜）**。對使用者來說，cold-tap 到「螢幕看到第一筆結果」的
+時間：
+
+```
+                  baseline   →   2f SLRU
+  A (Zipfian)     251 µs         7,269 µs  (慢 29×)
+  B (Uniform)     255 µs         7,493 µs  (慢 30×)
+  C (high-key)    250 µs         1,897 µs  (慢 7.6×)  ← 明顯改善
+```
 
 這是 2f 的核心 trade-off：**它不是「降低 cold start」的策略，是「升級成
-working set preload」的策略**。如果應用情境是 "App 開了之後會跑很久的
-workload"，2f 把整個 workload 提前 warm 起來；如果是 "點開就只看一個
-聯絡人"，2f 直接是反指標。
+working set preload」的策略**。
 
-### 3. 全 workload 累積下來，2f 反而省 38%
+### 3. 全 workload 累積下來，2f 在 A/B 省 38–39%、**C 只省 7%**
 
 ```
-總時間（cold start + 100k queries）：
-  baseline : 0 + 411 ms = 411 ms
-  2c       : 0.015 + 412 ms = 412 ms（≈ baseline）
-  2f       : 7.3 + 249 ms = 256 ms ← 比 baseline 省 38%
+總時間（cold start + 全 workload）：
+  Workload A:  baseline 411 ms → 2f 249 ms  (-39%)
+  Workload B:  baseline 413 ms → 2f 255 ms  (-38%)
+  Workload C:  baseline 262 ms → 2f 245 ms  (-7%)
 ```
 
-因為 SLRU 把整個 working set（不只第一筆 query 路徑上的 page）都拉進
-cache，所以**後續每一筆 query 也快**（avg 2.5 µs vs 4.1 µs）。2c 只 prefetch
-interior，**leaf 還是要 page fault**，所以 avg 沒進步。
+**改善幅度跟 baseline 的 avg-q 走**：A/B 的 baseline avg-q 是 4.1 µs（每筆
+都要 cold-fault leaf），2f 壓到 2.5 µs；C 的 baseline avg-q 已經是 **2.62
+µs**（leaves 已經高度共享同個 disk region、seek 路徑短），2f 只壓到 2.45 µs。
+**C 的 baseline 本來就接近 SLRU 拉得到的下限，所以 2f 收益小。**
 
 ### 4. Workload A vs B 對 2f 沒差（推翻原本預測）
 
@@ -141,12 +161,31 @@ interior，**leaf 還是要 page fault**，所以 avg 沒進步。
 - 2f vs 2d/2e 的差異只會在 **resident set 大於 RAM 預算** 時體現
   （RAM 預算 < 16 MB 時 access count 才能挑出最熱的 K 個）
 
+### 5. C 上 layers_5 也大幅退化（-26% vs A/B 的 -46~47%）
+
+confirm 先前在 [overall_results.md](../overall_results.md) 第七維就看到的
+現象：「按 file offset 排前 5」對 file-tail workload 命中率低，因為 C 走的
+interior path 不在全局上層。**layers_5 是 zipfian-friendly 的啟發式，
+file-region workload 上效益打折。**
+
+### 6. 2f 的「working-set preload」價值跟 hot set 的 leaf spread 成正比
+
+A/B 的 hot set 是「3,300 個 leaf 散在 file 前 1/6」—— 每筆 query 都要解決
+cold leaf fault，2f preload 完全消除這個 cost，所以全 workload 省 38%。
+C 的 hot set 是「357 個 leaf 集中在 file 尾」—— baseline 已經幾乎沒有 cold
+fault 可解（連續 leaves 一個 readahead 就吃完），2f preload 邊際收益只 7%。
+
+**Working-set preload 的天花板**：當 baseline 的 avg-q 已經接近「全 hot 命中」
+的下限時，2f 沒有空間再省。**C 的 baseline avg-q 2.62 µs 就是這個天花板。**
+
 ## Trade-off 矩陣（誰該用哪個策略）
 
 | 應用情境 | 建議策略 | 為什麼 |
 |---|---|---|
 | 點開 App 馬上要看到第一筆（聯絡人、設定）| **2c Layers N=5** | cold-start 148 µs vs 2f 7,269 µs |
-| 開啟後會跑一整段 workload（瀏覽相簿、滑訊息列表）| **2f SLRU** | 全 workload 時間 -38% |
+| 開啟後會跑一整段 workload（瀏覽相簿、滑訊息列表）| **2f SLRU** | 全 workload 時間 A/B 省 38% |
+| Hot set 小且集中（高 id 區段、append-only tail）| **2f SLRU** | C 上 cold start 只慢 7.6×（vs A/B 慢 30×）|
+| Workload baseline avg-q 已經接近 OS readahead 下限 | **不要用 2f** | C 全 workload 只省 7%，prefetch 成本回不來 |
 | RAM 充裕、想最少程式碼實作 prefetch | **2f SLRU** | 不用攔截 SQLite，~70 行 C |
 | RAM 緊（< working set）| 待測 **2d / 2e**（access count） | 2f 不會挑重點 |
 
@@ -157,7 +196,9 @@ src/prefetch_slru.c    — 70 行 C，讀 residency CSV + madvise
 runs/                  — warmup.sh、prefetch wrappers、runmatrix.sh、raw results
   workload_a_zipfian.txt → ../../benchmark_harness/workloads/workloadc.txt
   workload_b_uniform.txt → ../../benchmark_harness/workloads/workload_uniform.txt
+  workload_c_highkey.txt → ../../prefetch_churn/workloads/page_churn_benchmark_high.txt
   hotpages_a.csv        — Workload A (Zipfian) warmup residency
   hotpages_b.csv        — Workload B (Uniform) warmup residency
+  hotpages_c.csv        — Workload C (high-key uniform) warmup residency
 results/               — results_summary.csv 等
 ```
