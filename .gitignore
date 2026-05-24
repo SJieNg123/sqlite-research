@@ -1,0 +1,65 @@
+# --- Compiled binaries (sit next to .c sources) ---
+benchmark_harness/benchmark_harness
+classify_pages/classify_pages
+residency_checker/residency_checker
+layout_rewriter/layout_rewriter
+layout_rewriter/runs/evict
+layout_rewriter/runs/check_resident
+multiprocess/src/multiprocess_buffer_pool
+multiprocess/src/multiprocess_residency
+prefetch_vacuum/src/prefetch
+prefetch_vacuum/src/prefetch_layers
+prefetch_slru/src/prefetch_slru
+prefetch_slru/runs/benchmark_harness
+prefetch_slru/runs/evict
+prefetch_slru/runs/prefetch_layers
+prefetch_slru/runs/prefetch_slru
+prefetch_slru/runs/residency_checker
+prefetch_churn/benchmark_harness
+prefetch_churn/classify_pages
+prefetch_churn/prefetch_layers
+prefetch_churn/residency_checker
+prefetch_churn/runs_nsweep/evict
+
+# --- Convenience symlinks to canonical workloads/ ---
+prefetch_churn/generated_workloads/
+
+# --- Object files / static libs ---
+*.o
+*.so
+*.a
+
+# NOTE: benchmark_harness/sqlite3.c and sqlite3.h are vendored and DO get
+# committed — pinning the SQLite version is essential for benchmark
+# reproducibility (a 3.x → 3.y bump could shift latencies).
+
+# --- Test databases (regeneratable from testdb_builder.py) ---
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# --- Benchmark run artifacts ---
+bench_records/
+bench_records_*/
+ops_csv/
+ops_csv_*/
+rec_*/
+warmup_records/
+
+# --- Log / stderr dumps ---
+*.log
+*.err
+
+# --- Intermediate trace CSVs (regenerable; final results live in
+#     matrix_*_results.csv, *_summary.csv, *_aggregated.csv, hotpages_*.csv,
+#     classify_{before,after,vacuum,orig}.csv, results/, per-N
+#     benchmark_summary.csv & interior_summary.csv — those stay tracked) ---
+# Per-rep 100k-row latency traces (3 reps × N cells; only first row used)
+ops_*_r[0-9].csv
+ops_*_r[0-9][0-9].csv
+# Warmup pass traces (result is hotpages_*.csv, ops trace itself unused)
+warmup_*ops*.csv
+# N-sweep per-checkpoint intermediates (final = benchmark_summary.csv per N)
+prefetch_churn/runs_nsweep/n*/benchmarks/
+prefetch_churn/runs_nsweep/n*/checkpoints/

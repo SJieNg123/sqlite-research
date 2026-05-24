@@ -1,0 +1,17 @@
+workload,db,strategy,first_q_us_median,first_q_us_min,first_q_us_max
+B,orig,baseline,463.18,454.69,476.17
+B,orig,layers5,243.71,240.91,249.02
+B,orig,perpage,376.66,350.31,383.76
+B,orig,range,349.79,318.34,358.75
+B,vacuum,baseline,502.79,502.55,505.47
+B,vacuum,layers5,250.26,245.90,271.48
+B,vacuum,perpage,324.64,304.61,381.60
+B,vacuum,range,327.61,313.35,346.70
+C,orig,baseline,466.90,460.43,467.44
+C,orig,layers5,406.36,404.84,407.48
+C,orig,perpage,343.08,328.87,347.74
+C,orig,range,342.04,307.49,352.04
+C,vacuum,baseline,437.44,435.93,475.33
+C,vacuum,layers5,408.07,405.03,414.95
+C,vacuum,perpage,383.63,358.73,383.82
+C,vacuum,range,368.45,279.63,372.09

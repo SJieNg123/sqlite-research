@@ -1,0 +1,10 @@
+workload,strategy,rep,first_query_us,prefetch_us,n_prefetch
+C,baseline,1,254.01,0,0
+C,baseline,2,249.95,0,0
+C,baseline,3,246.05,0,0
+C,layers5,1,185.10,17.48,5
+C,layers5,2,185.17,13.10,5
+C,layers5,3,187.02,12.69,5
+C,slru,1,16.17,1778.19,420
+C,slru,2,13.09,1895.62,420
+C,slru,3,16.66,1881.49,420

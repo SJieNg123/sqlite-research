@@ -1,0 +1,293 @@
+# Overall Strategies — 現有策略總覽
+
+這個 repo 嘗試了三類正交的策略，每類處理不同的層級：
+
+1. **Layout 策略**（build-time，一次性，影響整個 file 的物理排列）
+2. **Prefetch 策略**（runtime，每次 cold start 跑一次）
+3. **Memory-sharing 策略**（architectural，影響多 process 的 RAM 用量）
+
+三類可以**自由組合** — 例如「type-aware layout + layers_5 prefetch + MAP_SHARED」
+是目前測過的全局最佳組合。
+
+---
+
+## 一、Layout 策略
+
+決定 interior pages 在 file 裡的物理位置。一次性決策，做完之後所有 cold start
+都受影響。
+
+### 策略 1a — 原始 layout（do nothing）
+
+不做任何事，SQLite 怎麼分配就怎麼放。Interior pages 散佈於整個 file（**scatter
+score ≈ 0.96**，92 個 interior 散在 page 2..26,007 之間）。是所有實驗的基準
+線。
+
+**狀態：** 永遠存在。
+**結論：** 沒有任何 prefetch 也能拿 baseline；上層 5 個 interior page 已經自然
+在檔頭，所以 `layers_5` 不需要做 layout 改動就能拿 **-54%** 改善。
+
+### 策略 1b — SQLite 內建 VACUUM（已驗證，效果 workload-dependent）
+
+呼叫 `VACUUM;`。理論上應該把 file 緊湊化，實際上 [src/vacuum.c](https://sqlite.org/src/file?name=src/vacuum.c)
+的 `sqlite3RunVacuum()` 按照 insertion order 重排，**不看 page type**。
+
+**狀態：** 已驗證（[prefetch_vacuum/](prefetch_vacuum/) Week 11、[layout_rewriter/runs/](layout_rewriter/runs/) 補測 A、[layout_rewriter/runs/matrix_1b_bc_results.csv](layout_rewriter/runs/matrix_1b_bc_results.csv) 補測 B、C）。
+**Layout 結果：**
+- scatter score 從 **0.96 → 1.13**（變得**更**散）
+- 檔案從 107.8 MB 縮到 104.9 MB（reclaim ~3%）
+
+**Latency 結果（同一 `posix_fadvise` harness）：**
+
+| Workload | baseline 變化 | layers_5 改善（orig → vacuum）|
+|---|---|---|
+| A (Zipfian) | +5%（318→333 µs） | -30% → -30%（無變化）|
+| B (Uniform) | +8%（463→503 µs） | -47% → **-50%**（略增）|
+| C (high-key) | **-6%（467→437 µs，變快）** | -13% → -7%（略降）|
+
+> 早期 `prefetch_vacuum/` 報告的「layers_5 從 -54% 退化到 -9%」是用 `sudo
+> drop_caches` + leaf 自然熱的 A workload 量出來的；換成統一 `posix_fadvise`
+> harness 後 A 的退化幅度從「-54%→-9%」收斂到「-30%→-30%」(同樣的「無
+> 改善」結論但 baseline 點不同)。
+
+**結論：**
+- **不要為了 cold-start 性能 VACUUM**：A、B 上會讓 baseline 變慢 5-8%。
+- **特例：高 id 區段查詢（C）反而會變快 6%**，因 VACUUM 把整檔壓緊，
+  high-key region 的 seek 距離縮短。
+- VACUUM 對 reclaim disk space 仍然有用，且不會破壞 layers_5 在 B 上的
+  prefetch 效益。
+
+### 策略 1c — Type-aware layout（layout_rewriter，已完成，效果 workload-dependent）
+
+[layout_rewriter/layout_rewriter.c](layout_rewriter/layout_rewriter.c) — 在
+binary 層級重排 file：page 1 留原位，**interior pages 全部搬到 slots 2..93
+（連續）**，leaf 接著，overflow/freelist 在最後。同時 patch 所有跨頁指標：
+interior 的 child pointer、overflow 的 next-page、freelist 的 next-trunk、page 1
+header 的 freelist pointer，以及產 SQL 修正 `sqlite_master.rootpage`。
+
+**狀態：** 已完成 + 端到端驗證（A 在 [layout_rewriter/results/](layout_rewriter/results/)；B、C 在 [layout_rewriter/runs/matrix_1c_bc_results.csv](layout_rewriter/runs/matrix_1c_bc_results.csv)）。
+**Layout 結果：**
+- scatter score 從 **0.96 → 0.0001**（幾乎完美 clustering）
+- `PRAGMA integrity_check;` 通過
+
+**Latency 結果（first-q 改善 vs 同 DB baseline）：**
+
+| Workload | ta baseline 變化 | 最佳 prefetch on ta | 跨 layout 最佳 |
+|---|---|---|---|
+| A (Zipfian) | +27%（318→404 µs） | **layers_5 -69%（127 µs）** | **ta + layers_5** ✅ |
+| B (Uniform) | **-12%（463→408 µs）** | perpage -14%（352 µs） | orig + layers_5（244 µs） |
+| C (high-key) | ±0%（467→467 µs） | **perpage -37%（294 µs）** | **ta + perpage** ✅ |
+
+**結論：**
+- **不是 universal best**：A 上 -69%（全局最強），C 上配 perpage 達 -37%，
+  但 **B 上 ta + layers_5 反而變慢 +8%**（leaves 被推到高 offset、第一個
+  cold leaf fault 距離拉長，prefetch coverage 不夠時暴露 penalty）。
+- **配方依 workload 而定**：Zipfian 點讀 → ta + layers_5；File-tail 讀
+  → ta + perpage；Uniform 全段讀 → 不要 ta。
+- `range` 在任何 layout 都不該選 —— `MADV_WILLNEED` 對單一大 range 的
+  readahead 是 bounded（~32/92 pages）。
+
+---
+
+## 二、Prefetch 策略
+
+決定 cold start 後、第一筆 query 跑之前，要主動把哪些 page 載進 OS page cache。
+
+### Structure-based（不看存取歷史，純粹看 page 結構）
+
+#### 策略 2a — Range（structure-based，已完成）
+
+把連續的 interior pages 合併成 range，每個 range 呼叫一次 `madvise(MADV_WILLNEED)`。
+[prefetch_vacuum/src/prefetch.c](prefetch_vacuum/src/prefetch.c) 的 `range` mode。
+
+**狀態：** 已完成。
+**結果：**
+- 原始 layout：92 個 interior → 87 syscalls，改善 **-27%**
+- type-aware layout：92 個 interior → **1 syscall**（連續），但 kernel
+  readahead 是 bounded，1 個 `MADV_WILLNEED` 只實際載入 32/92 pages → 改善僅 **-4%**
+
+**結論：** 即使 layout 完美，`MADV_WILLNEED` 是 advisory，**不保證載入量**。
+range 在任何 layout 下都不是好選擇。
+
+#### 策略 2b — Perpage（structure-based，已完成）
+
+對每個 interior page 個別呼叫一次 `madvise(MADV_WILLNEED)`。
+[prefetch_vacuum/src/prefetch.c](prefetch_vacuum/src/prefetch.c) 的 `perpage` mode。
+
+**狀態：** 已完成。
+**結果：**
+- 原始 layout：92 syscalls，改善 **-34%**
+- type-aware layout：92 syscalls，改善 **-33%**
+
+**結論：** 比 range 確定載入更多 page（每次 madvise 指定一頁，kernel 確實會
+load 那一頁），但 92 個 syscall 開銷 2.9 ms，吃掉一部分效益。
+
+#### 策略 2c — Layers N（structure-based，已完成 + 找到甜蜜點）
+
+只 prefetch 前 N 個 interior page（按 file offset 排序，等同於 B+tree 上層）。
+[prefetch_vacuum/src/prefetch_layers.c](prefetch_vacuum/src/prefetch_layers.c)。
+
+**狀態：** 已完成，N=1/5/10/20/46/92 全跑過。
+**結果（Workload A，原始 layout）：U 型曲線**
+
+| N | syscalls | 改善 |
+|---:|---:|---:|
+| 1 | 1 | -48% |
+| **5** | **5** | **-54%** ← 甜蜜點 |
+| 10 | 10 | -39% |
+| 92 | 92 | -31% |
+
+**結論：** N=5 是 syscall overhead 與 coverage 的最佳折衷**僅在 Workload A
+上**。配合 type-aware layout 可達 -69%。
+
+**Workload-specific 結果**（A/B/C × {orig, vacuum, churned}）：
+- **A**: N=5 -54% 是甜蜜點（U 型曲線）
+- **B**: N=5~92 全 plateau 在 -48%（沒有 U 型曲線；leaf-fault 主導）
+- **C 乾淨 DB**: N≤46 plateau ~15%，**N=92 跳到 -46%**（hot interior 在 file
+  中段，按 offset 排 top-N 完全選錯 page）
+- **C churned DB**: 同上 — N≤46 plateau ~10%，**N=92 跳到 -54%**（churn 不
+  改變這個結論，反而把 N=92 的相對優勢拉大）
+
+**因此 layers_N 是 *Zipfian-friendly* 啟發式，不是 universal best**。詳見
+[overall_results.md 第八維](overall_results.md#第八維--2c-layers_n-sweep--workload-b--c原始-layout)
+（乾淨 DB B/C）+ [第九維](overall_results.md#第九維--layout-1b-vacuum-補測n-sweep--2f-slru--abc)
+（vacuum DB）+ [第十維](overall_results.md#第十維--n-sweep--workload-c--churned-db補齊-prefetch_churn-缺口)
+（churned DB）。
+
+### Access-pattern-based（看存取歷史，未實作）
+
+#### 策略 2d — Access pattern，只 interior（待實作）
+
+先跑一次 workload 記錄每個 interior page 的存取次數，冷啟動時按 access count
+由高到低 prefetch 前 N 個 interior page，而非按 file offset 取前 N 個。
+
+**狀態：** 未實作。
+**為什麼值得做：** 目前的 `layers_N` 假設「offset 越小 = 越上層 = 越熱」，這
+對 B+tree 結構是成立的，但忽略了**不同 query 路徑使用不同分支**的事實。某些
+中下層 interior page 可能因為 workload 偏斜（Workload A 的 Zipfian 熱點）
+變得遠比兄弟節點熱。基於存取歷史排序可能找到 N=5 之外的更好 page 集合。
+
+#### 策略 2e — Access pattern，interior + leaf（待實作）
+
+同 2d 但記錄所有 page 的存取次數，prefetch 包含 top-K interior + top-M leaf
+（例如 7 個 interior + 3 個熱 leaf）。
+
+**狀態：** 未實作。
+**為什麼值得做：** 從 [overall_results.md](overall_results.md) 第四節可以看到
+Workload C（每筆都打 cold leaf）下 prefetch 效益只 ~10%，因為「leaf 是不可
+避免的」假設成立。但若 workload 有 leaf 級別的熱點（Workload A），prefetch
+幾個熱 leaf 可能直接砍掉部分 leaf fault。**比例需要實驗找**：
+
+- 7:3（偏 interior）— 保留 layers_5 的 sweet spot，附帶幾個熱 leaf
+- 5:5（平衡）— 看 leaf hot-set 是否真的有用
+- 不同 workload 下最佳比例可能不同（A 偏 leaf-friendly，C 偏 interior-only）
+
+### SLRU-approximated（已完成）
+
+#### 策略 2f — SLRU prefetch（mincore-dumped resident set，已完成）
+
+跑完一次 workload 後**不要 evict**，直接用 `mincore()` dump 當下 OS page cache
+裡的所有 resident page，存成 `hotpages.csv`。下次 cold start 時對每個
+`is_resident=1` 的 page 一一呼叫 `madvise(MADV_WILLNEED)`。
+[prefetch_slru/src/prefetch_slru.c](prefetch_slru/src/prefetch_slru.c)。
+
+**和 2d/2e 的差別：** 2d/2e 要攔截 SQLite 的 page read 才能算 access count；
+2f 只看 workload 結束後的 residency snapshot，**完全不用碰 SQLite 內部**，
+但精度較低 —— 只知道一個 page **有沒有**被用過，不知道**被用幾次**。
+實作成本：~70 行 C。
+
+**狀態：** 已完成，在 Workload A (Zipfian)、B (Uniform)、C (high-key uniform)
+三個 workload × **三個 layout (1a orig / 1b vacuum / 1c type-aware)** 上跑過。
+**結果：**
+- **First-query latency 在三個 workload × 三個 layout 上一致大勝 -94~95%**：
+  - Layout 1a (orig): A 251 → 14 µs、B 255 → 15 µs、C 250 → 16 µs
+  - Layout 1b (vacuum): A 219 → 15 µs、B 230 → 14 µs、C 212 → 14 µs
+  - Layout 1c (type-aware): A 321 → 15 µs、B 304 → 16 µs、C 249 → 13 µs
+  - **2f SLRU 是 layout-agnostic**：layout 變動對 first-q 影響 < 3 µs（小於單筆 noise）
+- **Prefetch 開銷由 hot set 大小決定**：A/B 4,000+ syscalls 花 ~7.5 ms；
+  **C 只 420 syscalls 花 1.9 ms（4× 便宜）**，端到端 cold start C 只「慢
+  7.6×」（A/B 慢 30×）
+- **全 workload 跑完的省下幅度跟 baseline 的 avg-q 走**：A 省 39%（411 → 249 ms）、
+  B 省 38%（413 → 255 ms）、**C 只省 7%**（262 → 245 ms）—— 因 C 的 baseline
+  avg-q 已經是 2.62 µs（leaves 高度共享同個 disk region，沒多少 cold fault 可解）
+- **A 和 B 結果幾乎一樣**，推翻原本「SLRU 在 skewed 上會輸給 access-count」的
+  預測 —— 因為 hot set (~16 MB) 全塞得進 RAM，沒有「該丟誰」的競爭，frequency
+  資訊用不上
+- **2f 的「working-set preload」價值跟 hot set 的 leaf spread 成正比** —— 越
+  分散（A/B），preload 收益越大；越集中（C），收益越小
+
+**結論：** 2f 不是「降低 cold-start」的策略，是「working-set preload」的策略。
+適用情境跟 2c Layers N 完全不同 —— 詳見
+[prefetch_slru/PREFETCH_SLRU.md](prefetch_slru/PREFETCH_SLRU.md) 的 trade-off
+矩陣。
+
+---
+
+## 三、Memory-sharing 策略
+
+決定多 process 場景下 page cache 的共享方式。在手機（背景 service + 主 App）
+或 server（worker process pool）這類部署最關鍵。
+
+### 策略 3a — MAP_SHARED mmap（已驗證）
+
+所有 process 用 `mmap(MAP_SHARED)` 開同一個 DB file。整個 fleet 共享 OS page
+cache 的同一份 physical copy。**SQLite 開啟 `PRAGMA mmap_size = <size>` 就走
+這條路徑**。
+[multiprocess/src/multiprocess_residency.c](multiprocess/src/multiprocess_residency.c)。
+
+**狀態：** 已驗證（[multiprocess/](multiprocess/)）。
+**結果：**
+- 3 個 child process 各讀 1/3 的 DB，parent 完全沒讀任何東西
+- 最後 `mincore()` 看到 **25,613 / 25,613 pages 全部 resident**，跨 process 共享確實成立
+- 任何一個 process 呼叫 `madvise(MADV_WILLNEED)` prefetch，其他 process 立即受惠
+
+**結論：** **prefetch 的成本固定 O(1)，效益隨 process 數量 O(N) 放大**。是
+mobile / embedded 場景下 prefetch 設計的天然 multiplier。
+
+### 策略 3b — Private buffer pool per process（已驗證對照）
+
+`PRAGMA mmap_size=0` + `PRAGMA cache_size=N`，每個 process 持有獨立 buffer pool。
+[multiprocess/src/multiprocess_buffer_pool.c](multiprocess/src/multiprocess_buffer_pool.c)。
+
+**狀態：** 已驗證對照組。
+**結果：**
+
+| Process 數量 | MAP_SHARED 總 RAM | Private buffer pool 總 RAM |
+|---:|---:|---:|
+| 3 | ~100 MB | ~30 MB |
+| 10 | ~100 MB | ~100 MB |
+| 100 | ~100 MB | **~1 GB** |
+
+**結論：** Process 數量少時 private buffer pool 反而省 RAM（因為只 cache 用到
+的 working set）；但 process 數量 → ∞ 時 MAP_SHARED 是唯一可行解。**這也是
+為什麼 Android / mobile 場景一定要走 mmap 路徑**。
+
+---
+
+## 組合策略 — 目前測過的最佳堆疊
+
+```
+Layout:           type-aware (layout_rewriter)    ← scatter 0.00
+Prefetch:         layers_5                         ← 5 syscalls, 94 µs
+Memory sharing:   MAP_SHARED                       ← 多 process 自動受惠
+```
+
+在 Workload A 上：first query 從 baseline **404 µs → 127 µs（-69%）**，且
+prefetch 的 5 個 syscall 可由任一 process 出資、整個 fleet 共享成果。
+
+---
+
+## 策略狀態總覽
+
+| 類別 | 策略 | 狀態 |
+|---|---|---|
+| Layout | 1a 原始 | ✅ baseline |
+| Layout | 1b SQLite VACUUM | ✅ 完整覆蓋（A/B/C × {baseline, range, perpage, layers_N sweep, 2f SLRU}）—— N=5 仍是 cost-effective 預設、A vac 甜蜜點移到 N=20、2f vacuum 開銷比 orig 省 7-16% |
+| Layout | 1c type-aware layout_rewriter | ✅ 已完成（A 最強 -69%、C + perpage -37%；B 反效果）|
+| Prefetch | 2a Range（structure） | ✅ 已完成 |
+| Prefetch | 2b Perpage（structure） | ✅ 已完成 |
+| Prefetch | 2c Layers N（structure） | ✅ 已完成 N sweep on A/B/C × {orig, vacuum} + **churned DB**（N=5 只是 A 的甜蜜點；B 全 plateau、C 必須 N=92 且乾淨/churned 都成立）|
+| Prefetch | 2d Access pattern，interior only | 🚧 未實作 |
+| Prefetch | 2e Access pattern，interior + leaf | 🚧 未實作 |
+| Prefetch | 2f SLRU（mincore-dumped resident set）| ✅ 已完成 A/B/C × layout 1a/1b/1c（layout-agnostic：first-q 三 layout 一致 13–16 µs；1b 可省 ~17% prefetch overhead）|
+| Memory sharing | 3a MAP_SHARED | ✅ 已驗證 |
+| Memory sharing | 3b Private buffer pool | ✅ 已驗證對照 |
