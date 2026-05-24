@@ -285,7 +285,7 @@ C 上的「query 走的 interior path 不在 file 前段」—— 按 offset 排
 #### ✅ 已完成
 
 - **工具鏈完整**：classify_pages、benchmark_harness、residency_checker、prefetch_layers、layout_rewriter、prefetch_slru 全部可用
-- **prefetch 策略全覆蓋**：2a Range / 2b Perpage / 2c Layers_N sweep / 2f SLRU 在 Workload A/B/C × Layout 1a/1b 上完整跑過（1c 上 A/B/C × {range, perpage, layers_5} 也完成）
+- **prefetch 策略全覆蓋**：2a Range / 2b Perpage / 2c Layers_N sweep / 2f SLRU 在 Workload A/B/C × Layout **1a / 1b / 1c** 上完整跑過。**2f SLRU 是 layout-agnostic**（三個 layout first-q 都 13–16 µs；只有 1b 能省 ~17% prefetch overhead）
 - **3 個層次都有結果**：
   1. **找到 prefetch 甜蜜點**（A 上 N=5、-54%）
   2. **解掉了 VACUUM 的問題**（type-aware layout_rewriter，A 上 -69%）
@@ -297,7 +297,7 @@ C 上的「query 走的 interior path 不在 file 前段」—— 按 offset 排
 
 - **2d / 2e Access-pattern-based prefetch 未實作**：layers_N 的「按 file offset 排序」啟發式在 Workload C 上失效（第 11 章驚訝 1）。改用 access count 排序的前 N 應該能在 C 上以遠少於 92 個 syscall 達到相近效益
 - **2f SLRU 在 RAM 緊（cgroup < working set）的對照**：目前 RAM 充裕，2f vs 2d/2e 看不出差異
-- **2f SLRU × Layout 1c**：2f 只在 1a/1b 跑過
+- ~~**2f SLRU × Layout 1c**：2f 只在 1a/1b 跑過~~ → **已補完**：結論是 2f SLRU layout-agnostic（first-q 三 layout 13–16 µs 沒有顯著差異），詳見 [overall_results.md 第十一維](overall_results.md#第十一維--2f-slru--layout-1c-type-aware)
 - **Zipfian 變體**：low-key hotspot vs high-key hotspot 對 prefetch 效益的影響
 - ~~**N sweep on churned DB**：prefetch_churn 只測 N=5~~ → **已補完**（見第 7 章補測：N=92 −54%）
 

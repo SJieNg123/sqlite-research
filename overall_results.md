@@ -8,7 +8,9 @@
 > [第六維](#第六維--策略-1b-sqlite-vacuum--workload-b--c)（1b VACUUM）、
 > [第七維](#第七維--策略-1c-type-aware-layout--workload-b--c)（1c type-aware）、
 > [第八維](#第八維--2c-layers_n-sweep--workload-b--c原始-layout)（N sweep）、
-> [第九維](#第九維--layout-1b-vacuum-補測n-sweep--2f-slru--abc)（vacuum × N sweep + 2f）。
+> [第九維](#第九維--layout-1b-vacuum-補測n-sweep--2f-slru--abc)（vacuum × N sweep + 2f）、
+> [第十維](#第十維--n-sweep--workload-c--churned-db補齊-prefetch_churn-缺口)（churned DB × N sweep）、
+> [第十一維](#第十一維--2f-slru--layout-1c-type-aware)（2f SLRU × type-aware layout）。
 > Workload D 是 churn generator，沒有自己的 latency 結果。
 >
 > 不同實驗用的 cold-start 機制不同（`sudo drop_caches` vs
@@ -132,6 +134,10 @@ page cache 裡的所有 resident page，存成 `hotpages.csv`。下次 cold star
 對照**三個 workload**：A (Zipfian、`workloadc.txt`)、B (Uniform、
 `workload_uniform.txt`)、C (high-key uniform、`page_churn_benchmark_high.txt`)，
 原始 layout，3 reps median，`posix_fadvise(POSIX_FADV_DONTNEED)` 冷啟動。
+
+> Layout 1b (VACUUM) 版本見 [第九維](#第九維--layout-1b-vacuum-補測n-sweep--2f-slru--abc)，
+> Layout 1c (type-aware) 版本見 [第十一維](#第十一維--2f-slru--layout-1c-type-aware)。
+> 結論預告：2f SLRU 在三個 layout 上 first-q 都是 13–16 µs（layout-agnostic）。
 
 ### Hot set（warmup 後 resident 的 page 分佈）
 
@@ -579,6 +585,81 @@ sudo），跟第四維的 `sudo drop_caches` **不同冷啟動機制**，絕對 
 
 ---
 
+## 第十一維 — 2f SLRU × Layout 1c (type-aware)
+
+第五維把 2f SLRU 跑在 Layout 1a 上、第九維補 Layout 1b（vacuum）。本節補上剩餘
+缺口 **Layout 1c × {baseline, layers_5, 2f SLRU} × Workload A/B/C × 3 reps**，
+回答「type-aware layout 把 interior 集中到檔頭之後，2f SLRU 還能再省什麼」。
+
+**直覺：** 1c 把 interior 排到 page 2..93，但 2f SLRU 的 prefetch 集合是
+mincore-dumped resident set（~4,000 個 page，主要由 leaf 組成），跟 interior
+位置幾乎無關。預測：first-q 不會更好，prefetch overhead 也不會明顯下降。
+
+### Latency 矩陣（median over 3 reps）
+
+| Workload | 策略 | first-q (µs) | avg (µs) | prefetch (µs) | n_prefetch |
+|---|---|---:|---:|---:|---:|
+| **A** | baseline | 321 | 4.06 | — | — |
+| A | layers_5 | 127（-61%） | 4.03 | 11 | 5 |
+| A | **2f SLRU** | **15（-95%）** | **2.41（-41%）** | 7,596 | 4,043 |
+| **B** | baseline | 304 | 4.03 | — | — |
+| B | layers_5 | 132（-56%） | 4.03 | 17 | 5 |
+| B | **2f SLRU** | **16（-95%）** | **2.45（-39%）** | 7,497 | 4,107 |
+| **C** | baseline | 249 | 2.53 | — | — |
+| C | layers_5 | 140（-44%） | 2.52 | 18 | 5 |
+| C | **2f SLRU** | **13（-95%）** | **2.35（-7%）** | 1,845 | 417 |
+
+### 跨 layout 對照（2f SLRU 三個 layout 並列）
+
+| Workload | Layout 1a (orig) | Layout 1b (vacuum) | Layout 1c (type-aware) |
+|---|---|---|---|
+| A first-q (µs) | 13.88 | 15.07 | 14.98 |
+| A prefetch (µs) | 7,478 | 6,704 | 7,596 |
+| A n_prefetch | 4,048 | 3,369 | 4,043 |
+| B first-q (µs) | 14.61 | 14.34 | 16.05 |
+| B prefetch (µs) | 7,614 | 6,303 | 7,497 |
+| B n_prefetch | 4,122 | 3,373 | 4,107 |
+| C first-q (µs) | 16.17 | 13.54 | 13.28 |
+| C prefetch (µs) | 1,881 | 1,910 | 1,845 |
+| C n_prefetch | 420 | 394 | 417 |
+
+### 四個發現
+
+1. **2f SLRU 是 layout-agnostic**：first-q 在三個 layout 上都落在 13–16 µs，
+   差異 < 3 µs（小於單筆 noise）。Layout 改 interior 位置對 mincore 撈到的
+   resident set 幾乎沒影響。
+
+2. **1c 沒有像 layers_5 那樣放大 2f SLRU 效益**：1c × layers_5 在 A 上 -69%
+   （第二維），相對於 1a × layers_5 的 -54% 是顯著放大；但 1c × 2f SLRU
+   只有 -95%（基本上跟 1a/1b 一樣），因為 2f SLRU 的 -94~95% 是 leaf preload
+   主導，已經接近 RAM hit 上限，不留 layout 加成空間。
+
+3. **1b（vacuum）才是真正能省 prefetch overhead 的 layout**：n_prefetch
+   從 1a 的 4,048 / 4,122 降到 1b 的 3,369 / 3,373（A/B 各省 ~17%）；1c
+   的 n_prefetch 跟 1a 幾乎一致。原因：VACUUM 物理壓縮 file，working set
+   裡的 page 數量真的變少；layout_rewriter 只搬位置不刪 page。
+
+4. **1c baseline 在 B 上也是最差的（304 µs，比 1a 255 µs / 1b 230 µs 高）**：
+   跟第七維「1c 在 B 上 baseline 變慢」結論一致。但 2f SLRU 蓋掉這個 penalty
+   後，1c 的 first-q 跟 1a/1b 並排。
+
+### 結論
+
+- **2f SLRU 不需要也用不到 layout 1c**：working-set preload 機制天花板已碰到
+  RAM hit，layout 加成空間 < 3 µs。
+- **想堆 layout × prefetch 乘數效應的人應該選 1c + layers_5**（A 上 -69% 是
+  全局最強）；2f SLRU 應該用 layout 1a 或 1b。
+- **1b 是 2f SLRU 的省 RAM 搭檔**：working set 縮 ~17%，prefetch 開銷下降，
+  全 workload 改善仍 -38~40%（第九維）。
+
+資料來源：
+- 矩陣: [prefetch_slru/runs/matrix_ta_results.csv](prefetch_slru/runs/matrix_ta_results.csv)
+- Median 摘要: [prefetch_slru/runs/matrix_ta_aggregated.csv](prefetch_slru/runs/matrix_ta_aggregated.csv)
+- 跑法: [prefetch_slru/runs/runmatrix_ta.sh](prefetch_slru/runs/runmatrix_ta.sh) + [warmup_ta.sh](prefetch_slru/runs/warmup_ta.sh)
+- Hot-set CSVs: [hotpages_a_ta.csv](prefetch_slru/runs/hotpages_a_ta.csv) / [b_ta](prefetch_slru/runs/hotpages_b_ta.csv) / [c_ta](prefetch_slru/runs/hotpages_c_ta.csv)
+
+---
+
 ## 還沒跑的策略 × workload 組合
 
 | 缺口 | 為什麼值得測 |
@@ -586,7 +667,6 @@ sudo），跟第四維的 `sudo drop_caches` **不同冷啟動機制**，絕對 
 | **2d Access pattern, interior-only** | 整個策略未實作。`layers_N` 假設「offset 越小 = 越熱」對 B+tree 結構成立，但忽略不同 query 路徑使用不同分支。**第八維已直接證明這個假設在 Workload C 上失效**（layers_N≤46 只 -15%，必須 N=92 才 -46%）。用 access count 排序的前 N 個 interior 應該能在 C 上以遠少於 92 個 syscall 達到相近效益 |
 | **2e Access pattern, interior + leaf (7:3 / 5:5)** | 未實作。Workload A 有 leaf-level 熱點，prefetch top-K interior + top-M leaf 可能直接砍掉部分 leaf fault；可以驗證「2f 之所以 -94% 是因為 leaf preload」這個假設能否用更少 syscall 達成 |
 | **2f SLRU 在 RAM 緊的對照** | 第五維是 RAM 充裕情境，2f vs 2d/2e 看不出差異。用 cgroup 把 RAM 預算壓到 < working set，才能體現 SLRU 不會挑重點的缺點 |
-| **2f SLRU × Layout 1c (type-aware)** | 2f 只在 Layout 1a 上跑過。Layout 1c 已經把 interior 集中到檔頭，2f 還能再省什麼是個有趣對照（直覺上 first-q 不會更好，但 prefetch overhead 可能下降）|
 | **Zipfian low-key hotspot variant** | 目前 Workload A 的熱點分佈在整個 [8, 99997] 區段。若熱點全在 [1, 1000]（≈ append-only churn）或全在 [99k, 100k]（≈ random churn），prefetch 效益會分歧 |
 
 ---

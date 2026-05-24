@@ -199,7 +199,7 @@ layout 上還剩多少效益」。
 |---|---|---|---|
 | **Layout 1a (orig)** | ✅ 全策略 | ✅ 全策略 | ✅ 全策略 |
 | **Layout 1b (VACUUM)** | ✅ baseline + range/perpage/layers_5 + **N sweep + 2f SLRU** | ✅ 全策略 | ✅ 全策略 |
-| **Layout 1c (type-aware)** | ✅ baseline + range/perpage/layers_5 | ✅ baseline + range/perpage/layers_5 | ✅ baseline + range/perpage/layers_5 |
+| **Layout 1c (type-aware)** | ✅ baseline + range/perpage/layers_5 + **2f SLRU** | ✅ baseline + range/perpage/layers_5 + **2f SLRU** | ✅ baseline + range/perpage/layers_5 + **2f SLRU** |
 | **Churn 漂移** | — | — | ✅ 10 checkpoints × **N sweep {0,1,5,10,20,46,92}** |
 
 B 早就不再只是「對照組」 — 它是 prefetch 失敗模式（leaf fault 主導）和 ta
