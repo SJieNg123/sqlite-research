@@ -50,3 +50,16 @@ warmup_records/
 # --- Log / stderr dumps ---
 *.log
 *.err
+
+# --- Intermediate trace CSVs (regenerable; final results live in
+#     matrix_*_results.csv, *_summary.csv, *_aggregated.csv, hotpages_*.csv,
+#     classify_{before,after,vacuum,orig}.csv, results/, per-N
+#     benchmark_summary.csv & interior_summary.csv — those stay tracked) ---
+# Per-rep 100k-row latency traces (3 reps × N cells; only first row used)
+ops_*_r[0-9].csv
+ops_*_r[0-9][0-9].csv
+# Warmup pass traces (result is hotpages_*.csv, ops trace itself unused)
+warmup_*ops*.csv
+# N-sweep per-checkpoint intermediates (final = benchmark_summary.csv per N)
+prefetch_churn/runs_nsweep/n*/benchmarks/
+prefetch_churn/runs_nsweep/n*/checkpoints/
