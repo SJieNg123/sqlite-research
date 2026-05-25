@@ -67,3 +67,17 @@ warmup_*ops*.csv
 # N-sweep per-checkpoint intermediates (final = benchmark_summary.csv per N)
 prefetch_churn/runs_nsweep/n*/benchmarks/
 prefetch_churn/runs_nsweep/n*/checkpoints/
+
+# Access-pattern × churn per-checkpoint intermediates (final =
+# benchmark_summary.csv per strategy + matrix_first_q_us.csv at top level)
+prefetch_churn/runs_access_churn/*/benchmarks/
+prefetch_churn/runs_access_churn/*/checkpoints/
+prefetch_churn/runs_access_churn/*/interior_pages.csv
+prefetch_churn/runs_access_churn/*/evict.sh
+prefetch_churn/runs_access_churn/run_all.log
+
+# Multi-process prefetch cadence: rec/ holds per-probe benchmark_harness records
+# + 100-line workload slices, regenerable from cadence_experiment.py
+multiprocess/runs_prefetch_cadence/rec/
+multiprocess/runs_prefetch_cadence/work*.db
+multiprocess/runs_prefetch_cadence/cadence_run*.log

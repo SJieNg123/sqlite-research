@@ -203,6 +203,19 @@ layout 上還剩多少效益」。
 > → **2d/2e 已完成**（A/B/C × 3 layouts × 6 reps）；2f × 1c 也已完成。
 > 詳見 [overall_results.md 第十四/十五/十六維](overall_results.md)。
 
+- ~~**2d/2e × churned DB**：第十維只測 layers_N × churn；access-pattern prefetch
+  在 churn 下的衰退曲線未知。~~ → **已補（minimal sweep）**：1a × C × 10
+  checkpoints × 50 k 寫入 ops，**靜態 t=0 hotpages 即可**——acc_2d 仍 -50%，
+  acc_2e_K10 仍 -91%。原因：workload C 的 hot leaves（[590k, 610k]）與 churn
+  insert target（id 600001+）大幅重疊 → hot-leaf set workload-stable。
+  詳見 [prefetch_churn/runs_access_churn/README.md](prefetch_churn/runs_access_churn/README.md)。
+  剩餘 open：A（Zipfian）+ 隨機刪除 churn 下 hot leaves 會旋轉，需要 per-checkpoint re-warmup 才能維持效益。
+- ~~**多 process 場景下 prefetch worker cadence**：DB 持續被 churn 時，prefetcher
+  該多久跑一次？~~ → **已補（minimal sweep）**：4 cadence × 4 rounds × gap=3 s，
+  **cadence=1 s 把 first_q 295 µs → 19 µs（-94%）**；cadence=5 s 只有 ~50%
+  hit rate；cadence=30 s 等同無 prefetcher。**經驗法則：cadence ≤ gap_s**。
+  詳見 [multiprocess/runs_prefetch_cadence/README.md](multiprocess/runs_prefetch_cadence/README.md)。
+
 ## 已完成的覆蓋（A/B/C 三維 × 全策略矩陣）
 
 對照原本只有「A → prefetch_vacuum + layout_rewriter; C → prefetch_churn; B 只

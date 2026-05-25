@@ -223,6 +223,9 @@ def write_prefetch_wrapper(
     mode: str,
     page_size: int,
     n_pages: int,
+    hotpages_csv: Path | None = None,
+    cap_interior: int = 0,
+    cap_leaf: int = 0,
 ) -> None:
     if mode == "none":
         return
@@ -245,6 +248,21 @@ def write_prefetch_wrapper(
                 shlex.quote(str(db_path.resolve())),
                 shlex.quote(str(classify_csv.resolve())),
                 str(n_pages),
+                str(page_size),
+            ]
+        )
+    elif mode in {"access-2d", "access-2e"}:
+        if hotpages_csv is None:
+            raise RuntimeError(f"mode {mode} requires --prefetch-hotpages")
+        leaf = 0 if mode == "access-2d" else cap_leaf
+        command = " ".join(
+            [
+                shlex.quote(executable_path(prefetch_tool)),
+                shlex.quote(str(db_path.resolve())),
+                shlex.quote(str(classify_csv.resolve())),
+                shlex.quote(str(hotpages_csv.resolve())),
+                str(cap_interior),
+                str(leaf),
                 str(page_size),
             ]
         )
@@ -389,6 +407,9 @@ def run_benchmark_round(
             args.prefetch_mode,
             page_size,
             args.prefetch_pages,
+            hotpages_csv=Path(args.prefetch_hotpages) if args.prefetch_hotpages else None,
+            cap_interior=args.prefetch_cap_interior,
+            cap_leaf=args.prefetch_cap_leaf,
         )
     else:
         prefetch_script = Path("")
@@ -861,10 +882,18 @@ def validate_benchmark_args(args: argparse.Namespace) -> None:
             prefetch_tool = Path(args.prefetch_tool)
         elif args.prefetch_mode == "layers":
             prefetch_tool = Path("prefetch_vacuum/src/prefetch_layers")
+        elif args.prefetch_mode in {"access-2d", "access-2e"}:
+            prefetch_tool = Path("prefetch_access/src/prefetch_access")
         else:
             prefetch_tool = Path("prefetch_vacuum/src/prefetch")
         args.prefetch_tool = str(prefetch_tool)
         ensure_path(prefetch_tool, "prefetch tool")
+        if args.prefetch_mode in {"access-2d", "access-2e"}:
+            if not args.prefetch_hotpages:
+                raise SystemExit(
+                    f"--prefetch-mode {args.prefetch_mode} requires --prefetch-hotpages <hotpages.csv>"
+                )
+            ensure_path(Path(args.prefetch_hotpages), "prefetch hotpages")
 
     if args.run_residency_checker:
         ensure_path(Path(args.residency_checker), "residency checker")
@@ -1162,7 +1191,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--prefetch-mode",
-        choices=("none", "range", "perpage", "layers"),
+        choices=("none", "range", "perpage", "layers", "access-2d", "access-2e"),
         default="layers",
         help="prefetch strategy to run after cold/drop-caches and before query measurement",
     )
@@ -1176,6 +1205,23 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=5,
         help="number of pages for --prefetch-mode layers",
+    )
+    parser.add_argument(
+        "--prefetch-hotpages",
+        default="",
+        help="hotpages CSV (page_number,is_resident) for --prefetch-mode access-2d/access-2e",
+    )
+    parser.add_argument(
+        "--prefetch-cap-interior",
+        type=int,
+        default=0,
+        help="interior page cap for --prefetch-mode access-2d/access-2e (0=all resident interior)",
+    )
+    parser.add_argument(
+        "--prefetch-cap-leaf",
+        type=int,
+        default=0,
+        help="leaf page cap for --prefetch-mode access-2e (top-K hot leaves)",
     )
     parser.add_argument(
         "--benchmark-cold-advice",

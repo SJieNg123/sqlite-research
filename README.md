@@ -369,14 +369,16 @@ C 上的「query 走的 interior path 不在 file 前段」—— 按 offset 排
 
 - ~~**2d / 2e Access-pattern-based prefetch 未實作**~~ → **✅ 已完成**：2d 在 1a × C **4 個 syscall -47.6%**（追平 layers_92）；2e_K10 在 C × 任一 layout **14-42 syscalls -82~84%**（超越 2f SLRU 的 -77%）。詳見 [overall_results.md 第十四維 / 第十五維](overall_results.md)
 - ~~**2f SLRU 在 RAM 緊（cgroup < working set）的對照**~~ → **✅ 已完成（756-cell 完整矩陣）**：systemd-run --user --scope -p MemoryMax=20M 跑 **A/B/C × 1a/1b/1c × 7 strategies × {20M, none} × 6 reps**。**結論**：(1) **first-q 對 RAM 壓力幾乎免疫**——63 cells 的 ratio 全部落在 [0.90, 1.19]；(2) **「2f SLRU + 1b vacuum」是 RAM 緊環境的全保留組合**——A/B/C × vacuum × 2f × 20M 仍 majflt=0 / avg=1.50；1a/1c 下 2f preload 被 evict 跌回 base level。詳見 [overall_results.md 第十六維](overall_results.md#第十六維--ram-pressure-完整矩陣cgroup-memorymax20-mb-abc--1a1b1c--base-2d-2e_k1050100500-2f_slru)
-- **多 process 場景下，prefetch worker 該多久跑一次？**（DB 持續被 churn 時）
-- **2d/2e × churned DB**：第十維只測 layers_N × churn；access-pattern prefetch 在 DB 持續變動下的衰退曲線未知（hot leaves 集合會隨 checkpoint 漂移）
+- ~~**多 process 場景下，prefetch worker 該多久跑一次？**（DB 持續被 churn 時）~~ → **✅ 已完成（minimal sweep）**：4 cadence × 4 rounds × gap=3s 量測，cadence=1s 把 first_q 從 295µs 壓到 19µs（**-94%**）；cadence=5s 只有 50% hit rate（mean 177µs, -40%）；cadence=30s 等於 no prefetcher。**經驗法則：cadence ≤ gap_s 才可靠 warm；cadence ≥ 10× gap_s 等同於沒跑**。詳見 [multiprocess/runs_prefetch_cadence/README.md](multiprocess/runs_prefetch_cadence/README.md)
+- ~~**2d/2e × churned DB**：第十維只測 layers_N × churn；access-pattern prefetch 在 DB 持續變動下的衰退曲線未知~~ → **✅ 已完成（10 checkpoints × 50k churn ops, 1a × C）**：用 **t=0 靜態 hotpages**（不重新 warmup），acc_2d 仍 -50%，**acc_2e_K10 仍 -91%**（超過 layers_92 的 -54%）。原因：workload C 讀 [590k, 610k]，writer 插入 id=600001+ 大多打到同樣的 hot leaves → hot-leaf 集合 workload-stable。**「hot pages 一次算好、跨 churn 重用」是可行的 production pattern**（前提：access pattern 與 churn pattern 不正交）。詳見 [prefetch_churn/runs_access_churn/README.md](prefetch_churn/runs_access_churn/README.md)
 
 #### 🔬 待回答的研究問題
 
 1. ~~2d/2e access-pattern prefetch 能否在 Workload C 上以 <10 個 syscall 達到接近 layers_92 的 -46% 改善？~~
    → **YES，而且超過預期。** 2d 用 **4 個 syscall** 在 C × 1a 上拿到 -47.6%（追平 layers_92 的 -46%，syscall 數從 92→4 省 23×）；2e_K10 用 14 個 syscall 在 C × 1a 上拿到 **-83.9%**（甚至超越 2f SLRU 的 -77%）。**Access-count ordering 完勝 file-offset ordering**，且邊際 syscall 成本極低（每多 1 個 madvise ≈ 救 18 µs first-query latency）
 2. **2f SLRU 在 RAM 緊（cgroup MemoryMax=20M）時還有用嗎？** → **First-q 完全免疫；avg/majflt 是否退化依 layout 而定**。756-cell 全矩陣（A/B/C × 1a/1b/1c × 7 strategies × {20M, none} × 6 reps）發現：(a) **63 cells 的 first-q ratio 全部落在 [0.90, 1.19]**——2f SLRU first-q 在 20M 下仍 15-19 µs；(b) **1b vacuum 是唯一讓 2f 在 20M 下仍保持 majflt=0 / avg=1.50 的 layout**——1a/1c 下 2f preload 被 evict、avg/majflt 跌回 base level（first-q 仍贏）。**「2f SLRU + 1b vacuum」是 RAM 緊環境的全保留配方**。
+3. **多 process 場景下，prefetch worker cadence 該多大？** → **Cadence ≤ gap_s 才可靠 warm**。在 writer + prefetcher + probe 三線程的最小實驗中（gap=3 s），cadence=1 s 把 first_q 從 295 µs 壓到 19 µs（-94%），cadence=5 s 只有 ~50% hit rate（177 µs, -40%），cadence=30 s 等同無 prefetcher。1 s prefetcher 成本是 ~14 syscalls/s，但 N 個 reader 共享同一個 MAP_SHARED page cache，所以 prefetcher 開銷固定、benefit 乘 N。
+4. **2d/2e access-pattern prefetch 在 churned DB 上會不會退化？** → **不會（在 workload C × high-key 插入 churn 條件下）**。10 checkpoints × 50k 寫入 ops，**靜態 hotpages（t=0 計算）** 仍能讓 acc_2e_K10 達到 -91%、acc_2d 達到 -50%。原因：workload C 的 hot leaves（key 590k-610k）與 churn 的 insert target（id 600001+）大幅重疊 → hot-leaf 集合幾乎不變。**access-pattern × churn-pattern 的「正交性」是衰退的真正驅動力**——不正交時可以「一次算好、跨 checkpoint 重用」；正交時則需要週期性 re-warmup。
 
 ---
 
@@ -463,11 +465,14 @@ python3 classify_pages/plot_pages.py pages.csv page_layout.png
 - `workloads/` — page churn workload 檔案
 - `results/` — 各 checkpoint 的 churn / prefetch summary CSV（含 `nsweep_churn_*.csv` 補測結果）
 - `runs_nsweep/` — N∈{0,1,5,10,20,46,92} × 11 checkpoint sweep（unprivileged `posix_fadvise` evict）
+- `runs_access_churn/` — 2d / 2e_K10 access-pattern prefetch × 50 k 寫入 churn（**靜態 t=0 hotpages 即可，2e_K10 -91%**）
 - `logs/` — benchmark_harness run 紀錄
 
 ### [multiprocess/](multiprocess/) — Multi-process mmap 實驗
 
 詳見 [multiprocess/MULTIPROCESS_MMAP.md](multiprocess/MULTIPROCESS_MMAP.md) 與 [multiprocess/MADVISE_KERNEL_NOTES.md](multiprocess/MADVISE_KERNEL_NOTES.md)。
+
+- `runs_prefetch_cadence/` — **prefetch worker 排程實驗**：writer + prefetcher + probe 三線程，掃 cadence ∈ {1 s, 5 s, 30 s, never}。**結論：cadence ≤ gap_s 才可靠 warm**（cadence=1 s, gap=3 s 拿到 -94%）。詳見 [multiprocess/runs_prefetch_cadence/README.md](multiprocess/runs_prefetch_cadence/README.md)
 
 ### [prefetch_vacuum/](prefetch_vacuum/) — Prefetch + VACUUM 實驗
 
