@@ -97,3 +97,5 @@ multiprocess/runs_prefetch_cadence/work*.db
 multiprocess/runs_prefetch_cadence/cadence_run*.log
 
 .claude/
+
+__pycache__/
