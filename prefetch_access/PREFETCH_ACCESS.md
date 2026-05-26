@@ -1,14 +1,21 @@
-# Prefetch Access-pattern — 策略 2d / 2e：access-count-ordered prefetch
+# Prefetch Access-pattern — 策略 2d / 2e / 3a / 3b：access-count-ordered prefetch
 
 `prefetch_access` 跑一遍 workload 取得「真實 walk 過的 interior pages」與「真實
 查詢命中過的 leaf pages」，下一輪 cold start 時只對這些 page 呼叫
 `madvise(MADV_WILLNEED)`。對照 [overall_strategies.md](../overall_strategies.md)
-的編號，這個目錄涵蓋兩條軸線：
+的編號，這個目錄涵蓋四條相關軸線：
 
 | 策略 | 載什麼 | 用途 |
 |---|---|---|
 | **2d** | 只 prefetch 真正被走過的 interior pages | 取代 2c layers_N 的「按 file offset 排前 N」啟發式，用 access count 排 |
-| **2e** | 2d 集合再加 top-K 熱 leaves | 加上 leaf preload，但 K 可調（K=10/50/100/500）|
+| **2e** | 2d 集合再加 top-K 熱 leaves | 加上 leaf preload，K 可調（K=10/50/100/500）|
+| **3a** | = 2e_K=40（interior:leaf ≈ 7:3 spec）| 原 prefetch spec 的 ratio variant，2026-05 補跑 |
+| **3b** | = 2e_K=92（interior:leaf ≈ 5:5 spec）| 同上，5:5 ratio |
+
+> **編號註：** 原 spec 把「interior+leaf」分成 3a (7:3) 和 3b (5:5) 兩種 ratio。
+> Codebase 把它參數化成 K（top-K leaves），所以 3a/3b 對應到 K=40/K=92。
+> 注意：**「Memory-sharing 3a/3b」（MAP_SHARED / Private buffer pool）已重新編號為 4a/4b**，
+> 避免跟這裡的 ratio 系列撞名。
 
 策略 2f (`prefetch_slru/`) 跟這裡的差別：2f 只看 mincore residency snapshot
 （**hot/cold 二元**），這裡的 2d/2e 用 **access count**（區分 1 次 vs 100 次），
@@ -119,6 +126,41 @@ cells、median of 6）。
 > 的都是 2d（n_leaf=0）。修正後（[`src/prefetch_access.c`](src/prefetch_access.c)
 > 第 113-115 行）重跑，現在的數據才是合法的 2e 結果。
 
+### 3a / 3b（ratio-based variants：K=40 / K=92，2026-05 補跑）
+
+原 spec 的 ratio: 3a = 7:3 (interior:leaf), 3b = 5:5。在 92 個 interior 的 DB 上對應：
+- **3a → K=40**（92 × 30/70 ≈ 40）
+- **3b → K=92**（92 × 50/50 = 92）
+
+**資料：** [runs/matrix_2e_ratio_results.csv](runs/matrix_2e_ratio_results.csv)（108 rows, 6 reps × 2 K × 3 workloads × 3 layouts）。**Driver：** [runs/runmatrix_2e_ratio.sh](runs/runmatrix_2e_ratio.sh)。
+
+**實際 ratio 表（2e 只 prefetch resident interior，不是全部 92）：**
+
+| Workload × Layout | resident interior | K=40 實際 ratio | K=92 實際 ratio |
+|---|---:|---|---|
+| A × 1a | 18 | 31:69 | 16:84 |
+| A × 1b | 12 | 23:77 | 12:88 |
+| **A × 1c** | **31** | **44:56** ← 最接近 3a | 25:75 |
+| B × 1a | 16 | 29:71 | 15:85 |
+| B × 1c | 31 | 44:56 | 25:75 |
+| C × 1a | 4 | 9:91 | 4:96 |
+| C × 1c | 32 | 44:56 | 26:74 |
+
+**只有 ta layout 接近 spec ratio**——因為 ta layout 把 interior 集中，warmup 期觸碰到的 interior 比較多（31-32 vs 4-18）。
+
+**Latency 結果（first-query µs, median of 6 reps）：**
+
+| WL | 1a (K=40) | 1a (K=92) | 1b (K=40) | 1b (K=92) | 1c (K=40) | 1c (K=92) |
+|---|---:|---:|---:|---:|---:|---:|
+| A | 233 | 212 | 251 | 214 | 250 | **410 ⚠️** |
+| B | 251 | 243 | 253 | 251 | 254 | 345 |
+| C | 78 | 80 | 82 | 79 | 81 | 82 |
+
+**反直覺 hump**：**A × 1c × K=92 = 410 µs**，比 K=40 (250) 跟 K=500 (119) 都差。
+ta layout 加 92 個熱 leaves 引發 readahead pollution，直到 K=500 把整個熱集都載入才回穩。這個非單調 hump 是 ta-specific。
+
+> ⚠️ **與原 spec 的偏離**：實際 ratio 受 resident interior 數拖累，只有 ta layout 接近 spec（44:56），其他 layout 嚴重偏 leaf。要嚴格對齊 7:3，需改 2e 強制 prefetch 全部 92 interior（不只 resident），屬未來工作。視覺化見 [figures/out/10_ratio_sweep.png](../figures/out/10_ratio_sweep.png)。
+
 ## RAM-pressure 完整矩陣
 
 `runs/runmatrix_ram_pressure_full.sh` 用 `systemd-run --user --scope -p
@@ -157,7 +199,8 @@ runs/
   aggregate_ram_full.py         — 把 matrix CSV 聚合成 markdown
   cold_{orig,vacuum,ta}.sh      — 對應三個 DB layout 的 evict helper
   prefetch_2d_<wl>_<layout>.sh  — 9 個 2d wrapper（A/B/C × orig/vacuum/ta）
-  prefetch_2e_<WL>_<layout>_K<K>.sh — 36 個 2e wrapper (× 4 K)
+  prefetch_2e_<WL>_<layout>_K<K>.sh — 54 個 2e wrapper (× 6 K: 10/40/50/92/100/500)
+                                       — K=40 = 3a, K=92 = 3b（2026-05 補跑）
   prefetch_2f_<WL>_<layout>.sh  — 9 個 2f wrapper（呼叫 ../../prefetch_slru/runs/prefetch_slru）
   hotpages_<wl>[_<layout>].csv  — 各 workload × layout 的 mincore baseline
   hot2e_<WL>_<layout>_K<K>.csv  — gen_hotleaves.py 產生的 access-count ranked
@@ -171,6 +214,9 @@ runs/
   matrix_ram_results.csv         — 48-cell RAM 矩陣 raw
   matrix_ram_full_results.csv    — 756-cell RAM 矩陣 raw
   matrix_ram_full_summary.md     — aggregate_ram_full.py 輸出
+  matrix_2e_ratio_results.csv    — 3a/3b ratio 補跑（K=40/K=92，108 cells）
+  runmatrix_2e_ratio.sh          — 3a/3b driver
+  hot2e_<WL>_<layout>_K{40,92}.csv — 18 個 3a/3b hotpages CSV
 ```
 
 ## 結果文件對照
@@ -178,3 +224,5 @@ runs/
 - [overall_results.md 第十四維](../overall_results.md#第十四維--2d-access-pattern-prefetch-interior-only--abc--3-layouts) — 2d × A/B/C × 3 layouts
 - [overall_results.md 第十五維](../overall_results.md#第十五維--2e-access-pattern-prefetch-interior--top-k-leaves--abc--3-layouts--kk10k50k100k500) — 2e × A/B/C × 3 layouts × K∈{10,50,100,500}
 - [overall_results.md 第十六維](../overall_results.md#第十六維--ram-pressure-完整矩陣cgroup-memorymax20-mb-abc--1a1b1c--base-2d-2e_k1050100500-2f_slru) — RAM-pressure 全 756-cell 矩陣
+- [overall_results.md 第十七維](../overall_results.md#第十七維--策略-3a--3bratio-based-access-pattern-prefetchk40--k92--abc--3-layouts) — **3a / 3b ratio**：K=40 / K=92 補跑
+- [figures/out/10_ratio_sweep.png](../figures/out/10_ratio_sweep.png) — K∈{0,10,40,50,92,100,500} 視覺化 + actual-ratio 表

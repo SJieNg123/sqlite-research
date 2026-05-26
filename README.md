@@ -332,6 +332,20 @@ C 上的「query 走的 interior path 不在 file 前段」—— 按 offset 排
 
 > ⚠️ **歷史 bug**：先前 prefetch_access.c 的 cap_leaf ternary 兩條 branch 都返回同樣值，導致所有 2e_K* 實際上跑的是 2d（n_leaf=0）。已修復、重跑、結果都是合法的。
 
+**對齊原始 spec 的 ratio variant（策略 3a / 3b，2026-05 補跑）：** 原 prefetch spec 把「interior + leaf」拆成兩種 ratio：**3a = 7:3、3b = 5:5**。Codebase 用 K (top-K leaves) 參數化，所以 3a → K=40、3b → K=92。但 2e 只 prefetch **resident interior**（warmup 真的觸碰過的，4–32 個，不是全部 92 個），實際 ratio 因 (workload, layout) 變動於 9:91 ~ 44:56 之間，**只有 ta layout 接近 spec 的 44:56**。
+
+| | K=40 (3a) | K=92 (3b) |
+|---|---:|---:|
+| A × 1a | 233 µs | 212 µs |
+| A × 1b | 251 µs | 214 µs |
+| **A × 1c** | **250 µs** | **410 µs ⚠️** |
+| B × 1a–1c | 251–254 µs | 243–345 µs |
+| C × 1a–1c | 78–82 µs | 79–82 µs |
+
+**最反直覺的點：A × 1c × K=92 = 410 µs，比 K=40 (250) 跟 K=500 (119) 都差**。ta layout 把 interior 集中後，加 92 個熱 leaves 引發 OS readahead pollution；直到 K=500 把整個熱集都載入才回穩。**這個非單調 K=92/100 hump 是 ta-specific**（1a/1b 上沒有）。C 則任何 K 都 saturate ~80 µs；B 沒有真的 hot leaf，ratio 怎麼分都差不多。**結論：ratio 不是 first-q 的主要 axis**，K 才是；除了 A × ta × K≈92 這個 anti-pattern 之外。視覺化見 [figures/out/10_ratio_sweep.png](figures/out/10_ratio_sweep.png)。
+
+> **編號註：** 原本「策略 3a/3b」指 multi-process memory-sharing（MAP_SHARED / Private buffer pool），**已重新編號為 4a/4b**，把 3a/3b 留給 ratio prefetch。
+
 **RAM 緊環境下還成立嗎？** systemd-run --user --scope -p MemoryMax=20M（< working set ~16 MB + DB 107 MB）跑完整 756-cell 矩陣（**A/B/C × 1a/1b/1c × 7 strategies × {20M, none} × 6 reps**）：
 
 | 觀察 | 數字 |
@@ -350,7 +364,7 @@ C 上的「query 走的 interior path 不在 file 前段」—— 按 offset 排
 
 **第九個學到的教訓**：**Access-count ordering 完勝 file-offset ordering**。當你有「最近的 query log」時，**4-14 個精選 syscall 比 92 個無腦載入更有效**。代價是需要一輪 warm-up 才能拿到 access count——適合 background prefetcher / SLRU 模式，不適合 cold first-ever-launch。**且整套 access-pattern prefetch 在 cgroup 20M 下優勢完全保留**。
 
-> 📂 詳見 [overall_results.md](overall_results.md) 第十四維（2d）、第十五維（2e）、第十六維（RAM-pressure 完整 756-cell 矩陣）。
+> 📂 詳見 [overall_results.md](overall_results.md) 第十四維（2d）、第十五維（2e）、第十六維（RAM-pressure 完整 756-cell 矩陣）、**第十七維（3a / 3b ratio = K=40 / K=92）**。
 
 ### 第 13 章：目前進度與下一步
 
