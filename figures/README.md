@@ -1,6 +1,6 @@
 # Publication-quality figures (Week 14)
 
-9 figures covering all 13 research weeks. Each script is self-contained
+10 figures covering all 13 research weeks. Each script is self-contained
 and reproducible from the CSVs already in the repo.
 
 ## Quick start
@@ -30,6 +30,7 @@ for f in figures/0?_*.py; do /home/u03/.cache/coldstart-venv/bin/python "$f"; do
 | 7 | [07_churn_evolution.py](07_churn_evolution.py) | [out/07_churn_evolution.png](out/07_churn_evolution.png) | First-query latency across 10 churn checkpoints (50 k total ops). Static t=0 hotpages survive both **C × insert-churn** and **A × delete-churn** with no decay. | `prefetch_churn/runs_access_churn{,_a}/matrix_first_q_us.csv` |
 | 8 | [08_cadence_comparison.py](08_cadence_comparison.py) | [out/08_cadence_comparison.png](out/08_cadence_comparison.png) | Multi-process prefetcher cadence vs probe latency. cadence=1 s → 16 µs (-95%); cadence ≥ 30 s → no effect. Rule: cadence ≤ gap_s. | `multiprocess/runs_prefetch_cadence/cadence_results.csv` |
 | 9 | [09_zlowkey_nsweep.py](09_zlowkey_nsweep.py) | [out/09_zlowkey_nsweep.png](out/09_zlowkey_nsweep.png) | Workload Z (Zipfian low-key) N-sweep across 3 layouts. Same N=5 elbow, same plateau ordering (1c < 1a < 1b) as A/B/C → **layers_N is a layout property, not workload-dependent**. | `layout_rewriter/runs/matrix_Nsweep_zlowkey_results.csv` |
+| 10 | [10_ratio_sweep.py](10_ratio_sweep.py) | [out/10_ratio_sweep.png](out/10_ratio_sweep.png) | 2e K-sweep mapped onto original ratio spec (K=40 ≈ Strategy 3a 7:3, K=92 ≈ Strategy 3b 5:5). Shows K=500 dominates A, 1c hits a non-monotonic K=92/100 hump, C saturates at any K. | `prefetch_access/runs/matrix_ram_full_results.csv` + `matrix_2e_ratio_results.csv` |
 
 ## Style conventions
 
