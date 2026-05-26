@@ -204,12 +204,20 @@ layout 上還剩多少效益」。
 > 詳見 [overall_results.md 第十四/十五/十六維](overall_results.md)。
 
 - ~~**2d/2e × churned DB**：第十維只測 layers_N × churn；access-pattern prefetch
-  在 churn 下的衰退曲線未知。~~ → **已補（minimal sweep）**：1a × C × 10
-  checkpoints × 50 k 寫入 ops，**靜態 t=0 hotpages 即可**——acc_2d 仍 -50%，
-  acc_2e_K10 仍 -91%。原因：workload C 的 hot leaves（[590k, 610k]）與 churn
-  insert target（id 600001+）大幅重疊 → hot-leaf set workload-stable。
-  詳見 [prefetch_churn/runs_access_churn/README.md](prefetch_churn/runs_access_churn/README.md)。
-  剩餘 open：A（Zipfian）+ 隨機刪除 churn 下 hot leaves 會旋轉，需要 per-checkpoint re-warmup 才能維持效益。
+  在 churn 下的衰退曲線未知。~~ → **已完整補上**：
+  - **C × insert-churn**（[prefetch_churn/runs_access_churn/](prefetch_churn/runs_access_churn/README.md)）：
+    1a × C × 10 checkpoints × 50 k 寫入 ops，acc_2d -50% / acc_2e_K10 -91%，
+    static t=0 hot 沒 decay（insert target 600001+ 跟 read range [590k, 610k] 重疊）。
+  - **A × delete-churn**（[prefetch_churn/runs_access_churn_a/](prefetch_churn/runs_access_churn_a/README.md)）：
+    3 arms × 10 checkpoints × 50 k delete-heavy ops；**2e_K10 -92.4% / 2d -91.8% / 2e_K50 -91.5%**，
+    static t=0 hot **完全沒 decay**（hypothesis 推翻 — Zipfian 熱 keys 散佈
+    寬，delete from id=1 沒擾動 hot leaves）。**結論：access-pattern × static
+    hot 在兩種 churn 類型下都穩定**。
+  - **A/B × layers_N × churn**（[prefetch_churn/runs_nsweep_a/](prefetch_churn/runs_nsweep_a/README.md)
+    + [prefetch_churn/runs_nsweep_b/](prefetch_churn/runs_nsweep_b/README.md)）：
+    補齊 N sweep 第二、第三個 workload（之前只有 C）。A: layers_5 -90.7%
+    plateau；B: layers_5 -45.9% / layers_92 -49.2%（leaf 沒自然熱、跟 C 同
+    形狀）。**churn 不改變 layers_N 的 plateau 形狀**。
 - ~~**多 process 場景下 prefetch worker cadence**：DB 持續被 churn 時，prefetcher
   該多久跑一次？~~ → **已補（minimal sweep）**：4 cadence × 4 rounds × gap=3 s，
   **cadence=1 s 把 first_q 295 µs → 19 µs（-94%）**；cadence=5 s 只有 ~50%
@@ -226,7 +234,7 @@ layout 上還剩多少效益」。
 | **Layout 1a (orig)** | ✅ 全策略 + **RAM 20M** | ✅ 全策略 + **RAM 20M** | ✅ 全策略 + **RAM 20M** |
 | **Layout 1b (VACUUM)** | ✅ baseline + range/perpage/layers_5 + **N sweep + 2f SLRU + 2d/2e + RAM 20M** | ✅ 全策略 + **2d/2e + RAM 20M** | ✅ 全策略 + **2d/2e + RAM 20M** |
 | **Layout 1c (type-aware)** | ✅ baseline + range/perpage + **N sweep** + 2f SLRU + **2d/2e + RAM 20M** | ✅ baseline + range/perpage + **N sweep** + 2f SLRU + **2d/2e + RAM 20M** | ✅ baseline + range/perpage + **N sweep** + 2f SLRU + **2d/2e + RAM 20M** |
-| **Churn 漂移** | — | — | ✅ 10 checkpoints × **N sweep {0,1,5,10,20,46,92}** |
+| **Churn 漂移** | ✅ **N sweep + 2d/2e × delete-churn** | ✅ **N sweep × insert+delete churn** | ✅ 10 checkpoints × **N sweep + 2d/2e × insert-churn** |
 | **RAM-pressure 全矩陣** | ✅ 7 strategies × 1a/1b/1c × {20M, none} × 6 reps | ✅ 同左 | ✅ 同左 |
 
 B 早就不再只是「對照組」 — 它是 prefetch 失敗模式（leaf fault 主導）和 ta

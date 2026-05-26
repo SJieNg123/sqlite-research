@@ -67,6 +67,14 @@ warmup_*ops*.csv
 # N-sweep per-checkpoint intermediates (final = benchmark_summary.csv per N)
 prefetch_churn/runs_nsweep/n*/benchmarks/
 prefetch_churn/runs_nsweep/n*/checkpoints/
+prefetch_churn/runs_nsweep_a/evict
+prefetch_churn/runs_nsweep_a/n*/benchmarks/
+prefetch_churn/runs_nsweep_a/n*/checkpoints/
+prefetch_churn/runs_nsweep_a/n*/test_churn.db*
+prefetch_churn/runs_nsweep_b/evict
+prefetch_churn/runs_nsweep_b/n*/benchmarks/
+prefetch_churn/runs_nsweep_b/n*/checkpoints/
+prefetch_churn/runs_nsweep_b/n*/test_churn.db*
 
 # Access-pattern × churn per-checkpoint intermediates (final =
 # benchmark_summary.csv per strategy + matrix_first_q_us.csv at top level)
@@ -75,6 +83,12 @@ prefetch_churn/runs_access_churn/*/checkpoints/
 prefetch_churn/runs_access_churn/*/interior_pages.csv
 prefetch_churn/runs_access_churn/*/evict.sh
 prefetch_churn/runs_access_churn/run_all.log
+prefetch_churn/runs_access_churn_a/*/benchmarks/
+prefetch_churn/runs_access_churn_a/*/checkpoints/
+prefetch_churn/runs_access_churn_a/*/interior_pages.csv
+prefetch_churn/runs_access_churn_a/*/evict.sh
+prefetch_churn/runs_access_churn_a/*/test_churn.db*
+prefetch_churn/runs_access_churn_a/run_all.log
 
 # Multi-process prefetch cadence: rec/ holds per-probe benchmark_harness records
 # + 100-line workload slices, regenerable from cadence_experiment.py
