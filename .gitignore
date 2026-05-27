@@ -89,6 +89,12 @@ prefetch_churn/runs_access_churn_a/*/interior_pages.csv
 prefetch_churn/runs_access_churn_a/*/evict.sh
 prefetch_churn/runs_access_churn_a/*/test_churn.db*
 prefetch_churn/runs_access_churn_a/run_all.log
+prefetch_churn/runs_access_churn_b/*/benchmarks/
+prefetch_churn/runs_access_churn_b/*/checkpoints/
+prefetch_churn/runs_access_churn_b/*/interior_pages.csv
+prefetch_churn/runs_access_churn_b/*/evict.sh
+prefetch_churn/runs_access_churn_b/*/test_churn.db*
+prefetch_churn/runs_access_churn_b/run_all.log
 
 # Multi-process prefetch cadence: rec/ holds per-probe benchmark_harness records
 # + 100-line workload slices, regenerable from cadence_experiment.py
