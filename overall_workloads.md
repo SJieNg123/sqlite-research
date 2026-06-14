@@ -3,8 +3,89 @@
 這個檔案說明 repo 裡**現階段實際使用**的 workload，以及每個 workload 對應到哪個實驗、想模擬什麼情境。
 
 所有 workload 都跑在同一個 reference DB 上 (`testdb_builder.py` 產生的
-`items(id PK, k1, k2, payload BLOB(100))`，**600,000 rows**，~102 MiB，26,331 ×
-4 KB pages，其中 92 個 interior pages)，這樣不同 workload 的結果可以橫向比較。
+`items(id PK, k1, k2, payload BLOB(100))`，**600,000 rows**)。
+
+---
+
+## Reference DB 結構
+
+**Schema：** `items(id INTEGER PRIMARY KEY, k1 INTEGER, k2 INTEGER, payload BLOB(100))`
+加上一個 secondary index `idx_items_k1k2 ON items(k1, k2)`。
+
+**核心數字（layout 1a 原始 DB）：**
+
+| 項目 | 數值 |
+|---|---|
+| `PRAGMA page_size` | **4096 bytes (4 KB)** — SQLite 預設 |
+| 總 row 數 | **600,000** |
+| 總 page 數 | **26,331** |
+| 整個 DB 大小 | **107,851,776 bytes ≈ 102.86 MiB（~102 MB）** |
+| **Interior pages** | **92 個 → 92 × 4 KB = 368 KB（0.35%）** |
+| **Leaf pages** | **26,239 個 → 26,239 × 4 KB ≈ 102.5 MB（99.65%）** |
+
+**比例直觀感受：** Interior 跟 Leaf 的數量比 ≈ **1 : 285**；大小比 ≈ **368 KB : 102 MB**。
+**Interior 全載只需 368 KB，就可避開 cold start 時 92 次 4 KB random I/O。**
+
+**Interior 細分（92 = 51 table interior + 41 index interior）：**
+
+| Page type | 個數 | 用途 |
+|---:|---:|---|
+| `interior_table` | 51 | `items` table B+tree 的內部節點 |
+| `interior_index` | 41 | secondary index `idx_items_k1k2` 的內部節點 |
+| **合計** | **92** | |
+
+**三個 layout 的 DB 大小對照：**
+
+| Layout | 檔案大小 | Page count | Interior | Leaf |
+|---|---|---|---|---|
+| **1a 原始（orig）** | 102.86 MiB | 26,331 | **92**（368 KB）| 26,239 |
+| **1b VACUUM** | 100.05 MiB | 25,613 | 85（340 KB）| 25,528 |
+| **1c Type-aware** | 102.86 MiB | 26,331 | **92**（368 KB）| 26,239 |
+
+資料來源：[layout_rewriter/runs/classify_before.csv](layout_rewriter/runs/classify_before.csv)（1a/1c）、
+[layout_rewriter/runs/classify_vacuum.csv](layout_rewriter/runs/classify_vacuum.csv)（1b）。
+
+**為什麼只有 1b VACUUM 變小、1c 不變？**
+
+- **1b VACUUM = 整庫打掉重建+壓實**，所以 page 數和檔案都變小；**1c type-aware
+  只把 page 重新排位置、不重塞資料**，所以 page 數/大小跟 1a 完全一樣（只有
+  scatter 變了，見下表）。
+- **1b 省下來的 718 個 page 全部來自 secondary index，table 一個都沒少：**
+
+  | Page type | 1a / 1c | 1b VACUUM | 差異 |
+  |---|---:|---:|---:|
+  | `interior_table`（items 表）| 51 | 51 | **0** |
+  | `leaf_table`（items 表資料）| 19,984 | 19,984 | **0** |
+  | `interior_index`（k1k2 索引）| 41 | 34 | **−7** |
+  | `leaf_index`（k1k2 索引資料）| 6,255 | 5,544 | **−711** |
+  | **合計** | **26,331** | **25,613** | **−718** |
+
+- 原因：`items` 的主鍵 `id` 是**遞增插入**，leaf 一頁塞滿才開新頁、本來就很密，
+  VACUUM 沒得壓；但 secondary index `idx_items_k1k2(k1,k2)` 是**亂序建的**，
+  page split 讓索引頁只塞到 ~60–90% 滿，VACUUM 改成按 key 排序灌入、把索引葉
+  子塞緊（−711 葉子 ≈ −11%），葉子變少後上層 index interior 也跟著少 7 個
+  （92→85 的 interior 減少**全部**是 41→34 的 index interior）。
+
+**為什麼這 92 個 interior page 是重點？**
+
+- Interior pages 只占整個 DB 的 **0.35%**（92/26,331），但 **每筆 query 都得從 root 走到 leaf**，沿路經過的 interior page **全部必須在記憶體裡**才能繼續往下找。
+- Cold start 時，這 92 個 page **每個都會觸發一次 disk I/O**（4 KB random read，HDD 上 ~5-10 ms，SSD 上 ~50-100 µs）。
+- Leaf page 雖然占 99.65%，但每筆 query 通常只命中 1-2 個 leaf；而且熱 keys 反覆被查，leaf 自然 cache warm。
+- → **整個 project 的目標：用 prefetch 把這 92 個 interior page 提前載進 OS page cache，避開 cold-start 的 random I/O。**
+
+**Interior page 的 file 散佈情況（scatter score）：**
+
+| Layout | Interior page 位置範圍 | Scatter score | 意義 |
+|---|---|---|---|
+| 1a orig | page 2 到 page 26,007 | **0.96** | 散佈於整個 file（接近 uniform） |
+| 1b vacuum | 跟 1a 類似 | **1.13**（更散） | VACUUM 沒幫忙，反而稍微更散 |
+| 1c type-aware | page 2 到 page 93（連續）| **0.0001** | 全部集中到檔頭、幾乎完美 clustering |
+
+> Scatter score 定義：interior pages 的相鄰 offset 差的中位數 / 「理想連續」的中位數。0 = 完美連續，1 = uniform 散佈。
+
+---
+
+這樣不同 workload 的結果可以橫向比較。
 
 Workload 格式（`benchmark_harness` 讀的）每行一個 op：
 ```
@@ -39,7 +120,7 @@ warm；唯一還是 cold 的是 interior page**。所以這個 workload 是 pref
 - `prefetch_slru/` 的 2f SLRU 驗證（orig + vacuum DB，first-q -94%、全 workload -39%）
 
 **為什麼這個 workload 會給「-54%」、「-69%」、甚至「-94%」這種看起來很漂亮的
-數字：** 因為冷啟動成本被拆成「interior fault + leaf fault + CPU」，Zipfian 下
+數字：** 因為 cold start 的 cost 被拆成「interior fault + leaf fault + CPU」，Zipfian 下
 leaf 部分被反覆查詢拉進 cache，**剩下的瓶頸只有 interior**，prefetch 一解就
 見效。而 2f SLRU 連 leaf 一起 preload，連那點 leaf cold fault 都消掉。
 
@@ -78,7 +159,7 @@ sampling、爬蟲式存取。**每筆 query 都打到沒看過的 leaf**，leaf 
 
 **模擬什麼：** 「新加入的資料馬上被讀取」— 例如剛收到的訊息、剛拍的照片、剛
 push 的 commit。**重點不是熱點，而是 id 落在哪個 file region**。Churn 過程持續
-INSERT 會把新資料放在檔尾，這個 workload 就在量「檔尾新資料的冷啟動 latency
+INSERT 會把新資料放在檔尾，這個 workload 就在量「檔尾新資料 cost start 的 latency
 怎麼隨 churn 累積而漂移」。
 
 **用在哪：**
@@ -172,24 +253,6 @@ layout 上還剩多少效益」。
 
 ---
 
-## 已知缺口（workload 層級）
-
-- **Zipfian「low-key hotspot」變體**：目前的 Workload A 雖然 Zipfian，但熱點
-  分佈在 8..99k 整個區段裡。若把熱點壓到 [1, 1000] 這種極窄區，prefetch 效益
-  會跟 [99k, 100k] 完全不同（前者 ≈ append-only churn pattern，後者 ≈ random
-  churn pattern）。**這兩個變體還沒測**。
-- ~~**N 在 churned DB 上的曲線**~~：已補（見
-  [overall_results.md 第十維](overall_results.md#第十維--n-sweep--workload-c--churned-db補齊-prefetch_churn-缺口)）。
-  結論：churned DB 上 N≤46 在 -10% 附近 plateau，**N=92 帶來 -54% 改善並在
-  10 個 checkpoint 上全部壓制其他 N**，跟乾淨 DB 上的形狀完全一致。Churn 不
-  改變「layers_N 在 C 上需要 N=92」的根本問題。
-- **RAM 緊縮場景的 workload**：目前的 A/B/C 都是 ~16 MB hot set in unlimited RAM。
-  缺一個 cgroup 限制下、hot set > RAM 的 workload，才能看出 2f SLRU vs
-  access-count（2d/2e）的差別。
-
-> 策略層級的缺口（2d/2e access-pattern、2f × layout 1c）見
-> [overall_results.md](overall_results.md) 的「還沒跑的策略 × workload 組合」表。
-
 ## 已完成的覆蓋（A/B/C 三維 × 全策略矩陣）
 
 對照原本只有「A → prefetch_vacuum + layout_rewriter; C → prefetch_churn; B 只
@@ -197,10 +260,16 @@ layout 上還剩多少效益」。
 
 | | A (Zipfian) | B (Uniform) | C (high-key) |
 |---|---|---|---|
-| **Layout 1a (orig)** | ✅ 全策略 | ✅ 全策略 | ✅ 全策略 |
-| **Layout 1b (VACUUM)** | ✅ baseline + range/perpage/layers_5 + **N sweep + 2f SLRU** | ✅ 全策略 | ✅ 全策略 |
-| **Layout 1c (type-aware)** | ✅ baseline + range/perpage/layers_5 + **2f SLRU** | ✅ baseline + range/perpage/layers_5 + **2f SLRU** | ✅ baseline + range/perpage/layers_5 + **2f SLRU** |
-| **Churn 漂移** | — | — | ✅ 10 checkpoints × **N sweep {0,1,5,10,20,46,92}** |
+| **Layout 1a (orig)** | ✅ 全策略 + **RAM 20M** | ✅ 全策略 + **RAM 20M** | ✅ 全策略 + **RAM 20M** |
+| **Layout 1b (VACUUM)** | ✅ baseline + range/perpage/layers_5 + **N sweep + 2f SLRU + 2d/2e + RAM 20M** | ✅ 全策略 + **2d/2e + RAM 20M** | ✅ 全策略 + **2d/2e + RAM 20M** |
+| **Layout 1c (type-aware)** | ✅ baseline + range/perpage + **N sweep** + 2f SLRU + **2d/2e + RAM 20M** | ✅ baseline + range/perpage + **N sweep** + 2f SLRU + **2d/2e + RAM 20M** | ✅ baseline + range/perpage + **N sweep** + 2f SLRU + **2d/2e + RAM 20M** |
+| **Churn 漂移** | ✅ **N sweep + 2d/2e × delete-churn** | ✅ **N sweep + 2d/2e × churn** | ✅ 10 checkpoints × **N sweep + 2d/2e × insert-churn** |
+| **RAM-pressure 全矩陣** | ✅ 7 strategies × 1a/1b/1c × {20M, none} × 6 reps | ✅ 同左 | ✅ 同左 |
 
 B 早就不再只是「對照組」 — 它是 prefetch 失敗模式（leaf fault 主導）和 ta
 layout 反效果（+8%）的主要證據來源。
+
+RAM-pressure 矩陣現已涵蓋 **9 個 (workload × layout) cell × 7 個策略 × 2 個 mem 上限**，
+全部以 6 reps median 聚合（756 cells，第十六維）。原本只測 A × 1a × 4 策略
+的 48-cell 縮影矩陣完全被取代，且新舊矩陣在 A × 1a × 4 策略上誤差 ≤ 3 µs
+（交叉驗證）。

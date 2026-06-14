@@ -268,6 +268,25 @@ C 上的「query 走的 interior path 不在 file 前段」—— 按 offset 排
 
 > ➕ **後續驗證（2026-05）**：把 N sweep 跑在 **churned DB** 上（10 個 checkpoint 累積 50,000 ops），N=92 同樣是唯一贏家（−54%），其他 N 全部退化。Churn 把新 interior pages 推到檔尾，跟 C 的「熱頁不在 file 前段」結構同源 → 這條 Zipfian-friendly 觀察在動態 DB 上也成立。見第 7 章補測。
 
+> ➕ **後續驗證（2026-05，第 12 維）**：把 N sweep 跑在 **Layout 1c (type-aware)** × A/B/C 上，發現「最佳 N 跟 layout 強耦合」：
+> - **A on 1c**: layers_N 上限從 1a 的 -26% 跳到 **-71%**；N≥5 全 plateau（U 型曲線消失，因為 TA 把 interior 集中到檔頭，任何 N≥5 都 cover）
+> - **C on 1c**: **N=46 -32%（最佳）、N≥5 全 -29~32%**；N=92 反而退到 -10%（inverted cliff）—— TA 解掉 C「必須載全 92 個」的問題
+> - **B on 1c**: layers_N 失效（N=5 +4%、最佳 N=46 -23%）；1c 對 B 是 layout-hostile
+>
+> 詳見 [overall_results.md 第十二維](overall_results.md#第十二維--n-sweep--layout-1c-type-aware--abc)。
+
+> ➕ **後續驗證（2026-05，第 13 維）**：新增 **Workload Z (Zipfian low-key
+> hotspot, keys [1, 1000], α=0.99)**，跑 N sweep × 3 layout，回答「熱點落在
+> file 哪段會不會改變結論」：
+> - **跟 A 結果同形（差異 ≤ 5pp）**：1a 最佳 N=20 −31%、1b 最佳 N=5 −31%、
+>   1c 最佳 N=92 −72%；hotspot location 不是 prefetch 效益的主要變因
+> - **N=1 universally worse**：on 1a/1b 比 baseline 還慢 ~+22%（純 madvise
+>   syscall overhead、root page 已 cached、無 coverage 受益），跟 A 的 N=1
+>   退化同源 → 確認「N=1 從來不是合理選擇」
+> - **1c 永遠最強**：跨 4 個 N 值（0/5/20/92）1c 都贏 1a/1b 30~50%
+>
+> 詳見 [overall_results.md 第十三維](overall_results.md#第十三維--n-sweep--workload-z-zipfian-low-key-hotspot--1a1b1c)。
+
 **驚訝 2：Type-aware layout 不是 universal best。**
 
 - Workload A: **-69%**（最強）
@@ -280,12 +299,79 @@ C 上的「query 走的 interior path 不在 file 前段」—— 按 offset 排
 
 > 📂 見 [overall_results.md](overall_results.md) 第六/七/八/九維。
 
-### 第 12 章：目前進度與下一步
+### 第 12 章：解掉 Workload C — Access-pattern prefetch（2026-05）
+
+第 11 章發現 layers_N 在 Workload C 上「必須 N=92」才能達到 -46%。**為什麼？** 因為 layers_N 按 **file offset** 排前 N，C 的熱頁不在檔頭。如果改按 **access count** 排前 N 呢？
+
+實作：跑一遍 workload 拿到「真實被 walk 的 interior pages + 真實 hottest leaves」（`prefetch_access/`），然後 cold start 時 madvise 那些 page。**這需要先有一輪 access history**——所以是 warm-start 策略，不是 first-ever-launch 策略。
+
+**2d（interior-only）—— 用 4 個 syscall 追平 layers_92 的 -46%**：
+
+| Workload × Layout | syscalls | 改善 |
+|---|---:|---:|
+| C × 1a (orig)   | **4**  | **-47.6%** |
+| C × 1b (vacuum) | 4      | -47.4% |
+| C × 1c (ta)     | 32     | -52.2% |
+| B × 任一 layout | 14-31  | -47~51% |
+| A × 任一 layout | 14-21  | **+0~3%**（持平 baseline——A 熱點集中在前段，已被 readahead cover）|
+
+2d 在 C 上把 syscall 從 92→4（省 23×）、改善持平 layers_92。這是 file-offset ordering vs access-count ordering 的本質差異。
+
+**2e（interior + top-K hot leaves）—— 邊際 syscall 把 first-query 推到接近 0**：
+
+| Workload × Layout × K | syscalls | 改善 |
+|---|---:|---:|
+| C × 1a × K=10 | **14** | **-83.9%** |
+| C × 1b × K=10 | 14 | -83.0% |
+| C × 1c × K=10 | 42 | -82.3% |
+| C × 任一 K=500 | ~514 | -98~99% |
+| A × 任一 K=500 | ~510 | -73~77% |
+| B × 任一 K=500 | ~510 | -49~58% |
+
+**驚訝**：2e_K10 在 C 上把 first-query 從 baseline 切掉 **84%**，**超過 2f SLRU 的 -77%**——而 2f 要 dump 整個 mincore (~4030 leaves)，2e_K10 只要 14 個 madvise。**邊際 syscall 報酬率：每多 1 個 madvise ≈ 救 18 µs first-query latency**。
+
+> ⚠️ **歷史 bug**：先前 prefetch_access.c 的 cap_leaf ternary 兩條 branch 都返回同樣值，導致所有 2e_K* 實際上跑的是 2d（n_leaf=0）。已修復、重跑、結果都是合法的。
+
+**對齊原始 spec 的 ratio variant（策略 3a / 3b，2026-05 補跑）：** 原 prefetch spec 把「interior + leaf」拆成兩種 ratio：**3a = 7:3、3b = 5:5**。Codebase 用 K (top-K leaves) 參數化，所以 3a → K=40、3b → K=92。但 2e 只 prefetch **resident interior**（warmup 真的觸碰過的，4–32 個，不是全部 92 個），實際 ratio 因 (workload, layout) 變動於 9:91 ~ 44:56 之間，**只有 ta layout 接近 spec 的 44:56**。
+
+| | K=40 (3a) | K=92 (3b) |
+|---|---:|---:|
+| A × 1a | 233 µs | 212 µs |
+| A × 1b | 251 µs | 214 µs |
+| **A × 1c** | **250 µs** | **410 µs ⚠️** |
+| B × 1a–1c | 251–254 µs | 243–345 µs |
+| C × 1a–1c | 78–82 µs | 79–82 µs |
+
+**最反直覺的點：A × 1c × K=92 = 410 µs，比 K=40 (250) 跟 K=500 (119) 都差**。ta layout 把 interior 集中後，加 92 個熱 leaves 引發 OS readahead pollution；直到 K=500 把整個熱集都載入才回穩。**這個非單調 K=92/100 hump 是 ta-specific**（1a/1b 上沒有）。C 則任何 K 都 saturate ~80 µs；B 沒有真的 hot leaf，ratio 怎麼分都差不多。**結論：ratio 不是 first-q 的主要 axis**，K 才是；除了 A × ta × K≈92 這個 anti-pattern 之外。視覺化見 [figures/out/10_ratio_sweep.png](figures/out/10_ratio_sweep.png)。
+
+> **編號註：** 原本「策略 3a/3b」指 multi-process memory-sharing（MAP_SHARED / Private buffer pool），**已重新編號為 4a/4b**，把 3a/3b 留給 ratio prefetch。
+
+**RAM 緊環境下還成立嗎？** systemd-run --user --scope -p MemoryMax=20M（< working set ~16 MB + DB 107 MB）跑完整 756-cell 矩陣（**A/B/C × 1a/1b/1c × 7 strategies × {20M, none} × 6 reps**）：
+
+| 觀察 | 數字 |
+|---|---|
+| First-q ratio (20M / unlimited) 全部範圍 | **[0.90, 1.19]**（63 cells） |
+| 2e_K10 on C × 任一 layout × 20M | **-82~88%** (跟 unlimited 一致) |
+| 2f SLRU first-q on 任一 (WL, layout) × 20M | **15-19 µs** (-95~98%, unlimited 一致) |
+| 2f SLRU majflt on 1b vacuum × 20M | **0** (unlimited 也是 0) |
+| 2f SLRU majflt on 1a/1c × 20M | 172-181（**preload 被 evict、跌回 base level**） |
+| 2f SLRU avg_us on 1b vacuum × 20M | **1.50/1.56**（unlimited 也是 1.50/1.56） |
+| 2f SLRU avg_us on 1a/1c × 20M | 1.79-1.87（**退到 base level**） |
+
+**兩個關鍵發現：**
+1. **First-q 對 RAM 壓力幾乎免疫**：63 cells 沒有任何一個 ratio > 1.2x。「cgroup MemoryMax 會打殘 prefetch」這個直覺被推翻——first-q 只需要 ~4 個 page 在 cache 裡，cgroup 20 MB 完全充足。
+2. **1b vacuum 是 2f SLRU 的「avg/majflt RAM-pressure-immune」唯一 layout**：A/B/C × vacuum 在 20M 下 2f 仍保持 majflt=0、avg=1.50（unlimited 一致）。1a/1c 下 2f preload 被 evict 跌回 base level。**「2f SLRU + 1b vacuum」是 RAM 緊環境的全保留組合**。
+
+**第九個學到的教訓**：**Access-count ordering 完勝 file-offset ordering**。當你有「最近的 query log」時，**4-14 個精選 syscall 比 92 個無腦載入更有效**。代價是需要一輪 warm-up 才能拿到 access count——適合 background prefetcher / SLRU 模式，不適合 cold first-ever-launch。**且整套 access-pattern prefetch 在 cgroup 20M 下優勢完全保留**。
+
+> 📂 詳見 [overall_results.md](overall_results.md) 第十四維（2d）、第十五維（2e）、第十六維（RAM-pressure 完整 756-cell 矩陣）、**第十七維（3a / 3b ratio = K=40 / K=92）**。
+
+### 第 13 章：目前進度與下一步
 
 #### ✅ 已完成
 
-- **工具鏈完整**：classify_pages、benchmark_harness、residency_checker、prefetch_layers、layout_rewriter、prefetch_slru 全部可用
-- **prefetch 策略全覆蓋**：2a Range / 2b Perpage / 2c Layers_N sweep / 2f SLRU 在 Workload A/B/C × Layout **1a / 1b / 1c** 上完整跑過。**2f SLRU 是 layout-agnostic**（三個 layout first-q 都 13–16 µs；只有 1b 能省 ~17% prefetch overhead）
+- **工具鏈完整**：classify_pages、benchmark_harness、residency_checker、prefetch_layers、layout_rewriter、prefetch_slru、prefetch_access 全部可用
+- **prefetch 策略全覆蓋**：2a Range / 2b Perpage / 2c Layers_N sweep / **2d Access-pattern interior-only** / **2e Access-pattern interior + top-K leaves** / 2f SLRU 在 Workload A/B/C × Layout **1a / 1b / 1c** 上完整跑過。**2f SLRU 是 layout-agnostic**（三個 layout first-q 都 13–16 µs；只有 1b 能省 ~17% prefetch overhead）。**2c layers_N 完整跨三 layout 矩陣**（A/B/C × {1a, 1b, 1c} × N∈{0,1,5,10,20,46,92}）：最佳 N 跟 layout 強耦合（1c × A: N=92 -71%、1c × C: N=46 -32%、1c × B: layers_N 失效）。**2d/2e access-pattern prefetch 主要打到 Workload C**：2d 在 1a × C 只用 **4 個 syscall** 拿到 -47.6%（追平 layers_92 的 -46% 但 syscall 從 92→4，省 23×）；2e_K10 在 C × 任一 layout 上用 14-42 syscalls 拿到 **-82~84%**（明顯超過 2f SLRU 的 -77%）
 - **3 個層次都有結果**：
   1. **找到 prefetch 甜蜜點**（A 上 N=5、-54%）
   2. **解掉了 VACUUM 的問題**（type-aware layout_rewriter，A 上 -69%）
@@ -295,18 +381,20 @@ C 上的「query 走的 interior path 不在 file 前段」—— 按 offset 排
 
 #### 🚧 進行中 / 待做
 
-- **2d / 2e Access-pattern-based prefetch 未實作**：layers_N 的「按 file offset 排序」啟發式在 Workload C 上失效（第 11 章驚訝 1）。改用 access count 排序的前 N 應該能在 C 上以遠少於 92 個 syscall 達到相近效益
-- **2f SLRU 在 RAM 緊（cgroup < working set）的對照**：目前 RAM 充裕，2f vs 2d/2e 看不出差異
-- ~~**2f SLRU × Layout 1c**：2f 只在 1a/1b 跑過~~ → **已補完**：結論是 2f SLRU layout-agnostic（first-q 三 layout 13–16 µs 沒有顯著差異），詳見 [overall_results.md 第十一維](overall_results.md#第十一維--2f-slru--layout-1c-type-aware)
-- **Zipfian 變體**：low-key hotspot vs high-key hotspot 對 prefetch 效益的影響
-- ~~**N sweep on churned DB**：prefetch_churn 只測 N=5~~ → **已補完**（見第 7 章補測：N=92 −54%）
+- ~~**2d / 2e Access-pattern-based prefetch 未實作**~~ → **✅ 已完成**：2d 在 1a × C **4 個 syscall -47.6%**（追平 layers_92）；2e_K10 在 C × 任一 layout **14-42 syscalls -82~84%**（超越 2f SLRU 的 -77%）。詳見 [overall_results.md 第十四維 / 第十五維](overall_results.md)
+- ~~**2f SLRU 在 RAM 緊（cgroup < working set）的對照**~~ → **✅ 已完成（756-cell 完整矩陣）**：systemd-run --user --scope -p MemoryMax=20M 跑 **A/B/C × 1a/1b/1c × 7 strategies × {20M, none} × 6 reps**。**結論**：(1) **first-q 對 RAM 壓力幾乎免疫**——63 cells 的 ratio 全部落在 [0.90, 1.19]；(2) **「2f SLRU + 1b vacuum」是 RAM 緊環境的全保留組合**——A/B/C × vacuum × 2f × 20M 仍 majflt=0 / avg=1.50；1a/1c 下 2f preload 被 evict 跌回 base level。詳見 [overall_results.md 第十六維](overall_results.md#第十六維--ram-pressure-完整矩陣cgroup-memorymax20-mb-abc--1a1b1c--base-2d-2e_k1050100500-2f_slru)
+- ~~**多 process 場景下，prefetch worker 該多久跑一次？**（DB 持續被 churn 時）~~ → **✅ 已完成（minimal sweep）**：4 cadence × 4 rounds × gap=3s 量測，cadence=1s 把 first_q 從 295µs 壓到 19µs（**-94%**）；cadence=5s 只有 50% hit rate（mean 177µs, -40%）；cadence=30s 等於 no prefetcher。**經驗法則：cadence ≤ gap_s 才可靠 warm；cadence ≥ 10× gap_s 等同於沒跑**。詳見 [multiprocess/runs_prefetch_cadence/README.md](multiprocess/runs_prefetch_cadence/README.md)
+- ~~**2d/2e × churned DB**：第十維只測 layers_N × churn；access-pattern prefetch 在 DB 持續變動下的衰退曲線未知~~ → **✅ 已完成（10 checkpoints × 50k churn ops, 1a × C）**：用 **t=0 靜態 hotpages**（不重新 warmup），acc_2d 仍 -50%，**acc_2e_K10 仍 -91%**（超過 layers_92 的 -54%）。原因：workload C 讀 [590k, 610k]，writer 插入 id=600001+ 大多打到同樣的 hot leaves → hot-leaf 集合 workload-stable。**「hot pages 一次算好、跨 churn 重用」是可行的 production pattern**（前提：access pattern 與 churn pattern 不正交）。詳見 [prefetch_churn/runs_access_churn/README.md](prefetch_churn/runs_access_churn/README.md)
+- ~~**access-pattern × A 的 delete-heavy churn 會不會 decay？**~~ → **✅ 已完成（B1，gap audit）**：3 arms × 10 checkpoint。**2e_K10_static -92.4%, 2d_static -91.8%, 2e_K50_static -91.5%**——全部贏過 layers_92 (-91.4%)，hypothesis（delete from id=1 會擾動 Zipfian 低 id 熱 keys）**被推翻**。原因：50k delete 集中在窄區、B+tree 不立即 merge、hot leaves 持續被 read 命中。**access-pattern × static hot 在 insert/delete 兩種正交 churn 下都穩定**。詳見 [prefetch_churn/runs_access_churn_a/README.md](prefetch_churn/runs_access_churn_a/README.md) 以及 [overall_results.md 第十八維](overall_results.md#第十八維--churn-擴充abc--churn--2c-layers_n--2d--2e_kab--churn--statictk0-hotpages)
+- ~~**layers_N × churn 換成 A / B workload，plateau 形狀會不會變？**~~ → **✅ 已完成（B2，gap audit）**：A × churn N=5 已到 plateau (-90.7%)、N=92 (-91.4%)；B × churn N=5 接近 plateau (-45.9%)、N=92 (-49.2%)。**Churn 不改變 layers_N 的 plateau 形狀**——A 是 leaf 自然熱、interior 是唯一瓶頸（N=5 就夠）；B/C 是 cold leaf workload、上限卡在 -50% 左右。詳見 [prefetch_churn/runs_nsweep_a/README.md](prefetch_churn/runs_nsweep_a/README.md) + [prefetch_churn/runs_nsweep_b/README.md](prefetch_churn/runs_nsweep_b/README.md)
 
 #### 🔬 待回答的研究問題
 
-1. ~~Type-aware VACUUM 真的能把 prefetch 效益從 -9% 救回 -54% 嗎？~~ → **已解答（第 9 章），救回到 -69%**
-2. 在「low key hotspot」的 Zipf workload 下，prefetch 效益會比 uniform 還差嗎？
-3. 多 process 場景下，prefetch worker 該多久跑一次？（DB 持續被 churn 時）
-4. **新**：2d/2e access-pattern prefetch 能否在 Workload C 上以 <10 個 syscall 達到接近 layers_92 的 -46% 改善？
+1. ~~2d/2e access-pattern prefetch 能否在 Workload C 上以 <10 個 syscall 達到接近 layers_92 的 -46% 改善？~~
+   → **YES，而且超過預期。** 2d 用 **4 個 syscall** 在 C × 1a 上拿到 -47.6%（追平 layers_92 的 -46%，syscall 數從 92→4 省 23×）；2e_K10 用 14 個 syscall 在 C × 1a 上拿到 **-83.9%**（甚至超越 2f SLRU 的 -77%）。**Access-count ordering 完勝 file-offset ordering**，且邊際 syscall 成本極低（每多 1 個 madvise ≈ 救 18 µs first-query latency）
+2. **2f SLRU 在 RAM 緊（cgroup MemoryMax=20M）時還有用嗎？** → **First-q 完全免疫；avg/majflt 是否退化依 layout 而定**。756-cell 全矩陣（A/B/C × 1a/1b/1c × 7 strategies × {20M, none} × 6 reps）發現：(a) **63 cells 的 first-q ratio 全部落在 [0.90, 1.19]**——2f SLRU first-q 在 20M 下仍 15-19 µs；(b) **1b vacuum 是唯一讓 2f 在 20M 下仍保持 majflt=0 / avg=1.50 的 layout**——1a/1c 下 2f preload 被 evict、avg/majflt 跌回 base level（first-q 仍贏）。**「2f SLRU + 1b vacuum」是 RAM 緊環境的全保留配方**。
+3. **多 process 場景下，prefetch worker cadence 該多大？** → **Cadence ≤ gap_s 才可靠 warm**。在 writer + prefetcher + probe 三線程的最小實驗中（gap=3 s），cadence=1 s 把 first_q 從 295 µs 壓到 19 µs（-94%），cadence=5 s 只有 ~50% hit rate（177 µs, -40%），cadence=30 s 等同無 prefetcher。1 s prefetcher 成本是 ~14 syscalls/s，但 N 個 reader 共享同一個 MAP_SHARED page cache，所以 prefetcher 開銷固定、benefit 乘 N。
+4. **2d/2e access-pattern prefetch 在 churned DB 上會不會退化？** → **在 C × insert / A × delete 兩個正交 churn 條件下都不會退化**。10 checkpoints × 50k 寫入 ops，**靜態 hotpages（t=0 計算）** 在三組設置都撐住：(a) **C × insert-churn**: acc_2e_K10 -91% / acc_2d -50%（hot leaves 跟 insert target 重疊）；(b) **A × delete-heavy churn (B1 補測)**: 2e_K10_static **-92.4%** / 2d_static **-91.8%** / 2e_K50_static -91.5%，全部贏過 layers_92（-91.4%）。原假設「delete from id=1 會擾動 A 的低 id 熱 keys」被推翻——50k delete 集中在窄區、B+tree 不立即 merge、hot leaves 持續被 read 命中。(c) **A/B × layers_N × churn (B2 補測)**: A layers_5 -90.7% / B layers_5 -45.9%，churn 不改變 N-sweep plateau 形狀。**結論**：access-pattern × static hot 是 production-ready baseline；plateau 高度由 workload leaf-warmth 決定（Zipfian -91% / uniform/high-key -49~54%），不由 churn 決定。
 
 ---
 
@@ -326,6 +414,7 @@ C 上的「query 走的 interior path 不在 file 前段」—— 按 offset 排
 ├── multiprocess/           # Multi-process mmap 實驗（第 6 章）
 ├── layout_rewriter/        # ⭐ Type-aware layout rewriter + cross-layout 矩陣（第 9, 11 章）
 ├── prefetch_slru/          # ⭐ 2f SLRU prefetch via mincore（第 10 章）
+├── prefetch_access/        # ⭐ 2d/2e access-pattern prefetch + 756-cell RAM-pressure 矩陣（第 12 章）
 └── frontend/               # 16-week 研究計畫 UI 元件
 ```
 
@@ -346,6 +435,7 @@ C 上的「query 走的 interior path 不在 file 前段」—— 按 offset 排
 | `prefetch_churn/` | 第 7–8 章 | 動態世界驗證 + workload 偏斜度討論 |
 | `layout_rewriter/` | 第 9, 11 章 | Type-aware layout + cross-workload 對照矩陣 |
 | `prefetch_slru/` | 第 10 章 | mincore-based working-set preload |
+| `prefetch_access/` | 第 12 章 | Access-pattern prefetch (2d/2e) + 756-cell RAM-pressure 矩陣 |
 | `frontend/16week_plan.jsx` | — | 整個研究計畫的 UI tracker |
 
 ## 各實驗目錄
@@ -391,11 +481,14 @@ python3 classify_pages/plot_pages.py pages.csv page_layout.png
 - `workloads/` — page churn workload 檔案
 - `results/` — 各 checkpoint 的 churn / prefetch summary CSV（含 `nsweep_churn_*.csv` 補測結果）
 - `runs_nsweep/` — N∈{0,1,5,10,20,46,92} × 11 checkpoint sweep（unprivileged `posix_fadvise` evict）
+- `runs_access_churn/` — 2d / 2e_K10 access-pattern prefetch × 50 k 寫入 churn（**靜態 t=0 hotpages 即可，2e_K10 -91%**）
 - `logs/` — benchmark_harness run 紀錄
 
 ### [multiprocess/](multiprocess/) — Multi-process mmap 實驗
 
 詳見 [multiprocess/MULTIPROCESS_MMAP.md](multiprocess/MULTIPROCESS_MMAP.md) 與 [multiprocess/MADVISE_KERNEL_NOTES.md](multiprocess/MADVISE_KERNEL_NOTES.md)。
+
+- `runs_prefetch_cadence/` — **prefetch worker 排程實驗**：writer + prefetcher + probe 三線程，掃 cadence ∈ {1 s, 5 s, 30 s, never}。**結論：cadence ≤ gap_s 才可靠 warm**（cadence=1 s, gap=3 s 拿到 -94%）。詳見 [multiprocess/runs_prefetch_cadence/README.md](multiprocess/runs_prefetch_cadence/README.md)
 
 ### [prefetch_vacuum/](prefetch_vacuum/) — Prefetch + VACUUM 實驗
 
@@ -408,6 +501,10 @@ python3 classify_pages/plot_pages.py pages.csv page_layout.png
 ### [prefetch_slru/](prefetch_slru/) — 2f SLRU Prefetch（mincore-based）
 
 跑完一次 workload 後用 `mincore()` dump 當下 OS page cache 的 residency snapshot，下次 cold start 全部 `madvise(MADV_WILLNEED)`。**完全不用攔截 SQLite 內部**，~70 行 C。詳見 [prefetch_slru/PREFETCH_SLRU.md](prefetch_slru/PREFETCH_SLRU.md)。
+
+### [prefetch_access/](prefetch_access/) — Access-pattern Prefetch (2d/2e) + RAM-pressure Matrix
+
+從上一輪 query log 推出 page access count，把 madvise 預算花在「最常被讀的」interior + 最熱 K 個 leaves。2d = interior-only (4-92 syscalls)、2e_K = interior + top-K leaves。**Workload C × 1a 上 2d 只用 4 個 syscall 拿到 -47.6%**（追平 layers_92 的 -46%，syscall 從 92→4 省 23×），**2e_K10 在 C × 任一 layout 用 14-42 syscalls 拿到 -82~84%**（超越 2f SLRU 的 -77%）。包含 756-cell RAM-pressure 完整矩陣（A/B/C × 1a/1b/1c × 7 strategies × {20M, none} × 6 reps）。詳見 [prefetch_access/PREFETCH_ACCESS.md](prefetch_access/PREFETCH_ACCESS.md)。
 
 ### [frontend/](frontend/) — 16-week Research Plan UI
 
