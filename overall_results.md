@@ -21,9 +21,10 @@
 > Workload D 是 churn generator，沒有自己的 latency 結果。
 >
 > **2c dense N=0..92 sweep 補測**（~5,580 額外 benchmark）：證實 sparse 6-pt
-> 在 9/12 cells 結論正確；漏掉的 sweet spot（A×1b N=62、B×1c N=26、C×1b N=87）
-> 已 inline 寫入第八/九/十二維與 [overall_strategies.md](overall_strategies.md) 的
-> 2c bullet。資料: [layout_rewriter/runs/nsweep_full/](layout_rewriter/runs/nsweep_full/)
+> 在 9/12 cells 結論正確；漏掉的 sweet spot（**A×1b N=62、B×1c N=26、C×1b N=87**）
+> 寫在 [overall_strategies.md](overall_strategies.md) 2c bullet 跟
+> [overall_workloads.md](overall_workloads.md) 已完成的覆蓋表，不另開維度。
+> 資料: [layout_rewriter/runs/nsweep_full/](layout_rewriter/runs/nsweep_full/)
 > + [prefetch_churn/runs_nsweep_full_{a,b,c}/](prefetch_churn/)；
 > 圖: [Figure 11](figures/out/11_nsweep_full.png) / [Figure 12](figures/out/12_nsweep_full_churn.png)。
 >

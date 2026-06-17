@@ -183,11 +183,14 @@ load 那一頁），但 92 個 syscall 開銷 2.9 ms，吃掉一部分效益。
 [第十三維](overall_results.md#第十三維--n-sweep--workload-z-zipfian-low-key-hotspot--1a1b1c)
 （Zipfian low-key 變體，confirms hotspot location 不變結論）+
 [第十八維](overall_results.md#第十八維--churn-擴充abc--churn--2c-layers_n--2d--2e_kab--churn--statictk0-hotpages)
-（A/B × churn × layers_N，補齊 churn × workload 矩陣）+
-[第十九維](overall_results.md#第十九維--2c-layers_n-全-n192-dense-sweeprigorous-補測clean--churn--abc--3-layouts)
-（**dense N=0..92 全 sweep**：clean + churn × A/B/C × 3 layouts × 3 reps；證實 sparse
-6-pt 在 9/12 cells 結論正確；但 **A×1b 漏 N=62 (-31%)、B×1c 漏 N=26 (-36%)、C×1b
-漏 N=87 (-57%) 三個 sweet spot**）。
+（A/B × churn × layers_N，補齊 churn × workload 矩陣）。
+
+**Dense N=0..92 全 sweep（rigor 補測）**：clean + churn × A/B/C × 3 layouts × 3 reps，
+共 ~5,580 額外 benchmark；證實 sparse 6-pt 在 9/12 cells 結論正確；但 **A×1b 漏
+N=62 (-31%)、B×1c 漏 N=26 (-36%)、C×1b 漏 N=87 (-57%) 三個 sweet spot**。資料:
+[layout_rewriter/runs/nsweep_full/](layout_rewriter/runs/nsweep_full/) +
+[prefetch_churn/runs_nsweep_full_{a,b,c}/](prefetch_churn/)；
+圖: [Figure 11](figures/out/11_nsweep_full.png) / [Figure 12](figures/out/12_nsweep_full_churn.png)。
 
 ### Access-pattern-based（看存取歷史，已完成）
 
