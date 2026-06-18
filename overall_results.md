@@ -37,6 +37,10 @@
 > 2d ≈ 2-6 µs、2e_K10 ≈ 5-8 µs、2e_K500 ≈ 80 µs、**2f SLRU 1,200-1,900 µs**
 > （2f overhead 比 first_q 大 80-130 倍，是真正影響「真實 cold start」的策略）。
 > 細節見 [calibration/README.md](calibration/README.md)。
+> 視覺化對照：[Figure 13](figures/out/13_strategy_firstq_bars.png)（純 first-q，
+> 2f SLRU 看起來通殺）vs [Figure 14](figures/out/14_strategy_endtoend_stacked.png)
+> （end-to-end stacked，2f SLRU bar 高過 baseline 紅線、真實 cold start 反而慢
+> 2-6 倍）。
 >
 > 不同實驗用的 cold-start 機制不同（`sudo drop_caches` vs
 > `posix_fadvise(POSIX_FADV_DONTNEED)`），絕對 µs **不能跨表比較**，但
