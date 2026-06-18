@@ -41,7 +41,7 @@
 最小執行方式：
 
 ```sh
-./benchmark_harness --workload generated_workloads/workloadc.txt
+./benchmark_harness --workload generated_workloads/workload_a_zipfian.txt
 ```
 
 常用參數：
@@ -49,7 +49,7 @@
 ```sh
 ./benchmark_harness \
   --db test.db \
-  --workload generated_workloads/workloadc.txt \
+  --workload generated_workloads/workload_a_zipfian.txt \
   --output benchmark_harness_operations.csv \
   --record-dir benchmark_harness_runs \
   --cold-advice dontneed
@@ -115,7 +115,7 @@ READMODIFYWRITE 321
 chmod +x drop_caches.sh
 
 ./benchmark_harness \
-  --workload generated_workloads/workloadc.txt \
+  --workload generated_workloads/workload_a_zipfian.txt \
   --drop-caches-script /usr/local/bin/dropcache.sh \
   --drop-caches-use-sudo
 ```
@@ -140,7 +140,7 @@ user ALL=(root) NOPASSWD: /usr/local/bin/dropcache.sh
 systemd-run --user --scope -p MemoryMax=512M \
   ./benchmark_harness \
   --db test.db \
-  --workload generated_workloads/workloadc.txt
+  --workload generated_workloads/workload_a_zipfian.txt
 ```
 
 如果實驗包含 prefetch，建議讓 prefetch 和 `benchmark_harness` 進同一個 memory-limited scope。`sqlite_prefetch_churn_experiment.py` 提供 `--systemd-memory-max`，會只限制每輪 cold-start measurement segment，不會限制寫入 churn 和 classifier。
@@ -250,7 +250,7 @@ distribution 適合快速看 resident pages 集中在檔案前段、中段或後
 
 ./benchmark_harness \
   --db test.db \
-  --workload generated_workloads/workloadc.txt
+  --workload generated_workloads/workload_a_zipfian.txt
 
 python3 benchmark_harness_analyze_residency_by_page_type.py \
   classify_pages.csv \
@@ -343,7 +343,7 @@ python3 generated_workloads/generate_ycsb_workloads.py
 
 ./benchmark_harness \
   --db test.db \
-  --workload generated_workloads/workloadc.txt \
+  --workload generated_workloads/workload_a_zipfian.txt \
   --output benchmark_harness_operations.csv \
   --record-dir benchmark_harness_runs
 

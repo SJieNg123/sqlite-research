@@ -5,7 +5,7 @@
 set -u
 DIR=/home/u03/sqlite-research-project-sharing/layout_rewriter/runs
 BH=/home/u03/sqlite-research-project-sharing/benchmark_harness/benchmark_harness
-WL_A=/home/u03/sqlite-research-project-sharing/benchmark_harness/workloads/workloadc.txt
+WL_A=/home/u03/sqlite-research-project-sharing/benchmark_harness/workloads/workload_a_zipfian.txt
 WL_B=/home/u03/sqlite-research-project-sharing/benchmark_harness/workloads/workload_uniform.txt
 WL_C=/home/u03/sqlite-research-project-sharing/prefetch_churn/workloads/page_churn_benchmark_high.txt
 mkdir -p "$DIR/bench_records_Nsweep_vac" "$DIR/ops_csv_Nsweep_vac"

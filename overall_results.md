@@ -160,7 +160,7 @@ baseline 本來就被 leaf cold fault 拉到 5,000+ µs 起跳。
 page cache 裡的所有 resident page，存成 `hotpages.csv`。下次 cold start 時對
 每個 resident page 一一呼叫 `madvise(MADV_WILLNEED)`。
 
-對照**三個 workload**：A (Zipfian、`workloadc.txt`)、B (Uniform、
+對照**三個 workload**：A (Zipfian、`workload_a_zipfian.txt`)、B (Uniform、
 `workload_uniform.txt`)、C (high-key uniform、`page_churn_benchmark_high.txt`)，
 原始 layout，3 reps median，`posix_fadvise(POSIX_FADV_DONTNEED)` 冷啟動。
 

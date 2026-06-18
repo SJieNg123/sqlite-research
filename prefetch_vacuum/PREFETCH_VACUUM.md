@@ -109,7 +109,7 @@ python3 testdb_builder.py
 sync && echo 3 | sudo tee /proc/sys/vm/drop_caches > /dev/null
 ./benchmark_harness \
   --db test.db \
-  --workload workloadc.txt \
+  --workload workload_a_zipfian.txt \
   --output ops_baseline.csv \
   --record-dir benchmark_harness_runs \
   --cold-advice cold
@@ -119,7 +119,7 @@ sync && echo 3 | sudo tee /proc/sys/vm/drop_caches > /dev/null
 ./prefetch test.db classify_pages.csv range
 ./benchmark_harness \
   --db test.db \
-  --workload workloadc.txt \
+  --workload workload_a_zipfian.txt \
   --output ops_prefetch_range.csv \
   --record-dir benchmark_harness_runs \
   --cold-advice cold
@@ -129,7 +129,7 @@ sync && echo 3 | sudo tee /proc/sys/vm/drop_caches > /dev/null
 ./prefetch test.db classify_pages.csv perpage
 ./benchmark_harness \
   --db test.db \
-  --workload workloadc.txt \
+  --workload workload_a_zipfian.txt \
   --output ops_prefetch_perpage.csv \
   --record-dir benchmark_harness_runs \
   --cold-advice cold
@@ -144,7 +144,7 @@ for N in 1 5 10 20 46 92; do
     ./prefetch_layers test.db classify_pages.csv $N 4096
     ./benchmark_harness \
       --db test.db \
-      --workload workloadc.txt \
+      --workload workload_a_zipfian.txt \
       --output ops_layers_${N}.csv \
       --record-dir benchmark_harness_runs \
       --cold-advice cold 2>&1 | grep "first_query_latency"
@@ -172,7 +172,7 @@ sync && echo 3 | sudo tee /proc/sys/vm/drop_caches > /dev/null
 ./prefetch_layers test.db classify_pages_after_vacuum.csv 5 4096
 ./benchmark_harness \
   --db test.db \
-  --workload workloadc.txt \
+  --workload workload_a_zipfian.txt \
   --output ops_after_vacuum_prefetch5.csv \
   --record-dir benchmark_harness_runs \
   --cold-advice cold 2>&1 | grep "first_query_latency"
@@ -184,7 +184,7 @@ sync && echo 3 | sudo tee /proc/sys/vm/drop_caches > /dev/null
 
 Database: `test.db` — 600k rows, 26331 pages (4 KB each), 92 interior pages (0.35%)
 
-Workload: `workloadc.txt` — 100% random point reads, 100000 operations
+Workload: `workload_a_zipfian.txt` — 100% random point reads, 100000 operations
 
 ### Week 9: Strategy Comparison
 

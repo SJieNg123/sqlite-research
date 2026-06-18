@@ -12,7 +12,7 @@ DIR=/home/u03/sqlite-research-project-sharing/layout_rewriter/runs
 BH=/home/u03/sqlite-research-project-sharing/benchmark_harness/benchmark_harness
 PL=/home/u03/sqlite-research-project-sharing/prefetch_vacuum/src/prefetch_layers
 OUTDIR=$DIR/nsweep_full
-WL_A=/home/u03/sqlite-research-project-sharing/benchmark_harness/workloads/workloadc.txt
+WL_A=/home/u03/sqlite-research-project-sharing/benchmark_harness/workloads/workload_a_zipfian.txt
 WL_B=/home/u03/sqlite-research-project-sharing/benchmark_harness/workloads/workload_uniform.txt
 WL_C=/home/u03/sqlite-research-project-sharing/prefetch_churn/workloads/page_churn_benchmark_high.txt
 mkdir -p "$OUTDIR/bench_records" "$OUTDIR/ops_csv"

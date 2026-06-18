@@ -1,1 +1,1 @@
-../../benchmark_harness/workloads/workloadc.txt
+../../benchmark_harness/workloads/workload_a_zipfian.txt
