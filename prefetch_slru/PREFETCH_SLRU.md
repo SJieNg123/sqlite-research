@@ -58,7 +58,7 @@ Reference DB：600,000 rows, 26,331 × 4 KB pages (其中 92 interior)。
 3 reps median。
 
 > Workload 命名沿用 [overall_workloads.md](../overall_workloads.md)：
-> - **Workload A** = Zipfian point-read (`workloadc.txt`)
+> - **Workload A** = Zipfian point-read (`workload_a_zipfian.txt`)
 > - **Workload B** = Uniform random point-read (`workload_uniform.txt`)
 > - **Workload C** = High-key uniform read (`page_churn_benchmark_high.txt`)
 
@@ -196,7 +196,7 @@ fault 可解（連續 leaves 一個 readahead 就吃完），2f preload 邊際�
 ```
 src/prefetch_slru.c    — 70 行 C，讀 residency CSV + madvise
 runs/                  — warmup.sh、prefetch wrappers、runmatrix.sh、raw results
-  workload_a_zipfian.txt → ../../benchmark_harness/workloads/workloadc.txt
+  workload_a_zipfian.txt → ../../benchmark_harness/workloads/workload_a_zipfian.txt
   workload_b_uniform.txt → ../../benchmark_harness/workloads/workload_uniform.txt
   workload_c_highkey.txt → ../../prefetch_churn/workloads/page_churn_benchmark_high.txt
   hotpages_a.csv        — Workload A (Zipfian) warmup residency

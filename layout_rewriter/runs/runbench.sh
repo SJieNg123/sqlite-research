@@ -6,7 +6,7 @@ EXTRA=""
 [ -n "$PCS" ] && EXTRA="--post-cold-script $PCS"
 /home/u03/sqlite-research-project-sharing/benchmark_harness/benchmark_harness \
   --db "$DB" \
-  --workload /home/u03/sqlite-research-project-sharing/benchmark_harness/workloads/workloadc.txt \
+  --workload /home/u03/sqlite-research-project-sharing/benchmark_harness/workloads/workload_a_zipfian.txt \
   --output "ops_${LABEL}.csv" \
   --record-dir bench_records \
   --cold-advice dontneed \

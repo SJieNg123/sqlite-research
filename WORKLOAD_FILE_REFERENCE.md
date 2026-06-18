@@ -72,8 +72,8 @@
 
 | 用途 | File |
 |---|---|
-| Workload .txt | `benchmark_harness/workloads/workloadc.txt` ⚠️ 歷史命名混淆——`workloadc.txt` 是 Workload A |
-| | 另一份 copy: `prefetch_access/runs/workload_a_zipfian.txt`（churn 用） |
+| Workload .txt | `benchmark_harness/workloads/workload_a_zipfian.txt`（原名 `workloadc.txt`，2026-06 改名以跟 B/C 對齊）|
+| | 同檔的 symlink：`prefetch_slru/runs/workload_a_zipfian.txt`、`prefetch_access/runs/workload_a_zipfian.txt`、`prefetch_churn/generated_workloads/workload_a_zipfian.txt` |
 | Base hotpages（1a/1b/1c）| `prefetch_access/runs/hotpages_a{,_vacuum,_ta}.csv` |
 | hot2e（18 個檔）| `prefetch_access/runs/hot2e_A_{orig,vacuum,ta}_K{10,40,50,92,100,500}.csv` |
 

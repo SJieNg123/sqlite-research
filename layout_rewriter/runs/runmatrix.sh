@@ -2,7 +2,7 @@
 # runmatrix.sh — emit CSV: db,strategy,rep,first_query_us,avg_us,majflt,minflt
 mkdir -p bench_records ops_csv
 BH=/home/u03/sqlite-research-project-sharing/benchmark_harness/benchmark_harness
-WL=/home/u03/sqlite-research-project-sharing/benchmark_harness/workloads/workloadc.txt
+WL=/home/u03/sqlite-research-project-sharing/benchmark_harness/workloads/workload_a_zipfian.txt
 echo "db,strategy,rep,first_query_us,avg_us,majflt,minflt"
 for DB_LABEL in orig ta; do
   if [ "$DB_LABEL" = "orig" ]; then DB=test.db; CSV=classify_before.csv; else DB=test_typeaware.db; CSV=classify_after.csv; fi

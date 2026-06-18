@@ -100,7 +100,7 @@ readmodifywrite <id>
 
 ## Workload A — Zipfian Point Read（YCSB-C 風格）
 
-**檔案：** [benchmark_harness/workloads/workloadc.txt](benchmark_harness/workloads/workloadc.txt)
+**檔案：** [benchmark_harness/workloads/workload_a_zipfian.txt](benchmark_harness/workloads/workload_a_zipfian.txt)
 **規模：** 100,000 ops，全部 `read`
 **Key 範圍：** id ∈ [8, 99997]（只打 DB 前 1/6 的 id 區段）
 **分佈：** 強 Zipfian skew

@@ -469,7 +469,7 @@ python3 classify_pages/plot_pages.py pages.csv page_layout.png
 - `benchmark_harness_plot_latency_vs_faults.py` — latency vs faults 圖
 - `benchmark_harness_plot_results.py` — 結果圖
 - `benchmark_harness_residency_report.py` — residency 報告
-- `workloads/workloadc.txt` — 測試用 workload
+- `workloads/workload_a_zipfian.txt` — 測試用 workload
 
 ### [residency_checker/](residency_checker/) — Residency Checker
 

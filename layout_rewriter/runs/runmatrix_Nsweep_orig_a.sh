@@ -3,7 +3,7 @@
 set -u
 DIR=/home/u03/sqlite-research-project-sharing/layout_rewriter/runs
 BH=/home/u03/sqlite-research-project-sharing/benchmark_harness/benchmark_harness
-WL_A=/home/u03/sqlite-research-project-sharing/benchmark_harness/workloads/workloadc.txt
+WL_A=/home/u03/sqlite-research-project-sharing/benchmark_harness/workloads/workload_a_zipfian.txt
 mkdir -p "$DIR/bench_records_Nsweep_orig" "$DIR/ops_csv_Nsweep_orig"
 echo "workload,N,rep,first_query_us,avg_us,majflt,minflt"
 

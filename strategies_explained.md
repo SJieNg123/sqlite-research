@@ -24,7 +24,7 @@
 一格 = 一個 workload × 一個策略（含參數）× 一次 rep。指揮一格的指令長這樣：
 
 ```sh
-benchmark_harness --db test.db --workload workloadc.txt \
+benchmark_harness --db test.db --workload workload_a_zipfian.txt \
   --cold-advice dontneed \
   --drop-caches-script cold_orig.sh \
   --post-cold-script  <某支 prefetch 腳本>   ← 換這行 = 換策略

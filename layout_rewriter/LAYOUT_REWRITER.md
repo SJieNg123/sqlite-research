@@ -86,7 +86,7 @@ indexes.
 
 ### Cold-start query latency
 
-Same workload (`benchmark_harness/workloads/workloadc.txt`, 100,000 random
+Same workload (`benchmark_harness/workloads/workload_a_zipfian.txt`, 100,000 random
 point reads), same cold-start protocol (`posix_fadvise(POSIX_FADV_DONTNEED)`
 + `MADV_DONTNEED`), median of 3 reps.
 
