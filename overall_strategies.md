@@ -326,7 +326,9 @@ first_rowid 抽出來、建立 key → leaf 對應表；對 workload 的每個 r
 **結論：** 2f 不是「降低 cold-start」的策略，是「working-set preload」的策略。
 適用情境跟 2c Layers N 完全不同 —— 詳見
 [prefetch_slru/PREFETCH_SLRU.md](prefetch_slru/PREFETCH_SLRU.md) 的 trade-off
-矩陣。
+矩陣。**真實 end-to-end cold start 對照圖**：[Figure 14](../figures/out/14_strategy_endtoend_stacked.png)
+（preprocessing 1.2-1.8 ms + first-q 17 µs = 1,825 µs，高過 baseline 紅線 1.9-6.0×；
+[Figure 13](../figures/out/13_strategy_firstq_bars.png) 是純 first-q 的 deceptive view）。
 
 **RAM-pressure 結果（756-cell 矩陣，第十六維）：**
 - **First-q 完全免疫**：18 個 (WL, layout, mem) cells 全部 15-19 µs（-95~98%），
