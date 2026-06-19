@@ -1295,8 +1295,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--benchmark-cold-advice",
         choices=("none", "cold", "pageout", "dontneed"),
-        default="none",
-        help="cold-advice mode passed to benchmark_harness",
+        default="dontneed",
+        help="cold-advice mode passed to benchmark_harness (default 'dontneed' = P0 pipeline MADV_COLD->PAGEOUT->DONTNEED chain)",
     )
     parser.add_argument(
         "--benchmark-sqlite-open-timing",
