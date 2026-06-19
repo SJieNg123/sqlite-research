@@ -1,68 +1,93 @@
-# A3 — 結果：Level-1 prefetch warmer 的 ablation 量測
+# A3 — 結果：Level-1 prefetch warmer 的完整 ablation（L0–L5）
 
-第一批跑出來的真實數據。量測遵守 [../README.md](../README.md) §2 的嚴謹度與誠實規則：
-**每臂 30 reps、報 median/p95/p99/min/stdev、cold start 看尾端、TTFQ 報樂觀＋保守兩版、null result 照實寫。**
+完整的 ablation ladder 數據。量測遵守 [../README.md](../README.md) §2 的嚴謹度與誠實規則：
+**每臂 30 reps、報 median/p95/p99/min/stdev、cold start 看尾端、TTFQ 報樂觀＋保守兩版、null/負結果照實寫。**
 
-## 設定
+> **編號說明（重要）**：L 編號是照[完整規劃的 6 層 ladder](../README.md#1-phase-規劃) 排的（L0 baseline、L1 warmer、
+> L2 tree-top、L3 pointer-ahead、L4 fan-out、L5 hot-leaf），**不是照「實際疊了幾層」**。其中 **L0/L1/L2/L5 是
+> 「開檔前 batch warmer」家族**（用 `benchmark_harness` 量），**L3/L4 是「查詢中線上預取」家族**（用獨立的
+> `trav_bench` 量、有自己的 baseline）。兩家用不同 harness，**只能各自跟自家 baseline 比，不能跨家比絕對值**。
 
-- DB：`prefetch_access/runs/test.db`（60 萬列、~103 MiB、4 KiB 頁）。
-- workload：`workload_a_zipfian.txt`（Zipfian point read）。
-- 每 rep：`evict`（posix_fadvise DONTNEED，無 sudo）冷快取 → warmer（post-cold-script，獨立 process、自己的 fd）
-  → `benchmark_harness` 開 SQLite 量 first-query / avg / majflt。同一支 warmer，只切 env（§0.2 原則 1）。
-- 量測機：kernel 6.17.0、gcc 15.2、非 root（見 [../PLAN.md](../PLAN.md)）。
+---
 
-## Ablation ladder（首批：L0 / L1 / L5；L2 tree-top、L3/L4 線上預取見「未做」）
+## Part A — Batch warmer 家族（L0 / L1 / L2 / L5），`benchmark_harness`，baseline 510 µs
 
-| 臂 | 暖什麼 / 怎麼暖 | n | median | p95 | p99 | min | stdev | warm_us | majflt | **TTFQ 樂觀** | **TTFQ 保守** |
-|---|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| **L0_off** | baseline，不暖 | 30 | 508.4 | 517.8 | 529.7 | 435.7 | 29.7 | 0 | 180 | 508 | 508 |
-| **L1_int_pread** | 92 個 interior，**pread**（阻塞） | 30 | **118.1** | 139.5 | 141.4 | 108.7 | 9.4 | **8028** | 177 | **118 (−77%)** | **8146 (＋1503%)** |
-| **L1_int_fadvise** | 92 個 interior，**fadvise**（非阻塞） | 30 | 339.7 | 353.0 | 360.7 | 289.7 | 20.8 | 161 | 178 | **340 (−33%)** | **500 (−2%)** |
-| **L5_intleaf_pread** | 92 interior ＋ 10 hot leaf，pread | 30 | 116.9 | 141.9 | 158.5 | 109.1 | 12.2 | 8767 | 181 | 117 (−77%) | 8883 |
-| **L5_intleaf_fadvise** | 92 interior ＋ 10 hot leaf，fadvise | 30 | 338.8 | 357.9 | 390.8 | 291.1 | 25.8 | 168 | 181 | 339 (−33%) | 507 |
+設定：DB `prefetch_access/runs/test.db`（60 萬列、103 MiB、4 KiB 頁）；workload `workload_a_zipfian.txt`（Zipfian 點查）；
+每 rep `evict`（fadvise DONTNEED）→ warmer（post-cold-script）→ harness 開 SQLite 量 first-query。真冷啟動（majflt≈180）。
 
-> TTFQ 樂觀 = 只算 first-query（假設 warmer 在背景/啟動空檔跑完）；TTFQ 保守 = first-query ＋ warmer wall-clock
-> （假設 warmer 卡在關鍵路徑）。`vs base` 對 L0 median。
+| 臂 | 暖什麼（頁數）/ 暖法 | median µs | p95 | p99 | stdev | warm 成本 µs | **TTFQ 樂觀** | **TTFQ 保守** |
+|---|---|--:|--:|--:|--:|--:|--:|--:|
+| **L0** | baseline，不暖 | 510 | 520 | 532 | 27 | 0 | 510 | 510 |
+| **L1** | 92 interior（全），**pread** | **113** | 122 | 129 | 5 | 8006 | **113（−78%）** | 8120 |
+| **L1** | 92 interior（全），**fadvise** | 335 | 354 | 357 | 27 | 162 | 335（−34%） | 497 |
+| **L2** | 3 roots only，pread | 413 | 432 | 435 | 35 | 213 | 413（−19%） | 626 |
+| **L2** | 51 items-tree interior，pread | 334 | 356 | 370 | 27 | 4390 | 334（−35%） | 4723 |
+| **L2** | 51 items-tree interior，**fadvise** | 334 | 350 | 351 | 24 | **92** | 334（−35%） | **425（最低保守）** |
+| **L5** | 92 interior ＋ 10 hot leaf，pread | 114 | 131 | 137 | 7 | 8763 | 114（−78%） | 8877 |
+| **L5** | 92 interior ＋ 10 hot leaf，fadvise | 337 | 350 | 380 | 26 | 175 | 337（−34%） | 512 |
 
-## 怎麼讀這張表（誠實版）
+> **L5 ＝ L1 ＋ 10 hot leaf（巢狀疊加，102 頁）。** 但因 L2/L3/L4 是「不同暖法/不同家族」、不是「再往上疊一層」，
+> 所以 L5 在數據裡實際是「**L1 再加熱葉**」，不是「L4 之上加熱葉」。L5 這個編號是對齊[規劃 ladder](../README.md#1-phase-規劃) 的
+> 位置（hot-leaf 排最頂），不代表中間 L2–L4 都疊上去了。
 
-1. **暖 interior 確實把 TTFQ 砍很多**：508 → 118 µs（**−77%**），而且很穩（stdev 9.4、p99 才 141）。這是 warmer 的主要價值。
+### Part A 的發現
 
-2. **但 pread vs fadvise 是整個故事的核心 —— 「暖」不是免費的**：
-   - **pread（阻塞）**：first-query 118 µs 很漂亮，**但暖 92 個冷頁要花 8 ms**。一旦 warmer 卡在關鍵路徑，
-     **保守 TTFQ = 8146 µs，比 baseline 還慢 16 倍**。pread 暖法**只有在有啟動空檔可重疊時才贏**。
-   - **fadvise（非阻塞）**：暖只花 161 µs（發提示就回），保守 TTFQ ≈ 500 µs ≈ **打平 baseline**；代價是 first-query
-     只降到 340 µs（**−33%**，因為 async readahead 在第一個 query 來之前還沒讀完）。
-   - → **真相落在兩版之間**：要「保證便宜」選 fadvise（−33%、近乎免費）；要「最快 TTFQ」且有啟動空檔才選 pread。
+1. **暖 interior 大砍 TTFQ**：L1 pread 510→113 µs（**−78%**），穩（stdev 5、p99 129）。
+2. **pread vs fadvise 是核心取捨**：pread 砍最多但暖 92 個冷頁要 8 ms，保守版淨虧；fadvise 暖幾乎免費（162 µs）但只
+   −34%（非同步 readahead 第一筆前沒讀完）。
+3. **L2 tree-top ＝ 成本/效益的調節旋鈕，但沒有免費的 −78%**：
+   - **3 roots（near-free，warm 213µs）只買到 −19%**——root 在每筆路徑上，暖它省一個 fault，但下面的 interior 仍 fault。
+   - **51 items-interior（fadvise，warm 只 92µs）買到 −35%，保守 TTFQ 425 是全表最低**——「只暖查詢真的會走的那棵樹」
+     在 fadvise 下最划算。
+   - ⚠️ **但「精準只暖 items 子樹」沒有打贏「全暖 92」**：L2_items_pread（51 頁）first-query 334 µs，比 L1_pread（92 頁）
+     的 113 µs **還差**。推測是 **readahead 副作用**——pread 全部 92 個散在檔案裡的 interior 時，kernel readahead 順手把
+     查詢要的那個 leaf 也帶進來了；只暖 51 頁就少了這個意外紅利。**這是個誠實的反直覺點：targeted 不一定贏，因為
+     pread 的「附帶 readahead」也在出力。**
+4. **L5 hot-leaf 對第一筆是 null result**：L5 比 L1 只差 1 µs。單點查詢只碰一個 leaf，多暖 10 個熱葉幫不到「第一筆」。
 
-3. **hot leaf 對 TTFQ 幾乎沒用（null result）**：L5 比 L1 只差 118→117 / 340→339 µs。因為第一個 query 是單點查詢、
-   只碰**一個** leaf，那一個剛好是不是熱葉是碰運氣——所以多暖 10 個熱葉對「第一筆」幾乎沒幫助。
-   （這呼應紅線 F10：沒幫助就照實寫。hot leaf 要有意義得攤在多筆查詢上、且須 train/test 切分才不算作弊。）
+---
 
-4. **warmer 是把 I/O「搬走」不是「消滅」**：`majflt` 五臂幾乎不動（177–181），而且 **avg 穩態延遲五臂都是 2.04 µs**
-   —— warmer 對整段 workload 的吞吐毫無影響，**好處 100% 集中在第一筆查詢（TTFQ）**。pread 那 8 ms 就是被搬到
-   warmer 階段的冷讀 I/O。所以這招只對「反覆冷啟動、在意第一筆延遲」的場景（serverless / 短命 process）有意義。
+## Part B — 線上預取家族（L3 / L4），`trav_bench`，**自己的 baseline 186 µs**
 
-## 一句話
+自寫的 SQLite VFS shim（[../src/trav_bench.c](../src/trav_bench.c)）：`xRead` 讀到 interior 頁時，parse 它的 child 頁號、
+**邊走訪邊預取下一層**。單一點查詢（key 155）、30 reps、每 rep 先 fadvise(DONTNEED) 冷快取。
 
-**暖 interior 能把冷啟動第一筆查詢砍 33–77%，但「砍多少」與「划不划算」完全取決於暖法與有沒有啟動空檔：**
-pread 砍最多卻可能在關鍵路徑上淨虧、fadvise 近乎免費但只砍一半；而 hot-leaf 對第一筆是 null result。
-兩版 TTFQ 都報，才不會只挑 −77% 那個好看的講。
+| 臂 | 線上預取法 | median µs | p95 | p99 | stdev | vs 自家 baseline |
+|---|---|--:|--:|--:|--:|--:|
+| **L0′** | baseline（不預取）| 186 | 198 | 205 | 5 | +0% |
+| **L3** | pointer-ahead（fadvise child）| 402 | 610 | 666 | 112 | **＋116%** |
+| **L4** | fan-out（pread child）| 7594 | 7720 | 9235 | 431 | **＋3982%** |
 
-## 未做（下一步，scaffolding 已在）
+### Part B 的發現 —— 這是個乾淨的「負結果」
 
-- **L2 tree-top 暖法**：只同步暖 root + 上 1–2 層（頁數極少 → warm_us 從 8 ms 砍到 ~µs 級），預期能把 pread 的保守
-  TTFQ 問題大幅緩解。需先算每頁 tree level（b-tree 淺層 BFS）。
-- **L3/L4 線上語意預取（pointer-ahead / fan-out）**：要 hook SQLite 讀路徑（VFS xRead 解析 child 頁號後 async 預取），
-  比 batch warmer 侵入性高。
-- **A1 shadow-tagging VFS**：目前 hotset 走 `classify_pages` oracle 路徑（結構派、無作弊）；live 活表是 production 路徑。
-- **decay 對照**：接 `measure_staleness.py` + `runs_page_split`，驗 file change counter 偵測過期 → 降級。
+**對點查詢，線上預取會傷效能，不是幫忙。** 原因量得很清楚：讀一個 interior 頁時，它有 **499 個 child**，但點查詢
+只會往下走 **1 個**。VFS 不知道查詢的 key，只能把 **499 個全預取**：
+
+- **L4 fan-out（pread 全部 499）**：同步多讀 499 個沒用的 leaf → **7594 µs（慢 40 倍）**。災難級過度預取。
+- **L3 pointer-ahead（fadvise 499）**：背景 readahead 那 499 個沒用的 leaf 偷走 I/O 頻寬 → **402 µs（慢 1 倍）**。
+
+→ 這正是投影片警告的「**一次 point lookup 卻暖了全部 → 過度預取**」，現在量出來了。**線上 pointer-ahead 要有用，必須
+是「語意感知」的（知道 key、只預取要 descend 的那一個 child）**——但純 VFS 看不到 key，只能 fan-out 全部。或者它只在
+**range scan**（真的會走訪很多 leaf）才划算；本 workload 是點查詢，所以是負結果。**照實記錄（紅線 F10）。**
+
+---
+
+## 全 ladder 一句話總結
+
+- **想砍冷啟動第一筆**：暖 interior 有效（−34~78%），但**沒有免費的 −78%**——要嘛付 8 ms pread（保守版淨虧），要嘛
+  用 fadvise 拿 −34%（近乎免費）。最划算的折衷是 **L2 只暖查詢那棵樹 + fadvise（−35%、保守 425）**。
+- **hot-leaf（L5）** 對單點第一筆 = null。
+- **線上 pointer-ahead / fan-out（L3/L4）** 對點查詢 = **負結果（過度預取）**，除非做成語意感知或用於 range scan。
+- **誠實**：avg 穩態五臂都 2.04 µs → batch warmer 好處 100% 在 TTFQ；兩家 baseline 不同不可跨比；負結果照報。
 
 ## 重現
 
 ```sh
-cd /home/u03/sqlite-research-project-sharing/prefetch_warmer/runs
-# 產 hotset（結構派 interior + 史派 hot2e 熱葉）見本目錄 hotset_*.csv（由 classify_pages 產）
-bash run_ablation.sh            # 5 臂 × 30 reps（~5 分）
-python3 aggregate.py ablation_raw.csv
+cd prefetch_warmer
+# batch warmer 家族 (Part A)
+( cd src && gcc -O2 warmer.c -o warmer )
+( cd runs && bash run_ablation.sh && python3 aggregate.py ablation_raw.csv )
+# 線上預取家族 (Part B)
+( cd src && gcc -O2 trav_bench.c ../../benchmark_harness/sqlite3.c -I../../benchmark_harness -o trav_bench -lpthread -ldl -lm )
+( cd src && for m in off ahead fanout; do WARM_MODE=$m ./trav_bench ../../prefetch_access/runs/test.db 155 30; done )
 ```

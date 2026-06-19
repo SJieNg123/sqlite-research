@@ -153,3 +153,5 @@ prefetch_warmer/runs/ablation_driver.log
 .claude/
 
 __pycache__/
+# trav_bench compiled binary (L3/L4 VFS bench; rebuild from trav_bench.c)
+prefetch_warmer/src/trav_bench

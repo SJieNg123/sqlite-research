@@ -14,12 +14,15 @@
 | **A1** page_classify O(1) 模組 + unit test | ✅ 完成 | [src/page_classify.{c,h}](src/page_classify.c)、[src/test_page_classify.c](src/test_page_classify.c)（ALL PASSED）|
 | **A1** shadow-tagging VFS（live 活表）| ⬜ 未做 | hotset 暫走 `classify_pages` oracle 路徑（結構派、無作弊）|
 | **A2** stateless warmer（fadvise/pread）| ✅ 完成 | [src/warmer.c](src/warmer.c) + [runs/hotset_*.csv](runs/) |
-| **A2.5** 線上語意預取（pointer-ahead / fan-out）| ⬜ 未做 | 需 hook SQLite 讀路徑 |
-| **A3** ablation 量測（L0/L1/L5 × 30 reps）| ✅ **有結果** | **[runs/README.md](runs/README.md)** — interior 暖法 TTFQ −33~77%、pread/fadvise 取捨、hot-leaf null |
-| **A3** L2 tree-top / decay 對照 | ⬜ 未做 | 下一步 |
+| **A2.5/L3-L4** 線上預取（pointer-ahead / fan-out）VFS | ✅ 完成 | [src/trav_bench.c](src/trav_bench.c)（自寫 VFS shim）|
+| **A3** ablation **L0/L1/L2/L5**（batch warmer，240 reps）| ✅ **有結果** | **[runs/README.md](runs/README.md)** Part A |
+| **A3** ablation **L3/L4**（線上預取，90 reps）| ✅ **有結果** | **[runs/README.md](runs/README.md)** Part B — 點查詢下是負結果 |
+| **A1** live VFS / **decay 對照** | ⬜ 未做 | 下一步 |
 
-**首批結果一句話**：暖 interior 把冷啟動第一筆查詢砍 **508→118 µs（−77%，pread）/ −33%（fadvise）**，但 pread 的
-8 ms 暖成本在關鍵路徑上會淨虧 → **TTFQ 樂觀/保守兩版都報**；hot-leaf 對第一筆是 null result。詳見 [runs/README.md](runs/README.md)。
+**結果一句話**：暖 interior 把冷啟動第一筆砍 **510→113 µs（−78% pread）/ −34%（fadvise）**，但 pread 的 8 ms 暖成本在
+關鍵路徑上會淨虧 → **TTFQ 兩版都報**；最划算折衷是 **L2「只暖查詢那棵樹＋fadvise」（−35%、保守僅 425 µs）**；
+hot-leaf（L5）對第一筆 = null；**線上 pointer-ahead/fan-out（L3/L4）對點查詢 = 負結果（過度預取，fan-out 慢 40 倍）**。
+詳見 [runs/README.md](runs/README.md)。
 
 ---
 
