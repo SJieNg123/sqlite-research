@@ -324,6 +324,23 @@ OS primitive，因此與「以 virtual memory 為基礎的 DB caching」這條 l
    一次性操作，**操作頻率比 vmcache 解的問題低 4 個數量級以上**，碰不到
    TLB shootdown / page allocator 的 scalability 邊界。
 
+**正面 design rationale**——值得強調的是，[Crotty+22] 在其 §6 結論明確列出
+「**maybe use mmap**」的兩項條件：
+- **(a) workload 為 read-only**
+- **(b) working set（或整個 DB）fit 進 memory**
+
+本研究的 cold-start 場景**完全滿足這兩項**：first-query 為唯讀；reference
+DB 102 MB 遠小於主機 RAM (62 GiB)；實驗中亦透過 cgroup `MemoryMax=20M`
+額外驗證了壓縮情境（§6.2.2）下 first-q 仍保持穩定。換言之，**Crotty+22
+自己訂的 mmap-OK criteria 直接背書本研究的 use case**。此外，相較傳統
+user-space buffer pool 設計，mmap 路徑**避免了 OS page cache 與 application
+buffer 之間的資料複製**，記憶體 footprint 更小——這也是 [Crotty+22] §3.4
+親口承認的 mmap 優勢（"*mmap-based file I/O also results in lower total
+memory consumption, as the data is not unnecessarily duplicated in user
+space*"）。對 mobile / embedded SQLite 部署場景而言，這個 memory 優勢非
+trivial。因此本研究選擇 mmap-based prefetch hint 通道是 deliberate
+design choice，而非 mmap-as-substrate 妥協。
+
 進一步：既有 mincore-based tool（如 vmtouch）只做全 page-cache 整檔
 preload，**沒有 page-type 區分**；本研究的 contribution 是把 `mincore()`
 snapshot 與 SQLite B+tree 的 **page-type classification** 結合，做出 2d/2e
@@ -819,7 +836,7 @@ preprocessing 1.8 ms 比 first-q 14 µs 大兩個數量級，**真實 cold start
 | [Kang+13] | Kang, W.-H., Lee, S.-W., Moon, B. "X-FTL: Transactional FTL for SQLite Databases." *SIGMOD* (2013), pp. 97–108 | §2.3.3——mobile SQLite write-optimization 同 lineage，介入層在 **FTL**（Flash Translation Layer）。Oh+15 的近鄰先行工作 |
 | [Kim+12] | Kim, H., Agrawal, N., Ungureanu, C. "Revisiting Storage for Smartphones." *USENIX FAST* (2012), pp. 17–29 | §2.3.3——mobile storage performance 奠基分析論文，建立「SQLite + journaling on flash」是 mobile I/O 主要瓶頸的認識 |
 | [Jeong+13] | Jeong, S., Lee, K., Lee, S., Son, S., Won, Y. "I/O Stack Optimization for Smartphones." *USENIX ATC* (2013), pp. 309–320 | §2.3.3——mobile I/O stack 層級優化，write-side focus |
-| [Crotty+22] | Crotty, A., Leis, V., Pavlo, A. "Are You Sure You Want to Use MMAP in Your Database Management System?" *CIDR* (2022) | §2.3.5 anchor——對 file-backed mmap-as-DBMS-substrate 的系統性批判（eviction control 喪失、無 async I/O、I/O 錯誤難處理、fast NVMe scalability 不足）。我們需要明確區分：我們**不是**把 mmap 當 DBMS substrate，而是當 prefetch hint 通道，所以 Crotty 的批評不適用 |
+| [Crotty+22] | Crotty, A., Leis, V., Pavlo, A. "Are You Sure You Want to Use MMAP in Your Database Management System?" *CIDR* (2022) | §2.3.5 anchor——對 file-backed mmap-as-DBMS-substrate 的系統性批判（eviction control 喪失、無 async I/O、I/O 錯誤難處理、fast NVMe scalability 不足）。**重要的是**：其 §6 結論明確列出 "maybe use mmap" 的兩項條件——read-only + fits in memory——本研究 cold-start use case 完全符合；§3.4 又親口承認 mmap "lower total memory consumption" 的優勢。**Crotty+22 不僅不否定我們，反而 explicitly 背書我們的 design choice** |
 | [Leis+23] | Leis, V., Alhomssi, A., Ziegler, T., Loeck, Y., Dietrich, C. "Virtual-Memory Assisted Buffer Management." *SIGMOD* (2023) | §2.3.5——Crotty+22 的後續回應。anonymous mmap + DBMS-controlled `madvise(DONTNEED)` eviction + 自製 Linux kernel module (exmap) 解 TLB shootdown 跟 page allocator scalability。我們用同 family OS primitive 但操作頻率低 4 個數量級以上（cold-start 一次 ~92 calls vs 他們的 >1M ops/s），碰不到他們解的瓶頸 |
 | 其他 papers / blog posts | §2.3 candidate reading list | survey 進度見 `related_work_reading_list.md`（待建立）|
 
