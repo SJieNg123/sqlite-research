@@ -26,15 +26,17 @@ latency，未將 prefetch 本身的 preprocessing 開銷納入 end-to-end cold-s
 之闕如；現有跨領域工作中，作業系統層的 readahead 僅依賴 sequential
 pattern detection、無法針對 page-type 做精準預判，DBMS 層的 buffer
 pool warming 又須侵入式修改 engine、且皆未將 preprocessing 計入真實
-成本。為彌補此 gap，**我們的研究** 提出一套結合 **page-type-aware
+成本。為彌補此 gap，我們提出一套結合 **page-type-aware
 物理 layout 重排** 與 **基於 mincore 的 targeted madvise prefetch**
 的兩層 cold-start 框架（系統正式命名待定）。在固定的 reference DB
 （**600k rows、102 MB**）上，我們依 SQLite B+tree 角色（interior /
 leaf）對 page 做精確分類，僅針對主導 cold-start cost 的 **0.35%（92
 個 interior page、共 368 KB）** 進行 prefetch，避免盲目 preload 帶來
 的 I/O 與 page reclaim 浪費，且整套設計無需修改 SQLite 內部。據我們
-所知，**我們的研究** 是第一個將 preprocessing 開銷明確納入 cold-start
-評估的 SQLite prefetch 研究：實驗顯示既有 cache-dump 策略雖能將
+所知，**我們的研究** 是第一個在 **empty OS page cache cold-start 場景下**
+（區別於 Yi et al. [2026] 處理的 hotspot-shift buffer cold-start），將
+prefetch preprocessing 開銷明確納入 end-to-end 評估的 SQLite prefetch
+研究：實驗顯示既有 cache-dump 策略雖能將
 first-query latency 從 baseline 的 **318 µs 壓降至 14 µs（−94%）**，
 但其 **1.8 ms 的 preprocessing 開銷** 反讓 end-to-end cold start
 **慢 3–7 倍**——這個 trade-off 在既有 prefetch 文獻中長期被忽略。最終
@@ -195,6 +197,20 @@ pool。學術界相關：
 
 **跟我們的差別**：buffer pool warming 用 DBMS 自有 cache；我們用 OS page
 cache + mmap、不修改 SQLite，把 prefetch 變成 application-side 工具。
+
+**Pre-Buffer [Yi et al. 2026]** —— 最近最相關，但解的是**不同的 cold-start
+問題**。他們提出 workload-aware buffer prefetching 框架，針對週期性 workload
+下的 **"buffer cold-start"** ——其定義為 **hit-rate 在 hotspot shift 後的恢復
+時間**（curve 從谷底回到 steady state 的秒數），prefetch 由獨立 background
+thread 在 hit-rate 跌幅 ≥10% 後觸發，且使用 **Direct I/O 繞過 OS page cache**。
+本研究處理的是 **OS page cache 為空時的 first-query latency**——prefetch
+位於 user-facing critical path 上、與 first-query 直接競爭時間，因此
+preprocessing 開銷無法藏在 background。值得注意的是，Yi et al. 在批評既有
+ML-based prefetcher [Chen et al. 2021] 時明確指出："*it is also necessary
+to consider the direct and indirect impact of the prefetch module on
+system performance*" ——但其 evaluation（hit-rate recovery time + 總
+execution time）並未將 prefetch overhead 與 query latency 分離。本研究
+的 preprocessing-aware end-to-end methodology 正是回應這個 open gap。
 
 #### 2.3.3 SQLite / mobile / embedded DB optimization
 
@@ -690,11 +706,20 @@ preprocessing 1.8 ms 比 first-q 14 µs 大兩個數量級，**真實 cold start
 
 ### 9.2 External References
 
+**Tools / Code repositories：**
+
 | Resource | Where | 用途 |
 |---|---|---|
 | **YCSB-cpp** | https://github.com/ls4154/YCSB-cpp | Workload A/B 的格式 / 分布 reference（YCSB-C Zipfian、YCSB-A uniform）——我們延續 YCSB 的 op string 風格作為 workload file 格式（見 §3.2） |
 | SQLite | https://www.sqlite.org/ | 被研究的 DB engine（讀路徑、B+tree、page cache 行為）|
 | FEMU | https://github.com/MoatLab/FEMU | Future Work §7 提到的 SSD-level evaluation 平台 |
+
+**Papers：**
+
+| # | Citation | 在本研究中的角色 |
+|---|---|---|
+| [Yi+26] | Yi, J., Wang, X., Jin, P. "Workload-Aware Buffer Prefetching for Database Systems." *Data Science and Engineering* (2026). https://doi.org/10.1007/s41019-025-00342-6 | §2.3.2 對比——他們的 "buffer cold-start" = hotspot-shift recovery，背景 thread + Direct I/O；我們處理 OS page cache cold-start + critical-path preprocessing accounting |
+| [Chen+21] | Chen, Y., Zhang, Y., Wu, J., Wang, J., Xing, C. "Revisiting data prefetching for database systems with machine learning techniques." *ICDE* (2021), pp. 2165–2170 | §2.3.2 引用——ML-based prefetcher，Pre-Buffer 點名批評其「未量化 prefetch module 對 system performance 的 direct/indirect impact」，正是本研究 fill 的 gap |
 | 其他 papers / blog posts | §2.3 candidate reading list | survey 進度見 `related_work_reading_list.md`（待建立）|
 
 ---
