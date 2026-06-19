@@ -1,0 +1,12 @@
+arm                    n   median      p95      p99     min   stdev   warm_us  majflt  TTFQ_opt  TTFQ_cons  vs_base
+-------------------------------------------------------------------------------------------------------------------
+L0_off                30    508.4    517.8    529.7   435.7    29.7       0.1     180     508.4      508.4      +0%
+L1_int_pread          30    118.1    139.5    141.4   108.7     9.4    8027.6     177     118.1     8145.8     -77%
+L1_int_fadvise        30    339.7    353.0    360.7   289.7    20.8     160.7     178     339.7      500.3     -33%
+L5_intleaf_pread      30    116.9    141.9    158.5   109.1    12.2    8766.5     181     116.9     8883.4     -77%
+L5_intleaf_fadvise    30    338.8    357.9    390.8   291.1    25.8     167.7     181     338.8      506.5     -33%
+
+TTFQ_opt  = median first-query only (warmer assumed to run in background/idle slack)
+TTFQ_cons = median first-query + median warmer_us (warmer on the critical path)
+vs_base   = TTFQ_opt change vs L0_off median (optimistic view)
+→ 真相落在 opt 與 cons 之間，看部署有沒有啟動空檔；cold start tail-sensitive，看 p95/p99。
