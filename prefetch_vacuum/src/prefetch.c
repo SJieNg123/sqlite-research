@@ -15,6 +15,12 @@ static long long now_ns() {
     return (long long)ts.tv_sec * 1000000000LL + ts.tv_nsec;
 }
 
+/* qsort comparator for long long; matches prefetch_layers.c:18 cmp_ll. */
+static int cmp_ll(const void *a, const void *b) {
+    long long x = *(long long *)a, y = *(long long *)b;
+    return (x > y) - (x < y);
+}
+
 /* Check how many of the given offsets are resident using mincore() */
 static int count_resident(void *map, size_t db_size,
                            long long *offsets, int n, int page_size) {
@@ -112,14 +118,8 @@ int main(int argc, char *argv[]) {
             syscall_count++;
         }
     } else {
-        /* sort offsets first */
-        for (int i = 0; i < n_interior - 1; i++)
-            for (int j = i + 1; j < n_interior; j++)
-                if (offsets[j] < offsets[i]) {
-                    long long tmp = offsets[i];
-                    offsets[i] = offsets[j];
-                    offsets[j] = tmp;
-                }
+        /* sort offsets first (match prefetch_layers.c:62 — qsort, not O(n^2)) */
+        qsort(offsets, n_interior, sizeof(long long), cmp_ll);
 
         long long range_start = offsets[0];
         long long range_end   = offsets[0] + sqlite_page_size;

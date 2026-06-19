@@ -146,16 +146,33 @@ range 在任何 layout 下都不是好選擇。
 - 原始 layout：92 syscalls，改善 **-34%**
 - type-aware layout：92 syscalls，改善 **-33%**
 
-**結論：** 比 range 確定載入更多 page（每次 madvise 指定一頁，kernel 確實會
-load 那一頁），但 92 個 syscall 開銷 2.9 ms，吃掉一部分效益。
+**結論：** 比 range 載入更多 page。`MADV_WILLNEED` 仍是 async hint
+（**不阻塞、不保證**在下次存取前完成載入），但每個 page 一個 hint 比 range
+模式單一大 hint 能讓 kernel readahead 更精準排程。實測 92 個 hint 全發後，
+first-q 之前實際 cache 命中數遠高於 range 模式的 32/92——這是「**更多細粒度
+hint = kernel 有更多機會在 first-q 之前 finish I/O**」的證據，**不是**「kernel
+保證 load」。Syscall overhead 本身 ≈ 14 µs（calibration 量過），可忽略。
 
 #### 策略 2c — Layers N（structure-based，已完成 + 找到甜蜜點）
 
-只 prefetch 前 N 個 interior page（按 file offset 排序，等同於 B+tree 上層）。
-[prefetch_vacuum/src/prefetch_layers.c](prefetch_vacuum/src/prefetch_layers.c)。
+只 prefetch **按 file offset 升序排前 N 個 interior page**（skip leaves）。
+[prefetch_vacuum/src/prefetch_layers.c](prefetch_vacuum/src/prefetch_layers.c)
+的實作就是 `qsort + take first N interior`。
+
+> **語意警告**：「≈ B+tree 上 N 層」**只在 1c (type-aware) layout 成立**
+> ——因為 1c 把所有 interior collocated 到 file 頭 (page 2..93)，所以
+> 按 offset 排前 N 就是 B+tree 上 N 層。**在 1a / 1b 不成立**——interior
+> 散佈於整個 file，「按 file offset 排前 N」只是「在檔案中最早出現的 N 個
+> interior pages」。`page 1` 是 SQLite DB header + `sqlite_master`（schema）
+> b-tree 的 root，**不是** `items` 表的 root；使用者表的 root 落在低頁號
+> 但**不必為 1**（實測 1a 的前幾個 interior 是 page 2/3/4，但這跟 B+tree
+> 樹深無 1-to-1 對應）。這也是為什麼 1a/1b 上 layers_N 效果跟 1c 不同——
+> 同一個 binary 同一個算法、效果差異純粹來自 layout 賦予的物理排列。
 
 **狀態：** 已完成，N=1/5/10/20/46/92 全跑過。
-**結果（Workload A，原始 layout）：U 型曲線**
+**結果（Workload A，原始 layout）：wide-bottom U 形**——
+N=1→N=5 急降（coverage 不足），N=5..N≈46 plateau（interior 已 cover、
+Zipfian 跑開後 hot leaves 自然熱），N>46 略升（async madvise 來不及完成）：
 
 | N | syscalls | 改善 |
 |---:|---:|---:|
