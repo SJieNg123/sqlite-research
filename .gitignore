@@ -134,6 +134,24 @@ multiprocess/runs_prefetch_cadence/rec/
 multiprocess/runs_prefetch_cadence/work*.db
 multiprocess/runs_prefetch_cadence/cadence_run*.log
 
+# Page-split churn per-checkpoint intermediates (final = staleness_summary.csv /
+# benchmark_summary.csv / interior_summary.csv + scripts + README)
+prefetch_churn/runs_page_split/*/benchmarks/
+prefetch_churn/runs_page_split/*/checkpoints/
+prefetch_churn/runs_page_split/*/interior_pages.csv
+prefetch_churn/runs_page_split/*/evict.sh
+prefetch_churn/runs_page_split/*/test_churn.db*
+prefetch_churn/runs_page_split/driver.log
+
+# prefetch_warmer build artifacts + run intermediates (final = ablation_raw.csv /
+# ablation_summary.txt / hotset_*.csv / scripts + README)
+prefetch_warmer/src/warmer
+prefetch_warmer/src/test_page_classify
+prefetch_warmer/runs/classify.csv
+prefetch_warmer/runs/ablation_driver.log
+
 .claude/
 
 __pycache__/
+# trav_bench compiled binary (L3/L4 VFS bench; rebuild from trav_bench.c)
+prefetch_warmer/src/trav_bench

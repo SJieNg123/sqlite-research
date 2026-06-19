@@ -900,6 +900,53 @@ def validate_benchmark_args(args: argparse.Namespace) -> None:
         ensure_path(Path(args.residency_join_script), "residency join script")
 
 
+def staleness_enabled(args: argparse.Namespace) -> bool:
+    return bool(args.staleness_hotlist) and bool(args.staleness_workload)
+
+
+def record_staleness(
+    args: argparse.Namespace,
+    db_path: Path,
+    label: str,
+    operation_count: int,
+    rows: list,
+) -> None:
+    """Append a frozen-list coverage row for this checkpoint, if enabled.
+
+    Quantifies how stale the static prefetch list has become: the fraction of the
+    workload's read ops whose CURRENT leaf page is still in the frozen list.
+    """
+    if not staleness_enabled(args):
+        return
+    import measure_staleness
+
+    metrics = measure_staleness.compute_coverage(
+        str(db_path),
+        args.staleness_hotlist,
+        args.staleness_workload,
+        max_read_ops=args.staleness_max_ops,
+    )
+    row = {"label": label, "operation_count": operation_count}
+    row.update(metrics)
+    rows.append(row)
+    print(
+        f"  staleness[{label}]: coverage={metrics['hot_key_coverage']:.4f} "
+        f"dead_frozen_leaves={metrics['dead_frozen_leaves']} "
+        f"leaf_pages_now={metrics['leaf_pages_now']}"
+    )
+
+
+def write_staleness_csv(path: Path, rows: list) -> None:
+    import measure_staleness
+
+    fields = ["label", "operation_count"] + measure_staleness.METRIC_FIELDS
+    with path.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fields)
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(row)
+
+
 def run_experiment(args: argparse.Namespace) -> None:
     source = Path(args.source_db)
     target = Path(args.work_db)
@@ -933,6 +980,7 @@ def run_experiment(args: argparse.Namespace) -> None:
     next_delete_id = args.delete_start_id
     snapshots: list[PageSnapshot] = []
     benchmark_results: list[BenchmarkResult] = []
+    staleness_rows: list = []
     inserted_total = 0
     deleted_total = 0
     operation_count = 0
@@ -961,6 +1009,7 @@ def run_experiment(args: argparse.Namespace) -> None:
     )
     if result is not None:
         benchmark_results.append(result)
+    record_staleness(args, target, label, operation_count, staleness_rows)
 
     print(f"write workload: {write_workload}")
     if insert_workload is not None:
@@ -1027,6 +1076,7 @@ def run_experiment(args: argparse.Namespace) -> None:
             )
             if result is not None:
                 benchmark_results.append(result)
+            record_staleness(args, target, label, operation_count, staleness_rows)
             latest = snapshot_row(snapshots[-2], snapshots[-1])
             print(
                 f"{label}: pages={latest['page_count']} "
@@ -1045,6 +1095,8 @@ def run_experiment(args: argparse.Namespace) -> None:
     write_snapshot_csv(Path(args.summary_csv), snapshots)
     write_interior_pages_csv(Path(args.interior_pages_csv), snapshots)
     write_benchmark_csv(Path(args.benchmark_summary_csv), benchmark_results)
+    if staleness_enabled(args) and args.staleness_summary_csv:
+        write_staleness_csv(Path(args.staleness_summary_csv), staleness_rows)
 
 
 def parse_args() -> argparse.Namespace:
@@ -1177,6 +1229,31 @@ def parse_args() -> argparse.Namespace:
         "--benchmark-summary-csv",
         default=None,
         help="CSV summary of per-checkpoint benchmark latency results",
+    )
+    parser.add_argument(
+        "--staleness-hotlist",
+        default="",
+        help=(
+            "frozen hotpages CSV (page_number,is_resident) to score for decay; "
+            "when set with --staleness-workload, per-checkpoint coverage is written "
+            "to --staleness-summary-csv (additive; empty = disabled)"
+        ),
+    )
+    parser.add_argument(
+        "--staleness-workload",
+        default="",
+        help="read workload whose keys define the hot set for --staleness-hotlist scoring",
+    )
+    parser.add_argument(
+        "--staleness-summary-csv",
+        default=None,
+        help="output CSV for per-checkpoint frozen-list coverage (staleness) metrics",
+    )
+    parser.add_argument(
+        "--staleness-max-ops",
+        type=int,
+        default=20000,
+        help="cap read ops sampled from --staleness-workload per checkpoint (0=all)",
     )
     parser.add_argument(
         "--drop-caches-script",
