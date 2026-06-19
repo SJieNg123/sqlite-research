@@ -21,54 +21,71 @@
 
 ## 1. Introduction
 
-### 1.1 Problem
+SQLite 作為 embedded database 的事實標準，被廣泛部署於行動裝置、IoT 與桌面
+應用中——每一次 app 啟動、每一次裝置自休眠喚醒、每一次 background process
+重新被排程，使用者所感知的「第一筆查詢延遲」（first-query latency）即由
+SQLite cold-start 性能直接決定。然而，SQLite cold-start 讀取路徑的系統性
+優化在學術界仍少有著墨：現有 SQLite 文獻多聚焦於寫入路徑（fsync、WAL、
+journal mode），而跨領域的 prefetch 工作或不感知 SQLite 內部結構（OS-level
+readahead，繼承 [Smith 1978] 的 sequential pattern detection 主線），或要求
+侵入式修改 engine 並側重 hot-set warming 而非 cold-start critical path
+（DBMS-internal buffer pool warming，包含 InnoDB `buffer_pool_dump` 與最近
+的 Pre-Buffer [Yi+26]）。
 
-- SQLite 把整個資料庫存成一個 **4 KB page 的陣列**，用 B+tree 組織。
-- 每筆 query 都要**從 root 走到 leaf**，沿路的 **interior page（interior node）
-  全部都要在 memory 裡**。
-- **Cold start**（cache 是空的）時，這些 page 都得從 disk 讀，每讀一個就是一次
-  慢速的 random I/O。
+SQLite 將整個資料庫以 4 KB page 為單位組織為 B+tree，每筆 query 必須從 root
+走到 leaf，沿途的 **interior page** 必須全部駐留在 memory 中才能進一步存取
+leaf。在 cold-start 場景下——OS page cache 為空、所有 page 皆須自 disk
+fetch——這條 B+tree path 上的每一次 page miss 都觸發一次 5–100 µs 的
+random I/O，使 cold first query 較 warm 狀態慢逾 200 倍。在本研究 600k row
+的參照資料庫（102 MB、26,331 個 page）上，cold first query 落在
+**318–667 µs** 區間（依 workload 與 layout 而定）。
 
-**核心問題：能不能在 first query 之前，先把這些關鍵 page 載進 memory？**
+本研究的關鍵觀察是：**interior page 僅占整個 DB 的 0.35%**（92 個 page、共
+368 KB），卻負擔所有 query path traversal 成本。若能在 first query 之前將
+這 368 KB 的關鍵 page 主動載入 OS page cache，cold-start 的 random I/O 即
+可被 amortize 至 sequential prefetch 操作。據此，我們提出一套針對 SQLite
+cold-start 的**兩層 prefetch 框架**（系統正式命名待定）：第一層為
+**page-type-aware 物理 layout 重排**——在 binary 層級重寫 SQLite file、
+將 92 個 interior page 集中至檔頭連續 slot 並 patch 所有 page-number
+reference（跨頁 pointer、`sqlite_master.rootpage`、freelist）；第二層為
+**基於 `mincore()` 的 targeted madvise prefetch**——透過 page-type
+classification 僅對主導 cold-start cost 的 interior 集合下達
+`madvise(MADV_WILLNEED)`，避免盲目 preload 引發的 I/O 與 page reclaim
+浪費。整套設計**無需修改 SQLite 內部**，作為 application-side 工具部署。
+此外，我們將 prefetch preprocessing 開銷顯式量化、並與 first-query latency
+共同 sum 為 end-to-end cold-start 真實成本——此 cost-accounting 框架揭露
+出 prefetch 文獻中長期被忽略的 trade-off。
 
-### 1.2 Key insight
+本文的主要貢獻如下：
 
-Interior 只占整個 DB 的 **0.35%**（92 個 / 26,331 個 = 368 KB / 102 MB），
-但每筆 query 都得用到。**只要先載這 368 KB，就能避開 cold start 的 random I/O**。
+- **(C1) Type-aware layout rewriter**：實作並驗證在 binary 層級重排 SQLite
+  file 並修補所有 page-number reference 的可行性與正確性。在 Zipfian
+  workload 上達成 **end-to-end cold start −68%**（first query 由 318 µs
+  降至 127 µs），preprocessing 開銷僅 **1.1 µs**。
+- **(C2) Access-pattern frugality**：基於 `mincore()` snapshot 的
+  access-history prefetch 在 file-tail uniform workload 上，**僅 4 個
+  syscall** 即達到與盲載全部 92 個 interior page 相當的 **−47%** 效果——
+  顯示「看歷史」優於「掃結構」。
+- **(C3) Preprocessing cost-accounting 框架**：據我們所知，首次將 prefetch
+  preprocessing 顯式納入 SQLite cold-start end-to-end 評估（區別於
+  [Yi+26] 處理的 hotspot-shift buffer cold-start）。揭露既有 cache-dump
+  策略雖能將 first-query latency 從 baseline **318 µs 壓降至 14 µs
+  （−94%）**，但其 **1.8 ms 的 preprocessing 開銷** 反讓 end-to-end
+  cold start **慢 3–7 倍**——此 trade-off 在既有 prefetch 文獻中長期被
+  忽略。
+- **(C4) Robustness 三維驗證**：50k 寫入 churn 後 static t=0 hotpages
+  完全不衰退（A 仍 −91%、C 仍 −54%）；cgroup `MemoryMax=20M`（約 working
+  set 的 1/5）記憶體壓縮下 first-q 完全免疫（63 個 cell 比值全落於
+  0.90–1.19）；多 process MAP_SHARED 共享下，prefetcher cadence ≤
+  query gap 即可可靠 warm cache。
 
-這個 0.35% 的瓶頸暗示三類**正交**的優化路徑：
-
-1. **Layout**：把這 92 個 page 集中到檔頭，readahead 一次就能載完
-2. **Prefetch**：cold start 後 first query 之前，主動把這 92 個（或更多）page
-   載進 cache
-3. **Memory sharing**：多個 process 共用同一份 page cache，preprocessing 的
-   成本被攤平
-
-### 1.3 Contributions
-
-- **(C1) Type-aware layout rewriter** (1c)：在 binary 層級重排 SQLite file，
-  把 92 個 interior 全集中到檔頭 page 2..93（連續），patch 所有跨頁 pointer +
-  `sqlite_master.rootpage` + freelist。**1c + layers_5 在 Workload A 拿到
-  end-to-end cold start −68%**，preprocessing 僅 1.1 µs。
-- **(C2) Access-pattern prefetch (2d/2e) 完勝 file-offset 排序**：用 mincore()
-  snapshot 找出真正被讀過的 page。對 file-tail workload (C) **只用 4 個 syscall
-  就追平載全部 92 個 interior 的效果**（−47% vs −46%）。
-- **(C3) End-to-end cold-start trade-off 量化**：揭露 SLRU-style preload (2f)
-  看似 **first-q −94%**，但 preprocessing 1.8 ms 比 first-q 14 µs **大兩個
-  數量級**，真實 cold start 反而**慢 3–7 倍**。這是 prefetch 文獻中很少明說
-  的觀察。
-- **(C4) Robustness 三條軸**：50k churn ops 下 static t=0 hotpages 不 decay；
-  cgroup MemoryMax=20M (約 working set 的 1/5) 下 first-q 完全免疫；多 process
-  MAP_SHARED 下 prefetcher cadence ≤ query gap 就能 warm。
-
-### 1.4 Paper roadmap
-
-§2 講 SQLite cold-start 的 mechanics、我們採用的 "warm process, cold data"
-量測模型，以及 related work 定位；§3 描述測試 DB / workload / benchmark
-harness；§4 把三類策略（layout / prefetch / memory-sharing）逐一列出設計
-選擇；§5 是 experiment and evaluation，**§5.5 是 paper 的核心 trade-off
-觀察（preprocessing cost）**；§6 discussion——含 key findings、robustness
-驗證、實務建議、limitations；§7 future work；§8 conclusion；§9 references。
+本文後續組織如下：§2 闡述 SQLite cold-start mechanics、本研究採用的
+「warm process, cold data」量測模型，以及 related work 定位；§3 描述
+測試 DB、workload 與 benchmark harness；§4 分述三類策略（layout /
+prefetch / memory-sharing）的設計選擇；§5 為 experiment and evaluation，
+其中 **§5.5 為本文核心 trade-off 觀察**；§6 為 discussion，含 key
+findings、robustness 驗證、實務建議與 limitations；§7 future work；§8
+conclusion；§9 references。
 
 ---
 
