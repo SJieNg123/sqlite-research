@@ -228,17 +228,43 @@ end-to-end cold-start 真實成本**。
 
 #### 2.3.3 SQLite / mobile / embedded DB optimization
 
-SQLite 是手機 / IoT / desktop 最廣的 DB，optimization paper 很多分散在
-工程 blog：
-- Google Android team 的 SQLite optimization（page size, journal mode, mmap）
-- Meta 的 mobile DB pattern (Lithium / Trident)
-- Apple Core Data / WAL optimization (WWDC talks)
-- Academic: "Mobile SQLite Performance Study" (?)
+SQLite 作為 mobile / embedded DB 的事實標準，已有相當數量的學術工作針對其
+在 mobile platform 上的效能瓶頸做優化。值得注意的是，**這條 lineage 幾乎
+全部聚焦於寫入路徑**（write amplification、fsync、journaling、autocommit
+overhead），與本研究的 cold-start read latency 在問題定義、優化機制與
+硬體假設上皆正交：
 
-**跟我們的差別**：既有工作多半專注「**寫入** / fsync / WAL」性能；我們專注
-**read cold-start**，且明確切出「**interior 0.35% 主導**」這個 quantitative
-observation。Type-aware layout rewriter (§4.1.1c) 也是 novel——既有 SQLite
-fork 沒有 page-type aware physical reorder。
+- **[Oh+15] SQLite/PPL** (PVLDB 8(12), VLDB '15) ——專為 mobile app 的
+  autocommit 寫入 workload 設計，發現「single message 常觸發 ≥10 次 page
+  write、write amplification > 100×」。解法是 **深度 fork SQLite**（B+tree
+  module、pager、buffer management policy、journaling 全部改）並搭配
+  **自製 PCM 硬體 (UMS board)**——在 PCM 中為每個 data page 維護 per-page
+  log，將多次 successive page writes 替換為小型 log records。回報相較
+  vanilla SQLite 達 **8–24× throughput 改善**。
+- **[Kang+13] X-FTL** (SIGMOD '13) ——同樣聚焦 SQLite 在 mobile flash 上
+  的 transactional write 性能，但介入層在 **FTL (Flash Translation Layer)**。
+- **[Kim+12] "Revisiting Storage for Smartphones"** (USENIX FAST '12)
+  ——mobile storage performance 的奠基分析論文，建立「SQLite + journaling
+  on flash」是 mobile I/O 主要瓶頸的認識。
+- **[Jeong+13] "I/O Stack Optimization for Smartphones"** (USENIX ATC '13)
+  ——mobile I/O stack 層級的優化，同樣是 write-side focus。
+
+工程界（非 academic）相關討論則散落於 Google Android team、Meta（Lithium /
+Trident）、Apple Core Data 的 WWDC talks 等資源，幾乎全部涉及 page size /
+journal mode / mmap / WAL 等寫入路徑參數調校。
+
+**跟我們的差別（三條軸）**：
+1. **問題維度**：上述工作全部處理 **steady-state write throughput / write
+   amplification**；我們處理 **first-query cold-start read latency**——一個
+   未被學術界系統性分析過的維度。
+2. **介入侵入性**：[Oh+15] / [Kang+13] 深度修改 SQLite engine 甚至 FTL；
+   我們**完全不修改 SQLite 內部**，作為 application-side 工具部署。
+3. **硬體假設**：[Oh+15] 需要自製 PCM 硬體 (UMS)；我們在 **commodity
+   hardware**（Ryzen 9950X + NVMe SSD）上運作，無特殊硬體需求。
+
+此外，本研究的 type-aware layout rewriter (§4.1.1c) 也是該領域 novel——
+既有 SQLite mobile-optimization fork 無 page-type aware physical reorder
+的設計。
 
 #### 2.3.4 SSD / NVMe page-aware optimization
 
@@ -736,6 +762,10 @@ preprocessing 1.8 ms 比 first-q 14 µs 大兩個數量級，**真實 cold start
 | [Effelsberg & Härder 1984] | Effelsberg, W., Härder, T. "Principles of database buffer management." *ACM Transactions on Database Systems* 9(4):560–595 (1984) | §2.3.2 foundational anchor——DB buffer management 奠基論文，建立 replacement / prefetching / ref-count 設計維度。Pre-Buffer 跟 Chen+21 都引這篇 |
 | [Yi+26] | Yi, J., Wang, X., Jin, P. "Workload-Aware Buffer Prefetching for Database Systems." *Data Science and Engineering* (2026). https://doi.org/10.1007/s41019-025-00342-6 | §2.3.2 對比——他們的 "buffer cold-start" = hotspot-shift recovery，背景 thread + Direct I/O；我們處理 OS page cache cold-start + critical-path preprocessing accounting |
 | [Chen+21] | Chen, Y., Zhang, Y., Wu, J., Wang, J., Xing, C. "Revisiting data prefetching for database systems with machine learning techniques." *ICDE* (2021), pp. 2165–2170. DOI: 10.1109/ICDE51399.2021.00218 | §2.3.2 引用——ML-based prefetcher（DNN/CNN/RNN/LSTM/Multi-Model，8–20M 參數）。**訓練 trace 採 warm-start**，evaluation 只報 precision/recall，未量測 NN inference 對 latency 的衝擊、也未量測 wasted-prefetch I/O 成本——雖其 §IV-B 自承「wrong prefetching... will hurt the performance of the system due to the extra I/O cost」。Pre-Buffer 的批評因此公允；本研究的 preprocessing-aware methodology 正是 fill 這個 gap |
+| [Oh+15] | Oh, G., Kim, S., Lee, S.-W., Moon, B. "SQLite Optimization with Phase Change Memory for Mobile Applications." *Proceedings of the VLDB Endowment* 8(12):1454–1465 (2015) | §2.3.3 canonical exemplar——mobile SQLite write-optimization 路線的代表作。**深度 fork SQLite**（B+tree / pager / buffer mgmt / journaling 全改）+ **自製 PCM 硬體 (UMS board)**，解 autocommit write amplification（>100×）達 8–24× throughput 改善。完美對照本研究三條 differentiator：read cold-start vs write throughput / 無 SQLite mod vs 深度 fork / commodity HW vs 自製 PCM |
+| [Kang+13] | Kang, W.-H., Lee, S.-W., Moon, B. "X-FTL: Transactional FTL for SQLite Databases." *SIGMOD* (2013), pp. 97–108 | §2.3.3——mobile SQLite write-optimization 同 lineage，介入層在 **FTL**（Flash Translation Layer）。Oh+15 的近鄰先行工作 |
+| [Kim+12] | Kim, H., Agrawal, N., Ungureanu, C. "Revisiting Storage for Smartphones." *USENIX FAST* (2012), pp. 17–29 | §2.3.3——mobile storage performance 奠基分析論文，建立「SQLite + journaling on flash」是 mobile I/O 主要瓶頸的認識 |
+| [Jeong+13] | Jeong, S., Lee, K., Lee, S., Son, S., Won, Y. "I/O Stack Optimization for Smartphones." *USENIX ATC* (2013), pp. 309–320 | §2.3.3——mobile I/O stack 層級優化，write-side focus |
 | 其他 papers / blog posts | §2.3 candidate reading list | survey 進度見 `related_work_reading_list.md`（待建立）|
 
 ---
