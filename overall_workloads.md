@@ -5,6 +5,19 @@
 所有 workload 都跑在同一個 reference DB 上 (`testdb_builder.py` 產生的
 `items(id PK, k1, k2, payload BLOB(100))`，**600,000 rows**)。
 
+> 🆕 **2026-06-19 P0 Pipeline 統一**：所有 workload 的 cold-start measurement
+> 機制已統一為 P0 pipeline——harness MADV chain (`--cold-advice dontneed`) +
+> `/usr/local/sbin/drop-caches` setuid wrapper 全機 drop + residency_checker
+> 強制 verify 0%。歷史上各 workload 跨 sub-project 用不同機制量測（per-file
+> posix_fadvise / system sudo drop_caches / prefetch_churn 跳過 MADV chain），
+> 這是 [CONTRADICTIONS.md](CONTRADICTIONS.md) 30 條矛盾的程式碼根因，已在
+> commit `691bd6b` + `fc998cb` 統一。詳見
+> [IMPLEMENTATION_PIPELINES.md](IMPLEMENTATION_PIPELINES.md)。
+>
+> 本檔內所有 workload **定義不變**（key 範圍、分布、ops 數），但既有
+> measurement 數字（baseline latency / 改善 %）需要在 P0 pipeline 下重跑驗證
+> 才能列入論文最終版。
+
 ---
 
 ## Reference DB 結構
@@ -193,7 +206,8 @@ INSERT 會把新資料放在檔尾，這個 workload 就在量「檔尾新資料
 ## Workload D — Mixed Write-heavy Churn Generator
 
 **檔案：** [prefetch_churn/workloads/page_churn_write.txt](prefetch_churn/workloads/page_churn_write.txt)
-**規模：** 100,000 ops，混合操作
+**檔案規模：** 100,000 ops，混合操作（**檔內定義**）
+**每 batch 實際用量：** 5,000 ops（**取前 5,000 行**，跑 10 batch = 累計 50,000 ops）
 **Op 組成：**
 
 | op | 次數 | 佔比 |
@@ -208,6 +222,7 @@ INSERT 會把新資料放在檔尾，這個 workload 就在量「檔尾新資料
 - `insert` 從 id = 600,001 開始往上長（DB 原本 600k 筆，所以每 batch 都是真
   新資料、不是 overwrite）
 - `update` / `read` / `rmw` / `scan` 都打既有 id 範圍
+- `readmodifywrite` 被 harness 預設 remap 成 DELETE（見 [project-churn-rmw-delete-remap](memory/project-churn-rmw-delete-remap.md)）——raw 檔沒 `delete` 字樣但有實際刪除
 
 **模擬什麼：** **不是用來測 latency 的**。它是 churn generator — 製造大量
 INSERT/UPDATE/DELETE 的寫入壓力，讓 SQLite freelist 重新分配、interior pages
@@ -217,6 +232,13 @@ INSERT/UPDATE/DELETE 的寫入壓力，讓 SQLite freelist 重新分配、interi
 5,000 ops 的這個 workload（取前 5,000 行），跑 10 次累積 50,000 ops。然後在每個
 checkpoint 用 Workload C 量 cold-start latency，看「prefetch 在被 churn 過的
 layout 上還剩多少效益」。
+
+> ⚠️ **規模標示落差（[CONTRADICTIONS.md](CONTRADICTIONS.md) #29）**：「**檔案
+> 規模 100,000 ops**」跟「**實際每 batch 只用 5,000 × 10 batch = 50,000 ops**」
+> 是兩個不同概念，過去文件只標 100,000 容易讓人誤以為單次跑滿。**已修法**：
+> 上方欄位現在同時標兩個數字。**論文 §3.2 引用此 workload 時應寫**：「Workload D
+> 是 churn 寫入產生器，**每次 checkpoint 之間執行 5,000 ops、共 10 個 checkpoint**，
+> 累積影響 DB layout 演化」。
 
 ---
 
