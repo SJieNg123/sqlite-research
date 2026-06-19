@@ -107,23 +107,29 @@ P2 churn 還要把 `--benchmark-cold-advice none` → `dontneed`、`--no-run-res
 
 ## §5. 策略實作 vs 文件定義的 mismatch
 
-> **狀態（2026-06-19 更新）**：M1 / M5 / M8 已在 commit `691bd6b`（P0 pipeline
-> migration）解決——本表已移除這三條。**編號保留不重排**以維持跨檔引用穩定。
-> 剩餘 5 條（M2 / M3 / M4 / M6 / M7）仍待處理。
+> **狀態（2026-06-19 第二輪更新）**：本輪 commit 又解掉**新 M1 + 新 M4**
+> （prefetch_churn 兩條 P0 偏離）。表中剩 **3 條開放**（新 M2 / M3 / M5）。
+> **解決後即從表移除**，footnote 用概念描述追蹤歷史，不靠 ID 號（因為
+> 移除一條後其他都會位移，ID 不適合當長期 reference）。
 
 | # | 文件宣稱 | 程式碼實作 | 落差 |
 |---|---|---|---|
-| **M2** | `strategies_explained.md:39` 說「製造冷啟動」步驟 = MADV chain + cold helper | prefetch_churn 用 `--benchmark-cold-advice none` 跳過 MADV chain | ❌ prefetch_churn 偏離 doc 宣稱的 protocol |
-| **M3** | `strategies_explained.md:5` 七策略「共用同一套引擎」 | warmer.c 用 pread（不是 madvise），跟其他六策略**不同保證等級** | ⚠️ 是「同一個 harness 呼叫」但 prefetch 機制其實異質 |
-| **M4** | `strategies_explained.md:57` 親口承認「早期 prefetch_vacuum 用 sudo drop_caches」「絕對 µs 不能跨表比」 | `overall_results.md` 與 `REPORT.md` 仍把不同 pipeline 的 µs 數字混在一張表裡 | 🔴 文件自承不可比，但仍然在比 → [CONTRADICTIONS.md #24] |
-| **M6** | residency_checker 存在於 4 個位置：`./residency_checker`、`prefetch_churn/residency_checker`、`residency_checker/residency_checker.c`、`prefetch_slru/runs/residency_checker` | prefetch_churn 用 `--no-run-residency-checker` 主動關掉 | ⚠️ 驗證 infrastructure 有，但**使用率不一致** |
-| **M7** | 文件說「7 個策略」（`strategies_explained.md:9`）| 實際算下來 binary 有 5 個（prefetch、prefetch_layers、prefetch_access、prefetch_slru、warmer），策略變體 ≥ 8（含 3a/3b ratio）| ⚠️ count 對不上但屬於 [CONTRADICTIONS.md R3] 已調和項 |
+| **M2** | `strategies_explained.md:5` 七策略「共用同一套引擎」 | warmer.c 用 pread（不是 madvise），跟其他六策略**不同保證等級** | ⚠️ 是「同一個 harness 呼叫」但 prefetch 機制其實異質 |
+| **M3** | `strategies_explained.md:57` 親口承認「早期 prefetch_vacuum 用 sudo drop_caches」「絕對 µs 不能跨表比」 | `overall_results.md` 與 `REPORT.md` 仍把不同 pipeline 的 µs 數字混在一張表裡 | 🔴 文件自承不可比，但仍然在比 → [CONTRADICTIONS.md #24] |
+| **M5** | 文件說「7 個策略」（`strategies_explained.md:9`）| 實際算下來 binary 有 5 個（prefetch、prefetch_layers、prefetch_access、prefetch_slru、warmer），策略變體 ≥ 8（含 3a/3b ratio）| ⚠️ count 對不上但屬於 [CONTRADICTIONS.md R3] 已調和項 |
 
-**已解決條目**（commit `691bd6b`，2026-06-19）：
+**已解決條目**（按解決時間倒序）：
 
-- ~~**M1** `--drop-caches-script` 命名誤導~~ → helper scripts 已全部改成 `exec /usr/local/sbin/drop-caches`，現在實際上就是 system-wide drop
-- ~~**M5** `--drop-caches-use-sudo` 死碼~~ → flag 已從 harness C、Python orchestrator、所有 shell scripts 移除
-- ~~**M8** `prefetch_layers` 5-arg 命令簽章錯誤~~ → `WORKLOAD_FILE_REFERENCE.md` §1.4 / §3 已更正成 `prefetch` (3-arg) vs `prefetch_layers` (4-arg) 兩 binary 分開
+**2026-06-19（第二輪，本 commit）**：
+
+- ~~**prefetch_churn 跳過 harness MADV chain**~~ → Python orchestrator `--benchmark-cold-advice` default 從 `"none"` 改為 `"dontneed"`；10 個 prefetch_churn shell orchestrators 把 `--benchmark-cold-advice none` 覆寫拿掉。現在 prefetch_churn 跑出來符合 P0 第①層。
+- ~~**residency_checker 「4 個位置」+ prefetch_churn 主動關掉**~~ → 兩部分：(a)「4 個位置」原描述**事實錯誤**，實際是 **1 source（`residency_checker/residency_checker.c`）+ 1 binary（`residency_checker/residency_checker`）+ 2 symlinks（`prefetch_churn/`、`prefetch_slru/runs/` 各一個指回去）**，md5 全部相同，**從來沒有分歧**；audit 原本把 directory 名跟 binary 路徑混為一談。(b) 真正的問題是 prefetch_churn 用 `--no-run-residency-checker` 主動關掉 verify——10 個 shell orchestrators 的該覆寫已拿掉、Python default `--run-residency-checker` 仍是 `True`，現在 prefetch_churn 跑會做 P0 第④層 verify。
+
+**2026-06-19（第一輪，commit `691bd6b`）**：
+
+- ~~**`--drop-caches-script` 命名誤導**~~ → helper scripts 已全部改成 `exec /usr/local/sbin/drop-caches`，現在實際上就是 system-wide drop
+- ~~**`--drop-caches-use-sudo` 死碼**~~ → flag 已從 harness C、Python orchestrator、所有 shell scripts 移除
+- ~~**`prefetch_layers` 5-arg 命令簽章錯誤**~~ → `WORKLOAD_FILE_REFERENCE.md` §1.4 / §3 已更正成 `prefetch` (3-arg) vs `prefetch_layers` (4-arg) 兩 binary 分開
 
 ---
 
