@@ -372,30 +372,30 @@ snapshot 與 SQLite B+tree 的 **page-type classification** 結合，做出 2d/2
 
 ### 3.1 Test database
 
-固定一個 reference DB，所有實驗共用：
+所有實驗共用一個固定的 reference database（由 `testdb_builder.py` 產生），
+schema 為 `items(id INTEGER PRIMARY KEY, k1 INTEGER, k2 INTEGER, payload
+BLOB(100))` 加上 secondary index `idx_items_k1k2 ON items(k1, k2)`，含
+600,000 row：
 
 | 項目 | 數值 |
 |---|---|
 | Page 大小 | 4 KB |
 | 總筆數 | 600,000 rows |
 | 總 page 數 | 26,331 |
-| 整個 DB | ~102 MB |
-| **Interior page（瓶頸）** | **92 個 → 368 KB（占 0.35%）** |
-| Leaf page（資料本體） | 26,239 個 → ~102 MB（占 99.65%） |
+| DB 總大小 | ~102 MB |
+| **Interior page** | **92 個 / 368 KB / 0.35%** |
+| Leaf page | 26,239 個 / ~102 MB / 99.65% |
 
-Schema: `items(id INTEGER PRIMARY KEY, k1 INTEGER, k2 INTEGER, payload BLOB(100))`
-加上一個 secondary index `idx_items_k1k2 ON items(k1, k2)`。
-
-**重點：interior 只占 0.35%（368 KB），但每筆 query 都得用到。只要先載這 368 KB，
-就能避開 cold start 的 random I/O。** 整個 paper 的研究空間就是「怎麼把這 368 KB
-最有效率地預載進 memory」。
+如 §2.1 所述，interior page 雖僅占 0.35%（368 KB）卻是每筆 query 必經
+之路；本研究的核心命題即是「如何最有效率地預載這 368 KB 進 OS page cache
+以消除 cold-start 的 random I/O」。三種 layout（1a / 1b / 1c）共用同一份
+schema 與 600,000 row 內容，僅 page 物理排列不同（詳見 §4.1 與圖 1）。
 
 ![三種 layout 下 92 個 interior page 在檔案裡的位置](figures/out/01_page_distribution.png)
 
-*圖 1：interior page（紅色）在檔案裡怎麼擺。**1a 原始**：散落整個 102 MB；
-**1b VACUUM**：略集中但仍散；**1c type-aware**：全部塞到檔頭前 400 KB，讓
-prefetch 可以一口氣抓完。三 layout 共用同一份 schema 跟 600k row 內容，只是
-page 物理排列不同。*
+*圖 1：interior page（紅色）在三 layout 下的物理分佈。**1a 原始**：散落
+整個 102 MB；**1b VACUUM**：略集中但仍散；**1c type-aware**：全部集中於
+檔頭前 400 KB，可被 sequential prefetch 一次涵蓋。*
 
 ### 3.2 Workloads
 
