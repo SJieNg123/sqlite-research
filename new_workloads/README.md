@@ -347,23 +347,3 @@ seed = 20271667
 ```
 
 若要知道它實際記錄在摘要中的參數，可查 `SUMMARY.csv` 中 `filename` 等於 `scan_zipf_tail_050.txt` 的那一列。
-
-## 產生器
-
-這批檔案由根目錄的以下腳本產生：
-
-```text
-generate_new_workloads.py
-```
-
-產生器會輸出到：
-
-```text
-new_workloads/
-```
-
-並引用以下既有 Zipf 實作：
-
-```text
-generated_workloads/generate_ycsb_workloads.py
-```
