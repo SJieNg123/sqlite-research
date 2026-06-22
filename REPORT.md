@@ -612,6 +612,8 @@ prefetch cost」的關鍵。詳見 [multiprocess/MULTIPROCESS_MMAP.md](multiproc
 
 ## 5. Experiment and Evaluation
 
+> **📊 P0 master batch（2026-06-22,authoritative）**：完整 strategy × workload × layout 矩陣已用 P0 pipeline 重跑(`run_p0.py`,全 117 cell `cold_pct`=0),權威結果表見 [overall_results.md「P0 master batch 結果」](overall_results.md)、原始檔 [`p0_runs/summary_p0.csv`](p0_runs/summary_p0.csv)。重點:first-query 最低為 **2f_slru(−79~90%)** 但其 ~6–7.5ms preproc 使 `e2e` 出局;`e2e` 最划算為 **2e_K10 / layers_5**(尤其 C × 2e_K10:fq −85%、e2e 462µs)。**以下 §5.x 子節數字屬 pre-P0,保留作敘事;最終定稿以 P0 表為準。**
+
 ### 5.1 Per-workload best methods (overview)
 
 同一套量測基準（7 種方法 × 3 種 layout，A/B/C 同條件）下，每個情境表現最好

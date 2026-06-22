@@ -120,6 +120,10 @@ header 的 freelist pointer，以及產 SQL 修正 `sqlite_master.rootpage`。
 
 ## 二、Prefetch 策略
 
+> **📊 2026-06-22**：所有 prefetch 策略已用 P0 pipeline 全矩陣重跑,權威數字見
+> [overall_results.md「P0 master batch 結果」](overall_results.md)(`p0_runs/summary_p0.csv`)。
+> 下方各策略小節的數字與「P0 待修」註記屬 pre-P0,保留作背景;結論以 P0 表為準。
+
 決定 cold start 後、第一筆 query 跑之前，要主動把哪些 page 載進 OS page cache。
 
 ### Structure-based（不看存取歷史，純粹看 page 結構）
