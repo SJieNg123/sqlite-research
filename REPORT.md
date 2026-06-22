@@ -487,6 +487,59 @@ median 統計，見 [calibration/prefetch_time_summary.csv](calibration/prefetch
 
 ---
 
+### 3.5 Prefetch delivery：pread oracle vs. async hint（selection–delivery 拆解）
+
+§3.4 分離了 prefetch 的**成本**（preprocessing）與 first-query。本節進一步把 prefetch
+的**效益**拆成兩個正交因子——**選對哪些 page**（targeting / selection）與**這些 page
+是否及時載入**（delivery）——並說明 P0 如何同時量測兩者。
+
+**根因：`madvise(MADV_WILLNEED)` 是 async hint、不保證載入。** 它向 kernel 登記 readahead
+即 return，實際載入在背景非同步完成；某頁在 first-query 之前「載進來沒」取決於 readahead
+是否來得及。因此 first-query 同時受「選對頁」與「載得及」兩件事影響，混在一起無法歸因。
+
+**兩臂量測。** P0 對每個 cell 用**相同 hotset**、只切換交付方式各跑一次（pread 不是新策略，
+而是對每個策略的 hotset 額外做一次同步交付，以隔離 selection）：
+
+| 臂 | 交付 | 量到 | 回答的問題 |
+|---|---|---|---|
+| **pread**（oracle） | `pread()` 同步阻塞，return 即 100% resident | `fq_pread` | 「hotset **選對**了嗎？」= delivery 理想時的 first-query 下界 |
+| **async**（實務） | `madvise` / `fadvise(WILLNEED)` 非同步 | `fq_async` + `delivery_pct` | 「**實務**上真的拿到多少？」 |
+
+兩臂之差即 **delivery loss**：
+
+$$\text{delivery\_loss} = \text{fq}_\text{async} - \text{fq}_\text{pread}$$
+
+這個差值**用量測直接回答了「`MADV_WILLNEED` 到底保不保證載入」**——它不保證，而漏載的代價
+就是 $\text{fq}_\text{async} - \text{fq}_\text{pread}$（配合 `delivery_pct` 看「當時載了幾成」）。
+
+**定位：pread 是上界，不是幻想。** pread 因同步阻塞、preprocessing 達 ms 量級，**不是可部署
+策略**（§5 的部署比較一律用 async 的 end-to-end，pread 只當參考線）。但它代表的 first-query
+是「**只要用任何手段（idle 空檔背景預暖、`readahead(2)`、io_uring）把 hotset 成功暖好**就能
+達到的上界」。真實部署落在光譜中間：
+
+```text
+裸 madvise hint  ──►  readahead(2) / io_uring  ──►  pread
+ 不額外努力（下界）       強力非同步（實務多半在此）        同步保證（上界）
+   = fq_async              = 落在兩者之間                = fq_pread
+```
+
+**delivery 受 readahead 上限封頂。** 單一 `madvise(MADV_WILLNEED)` 對一段 range 的實際載入量
+被 kernel readahead window 封頂為約 $2\times(\texttt{read\_ahead\_kb}/4)$ 頁；這正是 2a range
+在散佈 layout 上「一次 madvise 只載 32/92 頁」的成因（§5）。因此 `read_ahead_kb` **並非中性
+參數**——它同時決定 async 的封頂、以及「冷 fault 順帶 readahead」帶來的免費 prefetch。P0 將其
+**釘在 128 KB（裝置預設，外部效度最高）並逐 run 記錄**，另在代表 cell 掃描 {0, 128, 512} KB，
+量化 **kernel readahead 與顯式 prefetch 的替代關係**（readahead 越大、顯式 prefetch 邊際效益
+越小；readahead 越小、顯式 prefetch 越必要）。
+
+> **三句話 headline（§5 以此框架陳述）：**
+>
+> 1. **可達上界（oracle）**：`fq_pread`。
+> 2. **實務可部署最佳**：async，以 end-to-end `e2e = prefetch_us + fq_async` 比較（layers_5
+>    勝；2f SLRU 因 ms 量級 preprocessing 出局，見 §5.5）。
+> 3. **delivery 代價**：`fq_async − fq_pread`，即 async 作為 hint 相對 oracle 的漏載損失。
+
+---
+
 ## 4. Strategies
 
 三類正交，可以**自由組合**——例如「1c layout + 2c layers_5 prefetch + 4a

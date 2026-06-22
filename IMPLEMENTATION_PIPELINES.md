@@ -20,7 +20,7 @@
 | **P1**（多數）| `layout_rewriter` / `prefetch_access` / `prefetch_slru` / `prefetch_warmer` 各 `runs/runmatrix*.sh` | harness `--cold-advice dontneed` (MADV_COLD→PAGEOUT→DONTNEED) + `--drop-caches-script evict_helper.sh` → `evict` binary → **posix_fadvise(POSIX_FADV_DONTNEED)**（單檔，不需 sudo）| 名字叫 "drop-caches-script" 但實際是 fadvise；residency 驗證有時跑有時沒跑 |
 | **P2** | `prefetch_churn/` 全部 Python orchestrator | `--benchmark-cold-advice none`（**跳過 harness MADV chain**）+ evict binary（posix_fadvise）+ `--no-run-residency-checker`（**verify 也關掉**） | 跟 P1 差兩個關鍵步驟，**生出的 baseline µs 系統性不同** |
 | **P3**（歷史，可能仍在 CSV 裡）| 早期 prefetch_vacuum（已棄用但 CSV 沒重跑）| `sync && echo 3 > /proc/sys/vm/drop_caches`（**真 system-wide drop，需 root**）| `strategies_explained.md:57` 自承「早期用這套」、「絕對 µs 不能跨表比」——舊數字仍在 `overall_results.md` |
-| **P0**（**推薦新標準**）| 尚未使用 | harness MADV chain + **`/usr/local/sbin/drop-caches`**（setuid wrapper，全機 drop，u03 可跑）+ `residency_checker` 強制驗證 0% | — |
+| **P0**（**推薦新標準**）| 尚未使用 | harness MADV chain + **`/usr/local/sbin/drop-caches`**（setuid wrapper，全機 drop，u03 可跑）+ **兩道 mincore 驗證**：cold ①（prefetch 前 ≈0%）+ delivery ②（prefetch 後，pread arm 強制 ≥95%，見 §3） | — |
 
 **Gold standard 缺什麼**：P0 還沒被任何 batch 用過。重跑必須採 P0。
 
@@ -32,7 +32,7 @@
 |---|---|---|---|---|
 | 1. harness MADV chain | ✅ `dontneed` | ❌ `none`（**跳過**）| ❌（直接 system drop）| ✅ `dontneed` |
 | 2. 全機 page cache drop | ❌ 只 per-file fadvise | ❌ 只 per-file fadvise | ✅ `echo 3 > drop_caches` | ✅ `/usr/local/sbin/drop-caches` |
-| 3. Residency verify (mincore == 0) | ⚠️ 有 binary 但不一定跑 | ❌ `--no-run-residency-checker` | ❌（沒驗）| ✅ 強制 |
+| 3. Residency verify (mincore) | ⚠️ 有 binary 但不一定跑 | ❌ `--no-run-residency-checker` | ❌（沒驗） | ✅ 強制兩道：cold ① + delivery ② |
 | 4. 跨 sub-project 可比性 | ⚠️（同 P1 內部 OK，跨 P1/P2 不可比）| ⚠️（同上）| ❌（跟 P1/P2 完全不可比）| ✅ |
 | 5. u03 可跑 | ✅ | ✅ | ❌（u03 沒 sudo）| ✅|
 
@@ -42,24 +42,130 @@
 
 ## §3. 重跑用 P0 — 完整配方
 
-> 給同學跑 master rerun 直接 copy 用。Headline cell（Abstract / §1 引用）建議 5 reps；
-> 其餘可 3 reps。
+> **這是鎖定版定義（locked spec）。** 為了「一次定死、不再回頭改」，下面把每個會
+> 影響絕對 µs 或可複現性的旋鈕都釘死。master rerun 全部照此跑。
+
+### §3.0 P0 一句話 + 凍結清單
+
+> **P0 = `p0_env.sh`（釘環境 + 記錄）→ harness（SQLite 凍結設定 + 全機 drop + 內建
+> ①cold/②delivery mincore）→ op[0] 為 read 的 first-query → 每 cell 跑兩臂：pread = 可
+> 複現上界、async = 實務對照（附 delivery%）→ pread 少 reps、async 10 reps、丟首 rep、
+> rep-major、報 median+p95。**
+
+**凍結清單（改任一項都要全矩陣重跑，所以鎖死）：**
+
+| # | 項目 | 鎖定值 | 為什麼 |
+|---|---|---|---|
+| F1 | SQLite pager cache | `PRAGMA cache_size=0` | 不讓 SQLite 在 heap 偷存頁、繞過冷啟動（已寫死 [`:951`](benchmark_harness/benchmark_harness.c#L951)）|
+| F2 | SQLite 讀取路徑 | `PRAGMA mmap_size=檔案大小` | 讀走 mmap → OS page cache → drop-caches 管得到、prefetch 暖同一份（已寫死 [`:948`](benchmark_harness/benchmark_harness.c#L948)）|
+| F3 | 冷啟動清快取 | `/usr/local/sbin/drop-caches` = `sync; echo 3 > /proc/sys/vm/drop_caches`（全機，pagecache+dentry+inode）| 全機 drop 才是真冷；echo 3 一併清 dentry/inode |
+| F4 | CPU governor | `performance`（關 turbo 變頻）| 冷啟動 µs 對 CPU 頻率敏感 |
+| F5 | **`read_ahead_kb`** | **128（裝置預設）為主值；外加 {0,128,512} 敏感度掃描** | **直接決定一次 fault/madvise 順帶載幾頁**——range 封頂、U 型、delivery% 全跟它糾纏（見 §3.7）|
+| F6 | THP | `madvise`（或固定 `never`，記錄）| huge page 改變 fault 粒度 |
+| F7 | hotset 輸入 | 每份 hotset.csv checksum 凍結 + 記錄產生方式 | hotset 是輸入；換一份結果就漂移 |
+| F8 | 量測 workload | op[0] 必須是 `read`（A/B/C/Z 合格；D 只當 churn 產生器、不量 TTFQ）| first-query 定義 |
+
+### §3.1 環境：`p0_env.sh`（每個 batch 前跑一次，並把值寫進 run record）
+
+```sh
+#!/bin/sh
+# 釘住並記錄所有影響冷啟動 µs 的環境旋鈕。需 root / setuid 包裝。
+DEV=$(df --output=source /home/u03 | tail -1 | sed 's#/dev/##; s/[0-9]*$//')   # DB 所在 block device
+echo performance | tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor >/dev/null
+echo ${RA_KB:-128} > /sys/block/$DEV/queue/read_ahead_kb        # F5 主值 128
+echo madvise > /sys/kernel/mm/transparent_hugepage/enabled
+# ── 記錄（這串會被 runner 抓進每筆 run record，環境一漂移就看得出來）──
+echo "env: kernel=$(uname -r) dev=$DEV ra_kb=$(cat /sys/block/$DEV/queue/read_ahead_kb)" \
+     "gov=$(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor)" \
+     "thp=$(cat /sys/kernel/mm/transparent_hugepage/enabled)" \
+     "loadavg=$(cut -d' ' -f1 /proc/loadavg) memfree_kb=$(awk '/MemAvailable/{print $2}' /proc/meminfo)"
+```
+
+> 沒記錄 = 之後任何 variance 都無法解釋 = 被迫重跑。`read_ahead_kb` 尤其關鍵——這很可能就是
+> 舊 P3 有 U 型、P1 變 plateau 的元兇之一。
+
+### §3.2 harness 呼叫（SQLite 設定 F1/F2 已寫死在 code）
 
 ```bash
 benchmark_harness \
-  --db <test_xxx.db> \
-  --workload <workload_xxx.txt> \
-  --output <out.csv> \
-  --record-dir <records_dir> \
-  --cold-advice dontneed \                           # ① 自家 mmap MADV chain
-  --drop-caches-script /usr/local/sbin/drop-caches \ # ② 全機 drop（取代舊 evict）
-  --post-cold-script <strategy_prefetch.sh>          # ③ 策略本身的 prefetch
-# 跑完後額外驗證：
-residency_checker --db <test_xxx.db> --threshold 0  # ④ 強制 0% resident or abort
+  --db <test_xxx.db> --workload <workload_xxx.txt> \
+  --output <out.csv> --record-dir <records_dir> \
+  --cold-advice dontneed \
+  --drop-caches-script /usr/local/sbin/drop-caches \
+  --post-cold-script <deliver.sh> \
+  --verify-hotset <hotset_xxx.csv>          # ★ 新增 flag，見 §3.4
 ```
 
-關鍵差別 vs 現行 P1：第 ② 步把 `evict_helper.sh` 換成 `/usr/local/sbin/drop-caches`。
-P2 churn 還要把 `--benchmark-cold-advice none` → `dontneed`、`--no-run-residency-checker` → `--run-residency-checker`。
+順序固定 `cold-advice → drop-caches → post-cold-script → (★內建 mincore) → first query`
+（[`:1244-1247`](benchmark_harness/benchmark_harness.c)），prefetch 一定在 evict 後 / query 前，不會被清掉。
+
+### §3.3 兩臂設計：每個 cell 都跑 pread + async
+
+把每個策略**分解成「hotset 選擇」×「交付方式」**——策略只決定**載哪些頁**（hotset），
+交付方式正交：
+
+| 臂 | 怎麼跑 | 角色 | 報什麼 |
+|---|---|---|---|
+| **pread**（oracle）| `WARM_METHOD=pread warmer <db> <hotset> 4096` | **可複現上界**：hotset 選對且 100% 載入時的最佳 fq。**非部署**（同步阻塞，preproc ~ms）| 只報 `fq_pread`，標 `oracle, 不可直接部署` |
+| **async**（實務）| `WARM_METHOD=fadvise warmer …`（與既有 madvise 同 hint 語意）| 真實可部署機制 | `fq_async` + `delivery_pct` + `preproc_async` + `e2e_async` |
+
+- **統一用 `warmer` 當交付引擎**（pread/fadvise 只差同步/非同步），native `prefetch_layers/access/slru`
+  **降級為 hotset 產生器**（離線跑、吐 hotset.csv）。好處：pread 與 async **只差在 sync/async**，
+  其他全相同 → 兩臂之差 `fq_async − fq_pread` 乾淨等於「async 的 delivery 代價」（直接回答矛盾 #17）。
+- **pread 永不進「該部署哪個策略」的比較表**（它端到端 ~ms，不是策略）；策略間比較一律用 `e2e_async`。
+
+### §3.4 residency 驗證：★ 內建進 harness（修掉「驗證污染量測」）
+
+新增 harness flag `--verify-hotset <hotset.csv>`：harness 用既有的 `fill_mincore_vec`
+（[`:504`](benchmark_harness/benchmark_harness.c#L504)）在**兩個內部時點各做一次快速 mincore**（~µs）：
+
+1. drop-caches 之後、post-cold-script 之前 → `cold_pct`（應 ≈0，>1% 該 run 作廢）
+2. post-cold-script 之後、**op[0] 之前** → `delivery_pct`，寫進 run record
+
+> **為什麼一定要內建、不能用外掛 `residency_checker`+python**：外掛在 prefetch 與 op[0] 間多跑
+> ~100ms，這段時間 async readahead 會多載 → **fq_async 被灌水變快、不可複現**。harness 內建 mincore
+> 只加 µs 級延遲，async 來不及多載，污染消失。pread 臂不受影響（早已 100%），所以在 `--verify-hotset`
+> 上線前，**pread 臂可先跑**（它免疫此問題）。
+>
+> `hotset_residency.py`（repo 根目錄）退居離線/手動檢查用；自動辨識 hotset 格式
+> （有 `is_resident` 欄 → 只算 `==1`；有 `file_offset` 欄 → 全部頁）。
+
+### §3.5 reps / 聚合 / 交錯
+
+- **reps**：pread 臂 **3**（deterministic）；async 臂 **10**（壓 delivery 變異）；**兩臂都丟掉第 1 rep**（首跑有額外 code-path 冷成本）。
+- **交錯**：**rep-major**——全 cell 跑完 rep1 再 rep2…，把機器慢漂移攤平到所有 cell，而非集中某幾個。
+- **聚合**：報 **median + p95 + min + stdev**（冷啟動長尾，只報 median 會騙人）。
+
+### §3.6 每 cell 輸出欄位（統一一張大表）
+
+```
+workload, db, strategy, ra_kb, rep,
+  cold_pct,                       # ① 應 ≈0
+  fq_pread,                       # 天花板（oracle）
+  fq_async, delivery_pct,         # 實務 fq + 當時載幾成
+  preproc_async,                  # async prefetch 自身開銷（layers/2d/2e ≈ µs；2f ≈ 7.5ms）
+  e2e_async,                      # = preproc_async + fq_async（SLRU 的陷阱在此現形）
+  avg_us, majflt, minflt
+```
+
+Headline 三句：①「可達上界(oracle) `fq_pread`」②「實務最佳：async，端到端 `e2e_async`（layers_5 贏、SLRU 因 7.5ms preproc 出局）」③「`fq_async − fq_pread` = async 作為 hint 的 delivery 代價」。
+
+### §3.7 `read_ahead_kb` 敏感度掃描（當「發現」報，不只 control）
+
+`read_ahead_kb` 跟結論有因果糾纏（range 封頂 = `2×ra_pages`；冷 fault 順帶 readahead = kernel 免費 prefetch）。
+所以除了主值 128，在**代表 cell**（A,C × orig × {baseline, layers_5, 2e_K10, range}）掃 **{0, 128, 512} KB**，
+寫成發現：**「kernel readahead 與顯式 prefetch 是替代品——ra 大時顯式 prefetch 邊際效益縮小、ra 小時變必要」**。
+這同時擋掉「你的結果只是 readahead artifact」的攻擊。
+
+**關鍵差別 vs 現行 P1**：(1) `evict` → 全機 `/usr/local/sbin/drop-caches`；(2) `--verify-hotset` 內建兩道
+mincore；(3) 環境釘死+記錄（尤其 `read_ahead_kb`）；(4) 每 cell 雙臂 pread/async。P2 churn 另需把
+`--benchmark-cold-advice none` → `dontneed`、`--no-run-residency-checker` → 改用 `--verify-hotset`。
+
+**P0 工具（已實作）**：(a) harness `--verify-hotset`（[`benchmark_harness.c`](benchmark_harness/benchmark_harness.c)
+`load_hotset_pages` / `verify_hotset_residency`，emit `verify_cold_pct` / `verify_delivery_pct`）；
+(b) [`p0_env.sh`](p0_env.sh)（pin + 記錄環境，印 `P0_ENV` 行）；(c) 通用 runner [`run_p0.py`](run_p0.py)
+（雙臂 pread/async、統一欄位、rep-major、`--dry-run`/`--list`）。三者皆在 u03 Linux 上跑（harness 用
+mmap/mincore/madvise）；`run_p0.py --dry-run` 可先在任何機器驗證矩陣與 hotset 頁數。
 
 **禮貌警告**：全機 drop 會把同學的 page cache 也沖掉。Master batch 要**夜間集中跑** + 群組公告。
 
