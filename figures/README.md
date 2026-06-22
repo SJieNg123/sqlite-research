@@ -1,7 +1,18 @@
 # Publication-quality figures (Week 14)
 
-10 figures covering all 13 research weeks. Each script is self-contained
-and reproducible from the CSVs already in the repo.
+14 figures covering all research weeks. Each script is self-contained
+and reproducible from the CSVs in the repo.
+
+> **📊 P0 status (2026-06-22).** Figures whose experiment is the fixed strategy
+> matrix or a parameterized sweep have been **redrawn from P0 data**
+> (`run_p0.py` → `p0_runs*/summary_p0.csv`, async arm, `cold_pct`=0):
+> **01, 02, 03, 04, 05, 10, 13, 14**.
+> The rest still use **pre-P0** data because their experiment type isn't covered by
+> `run_p0.py` (would need separate P0 infra) — clearly marked below:
+> **06** RAM-pressure (needs cgroup memory-limited P0 runs), **07** churn-evolution
+> (needs churn-checkpoint harness), **08** cadence (multiprocess harness),
+> **09** zlowkey N-sweep + **11** dense 3-layout N-sweep + **12** churned N-sweep
+> (feasible via more P0 N-sweep batches; not yet run — fig 04 is the P0 N-sweep reference).
 
 ## Quick start
 
