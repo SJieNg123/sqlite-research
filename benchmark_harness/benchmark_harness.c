@@ -78,6 +78,7 @@ typedef struct {
     int64_t mmap_size;
     const char *drop_caches_script;
     const char *post_cold_script;
+    const char *verify_hotset;
     cold_advice_t cold_advice;
     sqlite_open_timing_t sqlite_open_timing;
     schema_init_timing_t schema_init_timing;
@@ -137,6 +138,9 @@ static void usage(const char *prog) {
             "  --drop-caches-script <file>     Run helper after madvise to drop Linux page cache.\n"
             "                                  Recommended: /usr/local/sbin/drop-caches (setuid wrapper).\n"
             "  --post-cold-script <file>       Run helper after cold/drop-caches and before SQLite query setup.\n"
+            "  --verify-hotset <file>          Hotset CSV (page_number,is_resident|file_offset). Emits\n"
+            "                                  verify_cold_pct (after drop-caches, before prefetch) and\n"
+            "                                  verify_delivery_pct (after prefetch, before first query).\n"
             "  --cold-advice none              Do not run madvise/drop-caches; measure current cache state.\n"
             "  --cold-advice cold              Use MADV_COLD only.\n"
             "  --cold-advice pageout           Use MADV_COLD then MADV_PAGEOUT.\n"
@@ -199,6 +203,8 @@ static void parse_args(int argc, char **argv, options_t *opts) {
             opts->drop_caches_script = argv[++i];
         } else if (strcmp(arg, "--post-cold-script") == 0 && i + 1 < argc) {
             opts->post_cold_script = argv[++i];
+        } else if (strcmp(arg, "--verify-hotset") == 0 && i + 1 < argc) {
+            opts->verify_hotset = argv[++i];
         } else if (strcmp(arg, "--cold-advice") == 0 && i + 1 < argc) {
             const char *mode = argv[++i];
             if (strcmp(mode, "none") == 0) {
@@ -537,6 +543,104 @@ static size_t count_resident_sqlite_pages(const mapped_db_t *dbmap) {
 
     free(vec);
     return resident_count;
+}
+
+/* --- Hotset residency verification (--verify-hotset) --- */
+
+/* Load the page numbers that make up a prefetch hotset. Auto-detects format
+ * by header: "page_number,is_resident" -> pages with is_resident==1 (access/
+ * slru hotpages); otherwise (e.g. "page_number,file_offset") -> all listed
+ * pages (warmer hotset). Returns malloc'd array; sets *out_n. Caller frees. */
+static uint32_t *load_hotset_pages(const char *path, size_t *out_n) {
+    FILE *f = fopen(path, "r");
+    if (f == NULL) {
+        die_errno("fopen(--verify-hotset)");
+    }
+    char line[512];
+    int header = 1;
+    int gate_on_resident = 0;
+    size_t cap = 256, n = 0;
+    uint32_t *pages = malloc(cap * sizeof(uint32_t));
+    if (pages == NULL) {
+        die_errno("malloc(hotset)");
+    }
+    while (fgets(line, sizeof(line), f) != NULL) {
+        if (header) {
+            header = 0;
+            gate_on_resident = (strstr(line, "is_resident") != NULL);
+            continue;
+        }
+        unsigned long pn = 0;
+        long col2 = 0;
+        int matched = sscanf(line, "%lu,%ld", &pn, &col2);
+        if (matched < 1) {
+            continue;
+        }
+        if (gate_on_resident && (matched < 2 || col2 != 1)) {
+            continue;  /* access/slru: only is_resident==1 pages are the hotset */
+        }
+        if (n == cap) {
+            cap *= 2;
+            uint32_t *np = realloc(pages, cap * sizeof(uint32_t));
+            if (np == NULL) {
+                die_errno("realloc(hotset)");
+            }
+            pages = np;
+        }
+        pages[n++] = (uint32_t)pn;
+    }
+    fclose(f);
+    *out_n = n;
+    return pages;
+}
+
+/* How many of the given hotset pages are fully resident in the OS page cache. */
+static size_t hotset_resident_count(const mapped_db_t *dbmap,
+                                    const uint32_t *pages, size_t n) {
+    unsigned char *vec = calloc(dbmap->os_page_count, sizeof(unsigned char));
+    if (vec == NULL) {
+        die_errno("calloc");
+    }
+    fill_mincore_vec(dbmap, vec);
+
+    size_t resident = 0;
+    for (size_t i = 0; i < n; ++i) {
+        uint32_t page_no = pages[i];
+        if (page_no < 1 || page_no > dbmap->sqlite_page_count) {
+            continue;
+        }
+        uint64_t sqlite_begin =
+            (uint64_t)(page_no - 1) * dbmap->sqlite_page_size;
+        uint64_t sqlite_end = sqlite_begin + dbmap->sqlite_page_size;
+        size_t first_os_page = (size_t)(sqlite_begin / dbmap->os_page_size);
+        size_t last_os_page = (size_t)((sqlite_end - 1) / dbmap->os_page_size);
+        bool all_resident = true;
+        for (size_t os_idx = first_os_page; os_idx <= last_os_page; ++os_idx) {
+            if ((vec[os_idx] & 1U) == 0) {
+                all_resident = false;
+                break;
+            }
+        }
+        if (all_resident) {
+            ++resident;
+        }
+    }
+    free(vec);
+    return resident;
+}
+
+/* Snapshot hotset residency and emit "verify_<label>_pct=..." (stderr + record).
+ * One mincore call (~us): negligible perturbation, unlike an external checker. */
+static void verify_hotset_residency(const mapped_db_t *dbmap,
+                                    const uint32_t *pages, size_t n,
+                                    const char *label, FILE *record) {
+    if (pages == NULL || n == 0) {
+        return;
+    }
+    size_t resident = hotset_resident_count(dbmap, pages, n);
+    double pct = 100.0 * (double)resident / (double)n;
+    emit_line(record, "verify_%s_pct=%.1f resident=%zu/%zu\n",
+              label, pct, resident, n);
 }
 
 static void append_resident_range(uint32_t **starts, uint32_t **ends,
@@ -1182,6 +1286,11 @@ int main(int argc, char **argv) {
     if (opts.mmap_size == 0) {
         opts.mmap_size = (int64_t)dbmap.file_size;
     }
+    uint32_t *hotset_pages = NULL;
+    size_t hotset_n = 0;
+    if (opts.verify_hotset != NULL) {
+        hotset_pages = load_hotset_pages(opts.verify_hotset, &hotset_n);
+    }
     out = open_unique_output_csv(opts.output_csv, output_path,
                                  sizeof(output_path));
 
@@ -1208,6 +1317,9 @@ int main(int argc, char **argv) {
     write_record_line(record, "post_cold_script=%s\n",
                       opts.post_cold_script != NULL ?
                       opts.post_cold_script : "(none)");
+    write_record_line(record, "verify_hotset=%s\n",
+                      opts.verify_hotset != NULL ?
+                      opts.verify_hotset : "(none)");
     write_record_line(record, "sqlite_open_timing=%s\n",
                       opts.sqlite_open_timing == SQLITE_OPEN_BEFORE_COLD ?
                       "before-cold" : "after-cold");
@@ -1244,6 +1356,8 @@ int main(int argc, char **argv) {
     apply_cold_advice(&dbmap, opts.cold_advice, opts.debug);
     run_helper_script(opts.drop_caches_script, "drop_caches_script",
                       opts.debug, record);
+    /* (1) cold check: hotset should be ~0% resident now (after evict, pre-prefetch). */
+    verify_hotset_residency(&dbmap, hotset_pages, hotset_n, "cold", record);
     run_helper_script(opts.post_cold_script, "post_cold_script",
                       opts.debug, record);
 
@@ -1267,6 +1381,10 @@ int main(int argc, char **argv) {
     report_resident_sqlite_page_distribution(&dbmap, "after madvise", record,
                                              true);
 
+    /* (2) delivery check: hotset residency immediately before the first query
+     * (~us mincore, so async readahead gets no meaningful extra time to land). */
+    verify_hotset_residency(&dbmap, hotset_pages, hotset_n, "delivery", record);
+
     write_csv_header(out);
     summary = run_benchmark(&sqlite_ctx, &workload, out);
 
@@ -1289,6 +1407,7 @@ int main(int argc, char **argv) {
     sqlite_close_ctx(&sqlite_ctx);
     unmap_db_file(&dbmap);
     free_workload(&workload);
+    free(hotset_pages);
     fclose(record);
     return 0;
 }
