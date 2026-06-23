@@ -15,9 +15,11 @@
 > commit `691bd6b` + `fc998cb` 統一。詳見
 > [IMPLEMENTATION_PIPELINES.md](IMPLEMENTATION_PIPELINES.md)。
 >
-> 本檔內所有 workload **定義不變**（key 範圍、分布、ops 數），但既有
-> measurement 數字（baseline latency / 改善 %）需要在 P0 pipeline 下重跑驗證
-> 才能列入論文最終版。
+> 本檔內所有 workload **定義不變**（key 範圍、分布、ops 數）。**measurement 數字
+> 已於 2026-06-23 全面用 P0 重跑**,權威結果見 [overall_results.md](overall_results.md)
+> 的 P0 表(全 cell `cold_pct`=0)。本檔下方「資料來源/覆蓋」段裡殘留的舊 µs/%
+> (如 2f「-94%」、type-aware「-69%」)為 pre-P0 illustrative,**一律以 overall_results.md P0 為準**
+> (P0 下 2f first-q 為 −79~90%、A/ta layers_5 −24%)。
 
 ---
 
@@ -135,12 +137,12 @@ warm；唯一還是 cold 的是 interior page**。所以這個 workload 是 pref
 
 **用在哪：**
 - `prefetch_vacuum/` 第 9–11 週的全部實驗（baseline / range / perpage / layers N）
-- `layout_rewriter/` 的 type-aware vacuum 端到端驗證（-69%）
-- `layout_rewriter/runs/` 的 1b VACUUM 補測、N sweep × {orig, vacuum} 全矩陣（找到 A vac 新甜蜜點 N=20）
-- `prefetch_slru/` 的 2f SLRU 驗證（orig + vacuum DB，first-q -94%、全 workload -39%）
+- `layout_rewriter/` 的 type-aware layout（P0:把 A/B baseline 推高、C 較快;見 overall_results.md）
+- `layout_rewriter/runs/` 的 1b VACUUM、N sweep 全矩陣
+- 2f SLRU（**P0:first-q −79~90%**;但 ~6–7.5ms preproc 使 e2e 出局）
 
-**為什麼這個 workload 會給「-54%」、「-69%」、甚至「-94%」這種看起來很漂亮的
-數字：** 因為 cold start 的 cost 被拆成「interior fault + leaf fault + CPU」，Zipfian 下
+**為什麼會出現「漂亮」的 first-query 改善（P0:2f −79~90%、2e_K10 在 C −85%）：**
+因為 cold start 的 cost 被拆成「interior fault + leaf fault + CPU」，Zipfian 下
 leaf 部分被反覆查詢拉進 cache，**剩下的瓶頸只有 interior**，prefetch 一解就
 見效。而 2f SLRU 連 leaf 一起 preload，連那點 leaf cold fault 都消掉。
 
