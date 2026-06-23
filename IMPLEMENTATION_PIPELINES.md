@@ -212,6 +212,7 @@ checksum 凍結清單 `p0_runs/hotset_freeze.sha256`;master batch 前用 `run_p0
 | 批次 | workloads | layouts | strategies | reps/arms | 產物 | figures |
 |---|---|---|---|---|---|---|
 | Master matrix | A,B,C | orig,vacuum,ta | baseline, layers_5, layers_92, 2d, 2e_K10, 2e_K500, 2f_slru | pread5/async10/baseline10,雙臂 | [`p0_runs/`](p0_runs/summary_p0.csv) | 01,02,03,05,13,14 |
+| Master matrix (**Z**) | **Z** | orig,vacuum,ta | 同上 6 策略 + baseline | pread5/async10/baseline10,雙臂 | [`p0_runs_z/`](p0_runs_z/summary_p0.csv) | (補洞;Z 主圖為 09) |
 | layers_N sweep | A,B,C | orig | layers_{1,2,3,5,8,13,21,34,46,64,92}+baseline | pread1/async5 | [`p0_runs_nsweep/`](p0_runs_nsweep/summary_p0.csv) | 04 |
 | 2e K-sweep | A,B,C | orig,vacuum,ta | 2d, 2e_K{10,40,50,92,100,500} | pread1/async5 | [`p0_runs_ksweep/`](p0_runs_ksweep/summary_p0.csv) | 10 |
 | Dense N-sweep + **Z** | A,B,C,**Z** | orig,vacuum,ta | layers_{1..92}(14 個 N)+baseline | pread1/async3 | [`p0_runs_nsweep_dense/`](p0_runs_nsweep_dense/summary_p0.csv) | 09,11 |
@@ -224,8 +225,8 @@ checksum 凍結清單 `p0_runs/hotset_freeze.sha256`;master batch 前用 `run_p0
 
 **B. P0 範圍內、尚未跑的細粒度組合**(誠實列出,非 batch 而是 cell 層級的洞)
 
-- [ ] **Workload Z × 完整 master matrix** —— Z 目前**只在 dense N-sweep(layers_N)**跑過,沒進 master 的 {baseline, 2d, 2e_K10, 2e_K500, 2f_slru, layers_5/92} 雙臂量測。Z 是 robustness workload(核心結果 = fig 09),要補的話跑 `run_p0.py --workloads Z --layouts orig,vacuum,ta`。
-- [ ] **Churn × vacuum/ta layout** —— `run_p0_churn.py` 寫死 `LAYOUT="orig"`,churn-evolution / churned N-sweep **只有 orig**;vacuum/ta 的 churn 未跑。
+- [x] **Workload Z × 完整 master matrix** —— **已補(2026-06-23)**:`run_p0.py --workloads Z --layouts orig,vacuum,ta` 跑了 {baseline,2d,2e_K10,2e_K500,2f_slru,layers_5/92} 雙臂 → [`p0_runs_z/summary_p0.csv`](p0_runs_z/summary_p0.csv)(39 rows,`cold_pct`=0;Z hotset 先以 `--regen-hotsets --no-freeze --workloads Z` 產出)。Z/orig:baseline 525、2f 119(−77%)、2e_K10 203,與 A 同型。
+- [x] **Churn × vacuum/ta layout** —— **已補(2026-06-23)**:`run_p0_churn.py` 改成 `LAYOUTS=[orig,vacuum,ta]` 迴圈、CSV 加 `layout` 欄;churn-evolution / churned N-sweep 現涵蓋三 layout(figs 07/12 以 orig 為 headline)。→ `p0_runs_churn/`。
 - [ ] **Churn × 其他策略 static** —— churn-evolution 只測 baseline / 2e_K10 / layers_92 的 static t=0 hotset;2d / 2f_slru static 未測。
 - [ ] **read_ahead_kb {0,512} sweep** —— 需 root(u03 無),只跑了主值 128(F5);掃描留待有 root 環境。
 
