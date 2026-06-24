@@ -88,7 +88,7 @@ classification 僅對dominate cold-start cost 的 interior 集合下達
   (**−79 ~ −90%**),但其 **~6–7.5 ms preprocessing** 反讓 end-to-end cold
   start **慢一個order of magnitude**——此 trade-off 在既有 prefetch literature中長期被忽略。
 - **(C4) Robustness 三維validation**：50k write churn 後 static t=0 hotset 不decay
-  (C 上 2e_K10 跨 checkpoint 持平 ~99 µs vs baseline ~580);cgroup
+  (C 上 2e_K10 跨 checkpoint 持平 ~82–86 µs vs baseline ~580);cgroup
   `MemoryMax=20M` memory壓縮下 first-q 幾乎免疫(20M/unlimited ratio近 1.0);多 process
   cadence re-warm下,cadence ≤
   query gap 即可可靠 warm cache。
