@@ -137,9 +137,9 @@ warm；唯一還是 cold 的是 interior page**。所以這個 workload 是 pref
 - `prefetch_vacuum/` 第 9–11 週的全部實驗（baseline / range / perpage / layers N）
 - `layout_rewriter/` 的 type-aware layout（P0:把 A/B baseline 推高、C 較快;見 overall_results.md）
 - `layout_rewriter/runs/` 的 1b VACUUM、N sweep 全矩陣
-- 2f SLRU（**P0:first-q −79~90%**;但 ~6–7.5ms preproc 使 e2e 出局）
+- 2f SLRU（**P0:first-q −76~89%**;但 deliver ~0.8–7ms 使 e2e 多半不具優勢）
 
-**為什麼會出現「漂亮」的 first-query 改善（P0:2f −79~90%、2e_K10 在 C −85%）：**
+**為什麼會出現「漂亮」的 first-query 改善（P0:2f −76~89%、2e_K10 在 C −81%）：**
 因為 cold start 的 cost 被拆成「interior fault + leaf fault + CPU」，Zipfian 下
 leaf 部分被反覆查詢拉進 cache，**剩下的瓶頸只有 interior**，prefetch 一解就
 見效。而 2f SLRU 連 leaf 一起 preload，連那點 leaf cold fault 都消掉。
@@ -163,7 +163,7 @@ sampling、爬蟲式存取。**每筆 query 都打到沒看過的 leaf**，leaf 
 - `layout_rewriter/runs/` 的 1b VACUUM 補測、1c type-aware 補測、N sweep × {orig, vacuum} 全矩陣
   - **發現一**：B 上 N sweep 從 N=5 開始全 plateau（沒有 A 的 U 型曲線）
   - **發現二**：ta 在 B 上把 baseline 推高、layers_N 改善也較弱（P0:B/ta −24% vs orig −47%），非 universal best
-- `prefetch_slru/` 的 2f SLRU 驗證（P0:B first-q −85%,但 e2e 不具優勢）
+- `prefetch_slru/` 的 2f SLRU 驗證（P0:B first-q −83%,但 e2e 多半不具優勢）
 - 原始定位：當 Workload A 量出「prefetch 省了 54%」，B 回答「這效益只在熱點下
   才有意義嗎」 — 答案是 prefetch 仍然有效，但比例會被「無法被解決的 leaf
   fault」攤薄
@@ -248,7 +248,7 @@ layout 上還剩多少效益」。
 | `layout_rewriter/runs/` (1b VACUUM × B/C) | B + C | VACUUM 對 baseline 和 prefetch 的影響在非 Zipfian workload 上是什麼樣 |
 | `layout_rewriter/runs/` (1c type-aware × B/C) | B + C | ta layout 是否 universal best？(答案：B 上反效果) |
 | `layout_rewriter/runs/` (N sweep × A/B/C × {orig, vacuum}) | A + B + C | 「N=5 甜蜜點」是 zipfian-friendly 還是 universal？(答案：zipfian-only) |
-| `prefetch_slru/` (2f SLRU × A/B/C × {orig, vacuum}) | A + B + C | mincore-dumped resident set preload 在三種 workload 的效益 (P0:first-q −79~90%,但 e2e 全面不具優勢) |
+| `prefetch_slru/` (2f SLRU × A/B/C × {orig, vacuum}) | A + B + C | mincore-dumped resident set preload 在三種 workload 的效益 (P0:first-q −76~89%,但 deliver 太重→e2e 多半不具優勢;warm-process 下 C 例外) |
 | `prefetch_churn/` 量測 (N=5 only) | C (high-key uniform) | Layout 隨 churn 漂移後，prefetch 效益怎麼變？|
 | `prefetch_churn/runs_nsweep/` (N=0,1,5,10,20,46,92) | C (high-key uniform) | churned DB 的 N sweep 形狀是否跟乾淨 DB 一致？(P0:形狀一致,N=92 −50%) |
 | `prefetch_churn/` churn 生成 | D (mixed write) | 製造真實的 layout 漂移壓力（不量 latency）|
