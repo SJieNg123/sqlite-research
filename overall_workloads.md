@@ -5,19 +5,10 @@
 所有 workload 都跑在同一個 reference DB 上 (`testdb_builder.py` 產生的
 `items(id PK, k1, k2, payload BLOB(100))`，**600,000 rows**)。
 
-> **2026-06-19 P0 Pipeline 統一**：所有 workload 的 cold-start measurement
-> 機制已統一為 P0 pipeline——harness MADV chain (`--cold-advice dontneed`) +
-> `/usr/local/sbin/drop-caches` setuid wrapper 全機 drop + harness 內建
-> `--verify-hotset`（`cold_pct`/`delivery_pct`,非外部 residency_checker；措辭 2026-06-22 校正）。
-> 歷史上各 workload 跨 sub-project 用不同機制量測（per-file
-> posix_fadvise / system sudo drop_caches / prefetch_churn 跳過 MADV chain），
-> 這是 [CONTRADICTIONS.md](CONTRADICTIONS.md) 30 條矛盾的程式碼根因，已在
-> commit `691bd6b` + `fc998cb` 統一。詳見
-> [IMPLEMENTATION_PIPELINES.md](IMPLEMENTATION_PIPELINES.md)。
->
-> 本檔內所有 workload **定義不變**（key 範圍、分布、ops 數）。**measurement 數字
-> 已於 2026-06-23 全面用 P0 重跑**,權威全表見 [overall_results.md](overall_results.md)
-> 的 P0 表(全 cell `cold_pct`=0)。
+> 所有 workload 的 cold-start measurement 機制為 **P0 pipeline**——harness MADV chain
+> (`--cold-advice dontneed`) + `/usr/local/sbin/drop-caches` 全機 drop + harness 內建
+> `--verify-hotset`（量 `cold_pct`/`delivery_pct`）。本檔為 workload **定義**（key 範圍、
+> 分布、ops 數）;measurement 數字權威全表見 [overall_results.md](overall_results.md)（全 cell `cold_pct`=0）。
 
 ---
 
@@ -184,10 +175,8 @@ INSERT 會把新資料放在檔尾，這個 workload 就在量「檔尾新資料
 
 **用在哪：**
 - `prefetch_churn/` 的 10 個 checkpoint：每個 checkpoint 之間先用 Workload D
-  製造寫入壓力，然後 drop cache，再跑這個 workload 量 cold-start latency
-  - 原本只跑 N=5（第四維）
-  - **後續 N sweep 補測**：[`prefetch_churn/runs_nsweep/`](prefetch_churn/runs_nsweep/) 跑了
-    N=0/1/5/10/20/46/92 × 10 checkpoints，見 [overall_results.md](overall_results.md) churn 段
+  製造寫入壓力，然後 drop cache，再跑這個 workload 量 cold-start latency；
+  N sweep（N=0/1/5/10/20/46/92 × 10 checkpoints）見 [overall_results.md](overall_results.md) churn 段
 - `layout_rewriter/runs/` 的 1b VACUUM、1c type-aware、N sweep × {orig, vacuum}
   全矩陣
   - **關鍵發現**：C 上 layers_N 必須 N=92（載全部 interior）才有 -46% 改善，
@@ -291,19 +280,17 @@ layout 上還剩多少效益」。
 | **Churn 漂移** | **N sweep + 2d/2e × delete-churn** + **dense N=0..92 × churn** | **N sweep + 2d/2e × churn** + **dense N=0..92 × churn** | 10 checkpoints × **N sweep + 2d/2e × insert-churn** + **dense N=0..92 × churn** |
 | **RAM-pressure 全矩陣** | 7 strategies × 1a/1b/1c × {20M, none} × 6 reps | 同左 | 同左 |
 
-B 早就不再只是「對照組」 — 它是 prefetch 失敗模式（leaf fault 主導）和 ta
-layout 反效果（P0:B/ta baseline +10%、prefetch 改善較弱）的主要證據來源。
+B 不只是「對照組」 — 它是 prefetch 失敗模式（leaf fault 主導）和 ta
+layout 反效果（B/ta baseline +4%、prefetch 改善較弱）的主要證據來源。
 
-RAM-pressure 矩陣現已涵蓋 **9 個 (workload × layout) cell × 7 個策略 × 2 個 mem 上限**，
-全部以 6 reps median 聚合（756 cells，第十六維）。原本只測 A × 1a × 4 策略
-的 48-cell 縮影矩陣完全被取代，且新舊矩陣在 A × 1a × 4 策略上誤差 ≤ 3 µs
-（交叉驗證）。
+RAM-pressure 矩陣涵蓋 **9 個 (workload × layout) cell × 7 個策略 × 2 個 mem 上限**，
+6 reps median 聚合（756 cells）。
 
 
 # New Workloads
 請參考new_workloads 資料夾底下的 README.md
 
-**Dense N=0..92 全 sweep（第十九維）** 進一步把每個 (workload × layout) 的
+**Dense N=0..92 全 sweep** 把每個 (workload × layout) 的
 layers_N 從 6 個採樣點補成全 93 個值 × 3 reps：clean DB 2,511 cells + churn DB
 3,069 cells = **~5,580 額外 benchmark**。發現 sparse 6-pt 在 9/12 cell 結論正確，
 但漏掉 3 個 sweet spot：**A × 1b N=62 -31% / B × 1c N=26 -36% / C × 1b N=87 -57%**。

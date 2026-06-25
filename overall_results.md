@@ -3,11 +3,8 @@
 本檔列出**每個策略 × 每個 workload × 每個 layout 的 P0 結果**（對照
 [overall_workloads.md](overall_workloads.md) 的 workload 定義）。
 
-> **2026-06-23:本檔已全面更新為 P0 數據。** 所有數字來自 **P0 pipeline**
-> （`run_p0.py` 家族 → `p0_runs*/`,全 cell `cold_pct`=0)。原本的「主表～第十八維」
-> pre-P0 mixed-pipeline 表格已被下方 **「全維度 P0 數據」** 取代(舊表保存在 git 歷史,
-> 需對照可 `git log`)。[CONTRADICTIONS.md](CONTRADICTIONS.md) 的 16 條數據矛盾(#1–16)
-> 已全部以 P0 單一權威值解決。Workload D 是 churn generator,無自身 latency 結果。
+> 本檔所有數字來自 **P0 pipeline**（`run_p0.py` 家族 → `p0_runs*/`,全 cell `cold_pct`=0)。
+> Workload D 是 churn generator,無自身 latency 結果。
 >
 > **Preprocessing 計入 e2e（兩個部署模型）**:preprocessing 拆成 **open(db)(冷開 DB ~200µs,per-layout 常數)**
 > 與 **deliver(逐頁 madvise/pread,隨 hotset)**。`e2e_warm` = deliver+fq(warm-process/integrated,
@@ -20,11 +17,11 @@
 ---
 
 <!-- P0-MASTER-RESULTS-START -->
-## P0 master batch 結果（2026-06-22,authoritative）
+## P0 master batch 結果
 
 > 由 `run_p0.py` 一次跑齊:54 strategy cells × pread/async + 9 baseline,pread 5 / async 10 / baseline 10 reps(丟 warmup)、rep-major、全機 drop-caches、in-harness `--verify-hotset`、釘核升頻、ra=128。**全 117 cell `cold_pct`=0**。原始檔:[`p0_runs/summary_p0.csv`](p0_runs/summary_p0.csv) / [`p0_runs/raw_p0.csv`](p0_runs/raw_p0.csv)。
 > `fq` = first-query median µs;`impr%` = async 相對該 (workload,layout) baseline;`e2e_std` = open+deliver+fq(standalone warmer);`e2e_warm` = deliver+fq(warm-process,≈static,本研究主張);`deliv%` = async delivery_pct;`oracle` = pread 臂 fq(可達上界)。
-> 此為 A/B/C 的詳表(含 delivery_pct/oracle);下方「全維度 P0 數據」涵蓋全 workload(含 Z)× layout × 策略 + N/K-sweep + RAM + churn + cadence。舊 pre-P0 18 維表已移除(git 歷史可查)。
+> 此為 A/B/C 的詳表(含 delivery_pct/oracle);下方「全維度 P0 數據」涵蓋全 workload(含 Z)× layout × 策略 + N/K-sweep + RAM + churn + cadence。
 
 ### Workload A (Zipfian)
 
@@ -109,9 +106,9 @@
 
 ---
 
-## 全維度 P0 數據（2026-06-23,取代舊 18 維 pre-P0 表）
+## 全維度 P0 數據
 
-> 本節以下全部為 **P0 pipeline**(`run_p0.py` 家族 → `p0_runs*/`,全 cell `cold_pct`=0)的數據,**取代**本檔原本的「主表～第十八維」pre-P0 mixed-pipeline 表格(舊表保存在 git 歷史中,如需對照可 `git log`)。上方「P0 master batch 結果」為 A/B/C 含 delivery_pct/oracle 的詳表;此處為全 workload(含 **Z**)× layout × 策略 + N/K-sweep + RAM + churn + cadence 的彙整。
+> 本節為 **P0 pipeline**(`run_p0.py` 家族 → `p0_runs*/`,全 cell `cold_pct`=0)的全 workload(含 **Z**)× layout × 策略 + N/K-sweep + RAM + churn + cadence 彙整;上方「P0 master batch 結果」為 A/B/C 含 delivery_pct/oracle 的詳表。
 
 ## 全策略 × layout × workload（P0,async first-query / e2e µs,median）
 
