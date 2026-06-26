@@ -12,7 +12,7 @@ Tests gap B1 from the audit: 在 churned DB 上，access-pattern prefetch
 那可能是因為「insert 對 hot leaves 的擾動偏弱」。
 
 **Hypothesis（被本實驗推翻）**：A 的 read range 是 [8, 99,997]，
-`page_churn_write.txt` 內的 readmodifywrite→delete 從 id=1 開始打、會直接
+`workload_churn_write.txt` 內的 readmodifywrite→delete 從 id=1 開始打、會直接
 **命中** A 的 hot leaves，所以 t=0 hotpages 應該會 decay。
 
 ## 設計

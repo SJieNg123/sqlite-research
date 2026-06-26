@@ -5,9 +5,9 @@ Tests the README §13 research gap: **2d/2e access-pattern prefetch in a continu
 ## Design
 
 - **DB**: same as `runs_nsweep` — 600k rows × 100 B, layout 1a (original).
-- **Churn**: same `page_churn_write.txt` workload — 10 checkpoints × 5000 mixed ops (insert/update/delete/readmodifywrite/scan) = 50,000 mutations total.
-- **Benchmark workload**: workload C (uniform reads in key range [590000, 610000]) — same `page_churn_benchmark_high.txt` as nsweep.
-- **Hot pages source**: **static, from t=0** — `prefetch_access/runs/hotpages_c.csv` and `hot2e_C_orig_K10.csv`, both computed once on the **unchurned baseline DB**. This is the conservative case (no per-checkpoint re-warmup); if it works here, dynamic re-warmup would do at least as well.
+- **Churn**: same `workload_churn_write.txt` workload — 10 checkpoints × 5000 mixed ops (insert/update/delete/readmodifywrite/scan) = 50,000 mutations total.
+- **Benchmark workload**: workload C (uniform reads in key range [590000, 610000]) — same `workload_c.txt` as nsweep.
+- **Hot pages source**: **static, from t=0** — `strategies/access/runs/hotpages_c.csv` and `hot2e_C_orig_K10.csv`, both computed once on the **unchurned baseline DB**. This is the conservative case (no per-checkpoint re-warmup); if it works here, dynamic re-warmup would do at least as well.
 - **Prefetcher**: `prefetch_access` binary in `--prefetch-mode access-2d` / `access-2e` (new modes added to `sqlite_prefetch_churn_experiment.py`).
 - **Baselines**: existing `runs_nsweep/n0` (no prefetch) and `runs_nsweep/n92` (layers_92 file-offset).
 

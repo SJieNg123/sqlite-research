@@ -47,7 +47,7 @@
 
 ### §3.0 P0 一句話 + 凍結清單
 
-> **P0 = `p0_env.sh`（釘環境 + 記錄）→ harness（SQLite 凍結設定 + 全機 drop + 內建
+> **P0 = `env.sh`（釘環境 + 記錄）→ harness（SQLite 凍結設定 + 全機 drop + 內建
 > ①cold/②delivery mincore）→ op[0] 為 read 的 first-query → 每 cell 跑兩臂：pread = 可
 > 複現上界、async = 實務對照（附 delivery%）→ pread 少 reps、async 10 reps、丟首 rep、
 > rep-major、報 median+p95。**
@@ -56,8 +56,8 @@
 
 | # | 項目 | 鎖定值 | 為什麼 |
 |---|---|---|---|
-| F1 | SQLite pager cache | `PRAGMA cache_size=0` | 不讓 SQLite 在 heap 偷存頁、繞過冷啟動（已寫死 [`:1068`](benchmark_harness/benchmark_harness.c#L1068)）|
-| F2 | SQLite 讀取路徑 | `PRAGMA mmap_size=檔案大小` | 讀走 mmap → OS page cache → drop-caches 管得到、prefetch 暖同一份（已寫死 [`:1065`](benchmark_harness/benchmark_harness.c#L1065)）|
+| F1 | SQLite pager cache | `PRAGMA cache_size=0` | 不讓 SQLite 在 heap 偷存頁、繞過冷啟動（已寫死 [`:1068`](pipeline/engine/benchmark_harness/benchmark_harness.c#L1068)）|
+| F2 | SQLite 讀取路徑 | `PRAGMA mmap_size=檔案大小` | 讀走 mmap → OS page cache → drop-caches 管得到、prefetch 暖同一份（已寫死 [`:1065`](pipeline/engine/benchmark_harness/benchmark_harness.c#L1065)）|
 | F3 | 冷啟動清快取 | `/usr/local/sbin/drop-caches` = `sync; echo 3 > /proc/sys/vm/drop_caches`（全機，pagecache+dentry+inode）| 全機 drop 才是真冷；echo 3 一併清 dentry/inode |
 | F4 | CPU governor | `performance`（關 turbo 變頻）；**u03 例外見下** | 冷啟動 µs 對 CPU 頻率敏感 |
 | F5 | **`read_ahead_kb`** | **128（裝置預設）固定值,逐 run 記錄,不掃描** | **直接決定一次 fault/madvise 順帶載幾頁**——range 封頂、U 型、delivery% 全跟它糾纏（見 §3.7）|
@@ -65,7 +65,7 @@
 | F7 | hotset 輸入 | 每份 hotset.csv checksum 凍結 + 記錄產生方式；**2d/2e/2f 用 P0 重產見下** | hotset 是輸入；換一份結果就漂移 |
 | F8 | 量測 workload | op[0] 必須是 `read`（A/B/C/Z 合格；D 只當 churn 產生器、不量 TTFQ）| first-query 定義 |
 
-### §3.1 環境：`p0_env.sh`（每個 batch 前跑一次，並把值寫進 run record）
+### §3.1 環境：`env.sh`（每個 batch 前跑一次，並把值寫進 run record）
 
 ```sh
 #!/bin/sh
@@ -87,7 +87,7 @@ echo "env: kernel=$(uname -r) dev=$DEV ra_kb=$(cat /sys/block/$DEV/queue/read_ah
 > **F4 在 u03 (meow1) 的落地（無 root）**：實機 u03 沒有 sudo，governor 寫不了,但**不需要**。
 > 這台是 **`amd-pstate-epp`** 驅動,真正釘頻率的是 **EPP**（`energy_performance_preference`）而非
 > governor 標籤——實測 EPP=`performance`、`boost=1`、負載核心 ~5.7 GHz（上限 5.76）。F4「powersave
-> 會鎖低頻」是舊 acpi-cpufreq 語意,不適用。因此 `p0_env.sh` 改成**記錄真實證據**:`P0_ENV` 行已
+> 會鎖低頻」是舊 acpi-cpufreq 語意,不適用。因此 `env.sh` 改成**記錄真實證據**:`ENV` 行已
 > 加 `driver= epp= boost= maxfreq_khz=`,讓 artifact 自證「跑在 performance 頻率策略」即使 governor
 > 顯示 powersave。實機冷清快取走 setuid `/usr/local/sbin/drop-caches`（免 sudo）。
 > `read_ahead_kb` 一律固定 128(裝置預設)並逐 run 記錄,不掃描其他值。
@@ -105,7 +105,7 @@ benchmark_harness \
 ```
 
 順序固定 `cold-advice → drop-caches → post-cold-script → (★內建 mincore) → first query`
-（[`:1405-1440`](benchmark_harness/benchmark_harness.c#L1405)），prefetch 一定在 evict 後 / query 前，不會被清掉。
+（[`:1405-1440`](pipeline/engine/benchmark_harness/benchmark_harness.c#L1405)），prefetch 一定在 evict 後 / query 前，不會被清掉。
 
 ### §3.3 兩臂設計：每個 cell 都跑 pread + async
 
@@ -125,7 +125,7 @@ benchmark_harness \
 ### §3.4 residency 驗證：★ 內建進 harness（修掉「驗證污染量測」）
 
 新增 harness flag `--verify-hotset <hotset.csv>`：harness 用既有的 `fill_mincore_vec`
-（[`:522`](benchmark_harness/benchmark_harness.c#L522)）在**兩個內部時點各做一次快速 mincore**（~µs）：
+（[`:522`](pipeline/engine/benchmark_harness/benchmark_harness.c#L522)）在**兩個內部時點各做一次快速 mincore**（~µs）：
 
 1. drop-caches 之後、post-cold-script 之前 → `cold_pct`（應 ≈0，>1% 該 run 作廢）
 2. post-cold-script 之後、**op[0] 之前** → `delivery_pct`，寫進 run record
@@ -146,7 +146,7 @@ benchmark_harness \
 
 ### §3.6 輸出欄位（實際 CSV schema，`arm` 是 row 維度而非欄）
 
-`raw_p0.csv`（每 (workload,db,strategy,**arm**,rep) 一列；`arm ∈ {pread, async, baseline}`）：
+`raw.csv`（每 (workload,db,strategy,**arm**,rep) 一列；`arm ∈ {pread, async, baseline}`）：
 ```
 workload, db, strategy, arm, ra_kb, rep, warmup,
   cold_pct,        # ① drop 後、prefetch 前殘留（應 ≈0；>1% 由彙整剔除）
@@ -156,7 +156,7 @@ workload, db, strategy, arm, ra_kb, rep, warmup,
   e2e_us,          # = preproc_us + first_query_us
   avg_us, majflt, minflt, load, memavail_kb
 ```
-`summary_p0.csv`（每 (workload,db,strategy,arm) 一列，丟 warmup、cold_pct>1% 剔除後彙整）：
+`summary.csv`（每 (workload,db,strategy,arm) 一列，丟 warmup、cold_pct>1% 剔除後彙整）：
 ```
 workload, db, strategy, arm, n, ra_kb,
   fq_median, fq_p95, fq_min, fq_stdev,   # p95 在 n<4 時留空
@@ -174,19 +174,19 @@ Headline 三句（從 arm 維度導出）：①「可達上界(oracle) = `pread`
 mincore；(3) 環境釘死+記錄（尤其 `read_ahead_kb`）；(4) 每 cell 雙臂 pread/async。P2 churn 另需把
 `--benchmark-cold-advice none` → `dontneed`、`--no-run-residency-checker` → 改用 `--verify-hotset`。
 
-**P0 工具（已實作）**：(a) harness `--verify-hotset`（[`benchmark_harness.c`](benchmark_harness/benchmark_harness.c)
+**P0 工具（已實作）**：(a) harness `--verify-hotset`（[`benchmark_harness.c`](pipeline/engine/benchmark_harness/benchmark_harness.c)
 `load_hotset_pages` / `verify_hotset_residency`，emit `verify_cold_pct` / `verify_delivery_pct`）；
-(b) [`p0_env.sh`](p0_env.sh)（pin + 記錄環境，印 `P0_ENV` 行）；(c) 通用 runner [`run_p0.py`](run_p0.py)
+(b) [`env.sh`](env.sh)（pin + 記錄環境，印 `ENV` 行）；(c) 通用 runner [`run_experiment.py`](run_experiment.py)
 （雙臂 pread/async、統一欄位、rep-major、`--dry-run`/`--list`）。三者皆在 u03 Linux 上跑（harness 用
-mmap/mincore/madvise）；`run_p0.py --dry-run` 可先在任何機器驗證矩陣與 hotset 頁數。
+mmap/mincore/madvise）；`run_experiment.py --dry-run` 可先在任何機器驗證矩陣與 hotset 頁數。
 
-**F7 落地：P0-native hotset 重產 + 凍結**（`run_p0.py --regen-hotsets`）。2d/2e/2f 原本讀的殘留檔是
+**F7 落地：P0-native hotset 重產 + 凍結**（`run_experiment.py --regen-hotsets`）。2d/2e/2f 原本讀的殘留檔是
 **舊 P1 warmup（`evict` = per-file fadvise）** 產的。`--regen-hotsets` 用 **P0 冷清（全機 drop-caches）**
-重產唯一被污染的輸入——base 殘留 `prefetch_slru/runs/hotpages_{w}{suffix}.csv`（2f 直接讀、2d 經
-symlink 讀,皆自動更新）；2e 再用新 base 重跑 [`gen_hotleaves.py`](prefetch_access/runs/gen_hotleaves.py)
+重產唯一被污染的輸入——base 殘留 `strategies/slru/runs/hotpages_{w}{suffix}.csv`（2f 直接讀、2d 經
+symlink 讀,皆自動更新）；2e 再用新 base 重跑 [`gen_hotleaves.py`](strategies/access/runs/gen_hotleaves.py)
 （top-K leaf 由 workload 頻率算,deterministic）。流程:`drop-caches → harness（cold-advice none、
-mmap full、不 prefetch）→ residency_checker snapshot → gen_hotleaves`。原檔備份到 `*.p1.bak`,完成後寫
-checksum 凍結清單 `p0_runs/hotset_freeze.sha256`;master batch 前用 `run_p0.py --verify-frozen` 當閘門。
+mmap full、不 prefetch）→ residency_checker snapshot → gen_hotleaves`。原檔備份到 `*.orig.bak`,完成後寫
+checksum 凍結清單 `results/main/hotset_freeze.sha256`;master batch 前用 `run_experiment.py --verify-frozen` 當閘門。
 預設為 dry-run,需 `--yes` 才真正清快取/覆寫（每 (w,layout) 一次全機 drop,故同列「夜間 + 公告」）。
 
 **rerun 前的嚴謹度強化（2026-06-22 審查後加入)**:
@@ -204,29 +204,29 @@ checksum 凍結清單 `p0_runs/hotset_freeze.sha256`;master batch 前用 `run_p0
 
 ### §3.8 P0 執行覆蓋紀錄（2026-06-23 審查更新）
 
-**「P0 pipeline」嚴格定義 = `run_p0.py`**（+ 同進程包裝 [`run_p0_churn.py`](run_p0_churn.py)、[`run_p0_cadence.py`](run_p0_cadence.py),量測都呼叫 P0 harness:全機 `drop-caches` + `--verify-hotset`(cold/delivery)+ `--cpu`/`--warm-cpu-ms`/`--readonly`,`cold_pct`=0 為門檻)。`benchmark_harness/workloads` 的 A/B/C/Z 為範圍內;new_workloads **不在**範圍。
+**「P0 pipeline」嚴格定義 = `run_experiment.py`**（+ 同進程包裝 [`churn.py`](churn.py)、[`cadence.py`](cadence.py),量測都呼叫 P0 harness:全機 `drop-caches` + `--verify-hotset`(cold/delivery)+ `--cpu`/`--warm-cpu-ms`/`--readonly`,`cold_pct`=0 為門檻)。`pipeline/engine/benchmark_harness/workloads` 的 A/B/C/Z 為範圍內;new_workloads **不在**範圍。
 > **`static_experiment/`(`orchestrator.py` + `formal-experiment.json`)不是 P0 pipeline** —— 它是獨立的正式框架,用**另一支** harness(`static_experiment/tools/bin/benchmark_harness`,**沒有** `--verify-hotset`/`--readonly`/`--cpu`/`--warm-cpu-ms`、只 `--cold-advice none` + drop-caches),策略名(range_interior/offset_topk_interior/residency_topk)與 workload(read/scan_*)也不同。它目前只跑過 `smoke`/`smoke-scan` 子集、`formal-experiment.json` 未跑,且**其結果不進本研究的 P0 md**(刻意:非同一套 P0 紀律)。詳見 §3.9。
 
 **A. 已用 P0 跑完的組合**(全 `cold_pct`=0)
 
 | 批次 | workloads | layouts | strategies | reps/arms | 產物 | figures |
 |---|---|---|---|---|---|---|
-| Master matrix | A,B,C | orig,vacuum,ta | baseline, layers_5, layers_92, 2d, 2e_K10, 2e_K500, 2f_slru | pread5/async10/baseline10,雙臂 | [`p0_runs/`](p0_runs/summary_p0.csv) | 01,02,03,05,13,14 |
-| Master matrix (**Z**) | **Z** | orig,vacuum,ta | 同上 6 策略 + baseline | pread5/async10/baseline10,雙臂 | [`p0_runs_z/`](p0_runs_z/summary_p0.csv) | (補洞;Z 主圖為 09) |
-| layers_N sweep | A,B,C | orig | layers_{1,2,3,5,8,13,21,34,46,64,92}+baseline | pread1/async5 | [`p0_runs_nsweep/`](p0_runs_nsweep/summary_p0.csv) | 04 |
-| 2e K-sweep | A,B,C | orig,vacuum,ta | 2d, 2e_K{10,40,50,92,100,500} | pread1/async5 | [`p0_runs_ksweep/`](p0_runs_ksweep/summary_p0.csv) | 10 |
-| Dense N-sweep + **Z** | A,B,C,**Z** | orig,vacuum,ta | layers_{1..92}(14 個 N)+baseline | pread1/async3 | [`p0_runs_nsweep_dense/`](p0_runs_nsweep_dense/summary_p0.csv) | 09,11 |
-| RAM-pressure 20M | A,B,C | orig,vacuum,ta | baseline,layers_5/92,2d,2e_K10/K500,2f_slru | pread1/async5,`--mem-limit 20M` | [`p0_runs_ram20m/`](p0_runs_ram20m/summary_p0.csv)(vs master=unlimited) | 06 |
-| Churn-evolution | A,B,C | **orig** | baseline, 2e_K10-static, layers_92-static | 3 reps × 11 checkpoint | [`p0_runs_churn/churn_evolution.csv`](p0_runs_churn/churn_evolution.csv) | 07 |
-| Churned N-sweep | A,B,C | **orig** | layers_{1..92}-static(最終 churned DB) | 3 reps | [`p0_runs_churn/churn_nsweep.csv`](p0_runs_churn/churn_nsweep.csv) | 12 |
-| Cadence | A | orig | static hotset × cadence∈{1,5,30,never}s | P0 drop + gap + warmer 重暖 | [`p0_runs_cadence/cadence_results.csv`](p0_runs_cadence/cadence_results.csv) | 08 |
+| Master matrix | A,B,C | orig,vacuum,ta | baseline, layers_5, layers_92, 2d, 2e_K10, 2e_K500, 2f_slru | pread5/async10/baseline10,雙臂 | [`results/main/`](results/main/summary.csv) | 01,02,03,05,13,14 |
+| Master matrix (**Z**) | **Z** | orig,vacuum,ta | 同上 6 策略 + baseline | pread5/async10/baseline10,雙臂 | [`results/z/`](results/z/summary.csv) | (補洞;Z 主圖為 09) |
+| layers_N sweep | A,B,C | orig | layers_{1,2,3,5,8,13,21,34,46,64,92}+baseline | pread1/async5 | [`results/nsweep/`](results/nsweep/summary.csv) | 04 |
+| 2e K-sweep | A,B,C | orig,vacuum,ta | 2d, 2e_K{10,40,50,92,100,500} | pread1/async5 | [`results/ksweep/`](results/ksweep/summary.csv) | 10 |
+| Dense N-sweep + **Z** | A,B,C,**Z** | orig,vacuum,ta | layers_{1..92}(14 個 N)+baseline | pread1/async3 | [`results/nsweep_dense/`](results/nsweep_dense/summary.csv) | 09,11 |
+| RAM-pressure 20M | A,B,C | orig,vacuum,ta | baseline,layers_5/92,2d,2e_K10/K500,2f_slru | pread1/async5,`--mem-limit 20M` | [`results/ram20m/`](results/ram20m/summary.csv)(vs master=unlimited) | 06 |
+| Churn-evolution | A,B,C | **orig** | baseline, 2e_K10-static, layers_92-static | 3 reps × 11 checkpoint | [`results/churn/churn_evolution.csv`](results/churn/churn_evolution.csv) | 07 |
+| Churned N-sweep | A,B,C | **orig** | layers_{1..92}-static(最終 churned DB) | 3 reps | [`results/churn/churn_nsweep.csv`](results/churn/churn_nsweep.csv) | 12 |
+| Cadence | A | orig | static hotset × cadence∈{1,5,30,never}s | P0 drop + gap + warmer 重暖 | [`results/cadence/cadence_results.csv`](results/cadence/cadence_results.csv) | 08 |
 
 → **14 / 14 figures 全部用 P0 資料重畫**(figure 對照見 [`figures/README.md`](figures/README.md) 頂部 banner)。
 
 **B. P0 範圍內、尚未跑的細粒度組合**(誠實列出,非 batch 而是 cell 層級的洞)
 
-- [x] **Workload Z × 完整 master matrix** —— **已補(2026-06-23)**:`run_p0.py --workloads Z --layouts orig,vacuum,ta` 跑了 {baseline,2d,2e_K10,2e_K500,2f_slru,layers_5/92} 雙臂 → [`p0_runs_z/summary_p0.csv`](p0_runs_z/summary_p0.csv)(39 rows,`cold_pct`=0;Z hotset 先以 `--regen-hotsets --no-freeze --workloads Z` 產出)。Z/orig:baseline 525、2f 119(−77%)、2e_K10 203,與 A 同型。
-- [x] **Churn × vacuum/ta layout** —— **已補(2026-06-23)**:`run_p0_churn.py` 改成 `LAYOUTS=[orig,vacuum,ta]` 迴圈、CSV 加 `layout` 欄;churn-evolution / churned N-sweep 現涵蓋三 layout(figs 07/12 以 orig 為 headline)。→ `p0_runs_churn/`。
+- [x] **Workload Z × 完整 master matrix** —— **已補(2026-06-23)**:`run_experiment.py --workloads Z --layouts orig,vacuum,ta` 跑了 {baseline,2d,2e_K10,2e_K500,2f_slru,layers_5/92} 雙臂 → [`results/z/summary.csv`](results/z/summary.csv)(39 rows,`cold_pct`=0;Z hotset 先以 `--regen-hotsets --no-freeze --workloads Z` 產出)。Z/orig:baseline 525、2f 119(−77%)、2e_K10 203,與 A 同型。
+- [x] **Churn × vacuum/ta layout** —— **已補(2026-06-23)**:`churn.py` 改成 `LAYOUTS=[orig,vacuum,ta]` 迴圈、CSV 加 `layout` 欄;churn-evolution / churned N-sweep 現涵蓋三 layout(figs 07/12 以 orig 為 headline)。→ `results/churn/`。
 - [ ] **Churn × 其他策略 static** —— churn-evolution 只測 baseline / 2e_K10 / layers_92 的 static t=0 hotset;2d / 2f_slru static 未測。
 - [ ] **read_ahead_kb {0,512} sweep** —— 需 root(u03 無),只跑了主值 128(F5);掃描留待有 root 環境。
 
@@ -237,16 +237,16 @@ checksum 凍結清單 `p0_runs/hotset_freeze.sha256`;master batch 前用 `run_p0
 - ✅ `overall_results.md` 置頂「P0 master batch 結果」為權威表;舊 P1/P2/P3 維度表已加 **pre-P0** 標註(未刪除,僅標示取代)。
 - ✅ `CONTRADICTIONS.md` #1–16 已逐條標 P0 解決狀態(12 ✅ / 4 🟠)。
 - ✅ `REPORT.md` §5 + §3.4.1、`README.md`、`overall_strategies.md` 指向 P0 表。
-- ⚠️ **待修(已知 data-sync 殘留)**:`figures/README.md` 的**表格 data-source 欄**仍寫舊 pre-P0 CSV(如 `matrix_ram_full_results.csv`、`runs_prefetch_cadence/…`),雖然頂部 banner 已宣告 P0、圖也確實是 P0 重畫 —— 表格欄位待改成對應的 `p0_runs*/`。
+- ⚠️ **待修(已知 data-sync 殘留)**:`figures/README.md` 的**表格 data-source 欄**仍寫舊 pre-P0 CSV(如 `matrix_ram_full_results.csv`、`runs_prefetch_cadence/…`),雖然頂部 banner 已宣告 P0、圖也確實是 P0 重畫 —— 表格欄位待改成對應的 `results/main*/`。
 - ⏳ **完全收尾**:把 ✅ 條的舊 P1/P2/P3 表數字實際刪除/重算(目前 pre-P0 標註 + P0 表置頂),以及 🟠(#3/#4/#5/#12)的 prose 算術用 P0 數字重寫。
 
 ### §3.9 `static_experiment/` —— 獨立框架,**不算 P0 pipeline**
 
 `static_experiment/`(`orchestrator.py`、`configs/*.json`、自有 `tools/bin/benchmark_harness`)是另一套較正式的 config 驅動實驗框架,**與本研究的 P0 pipeline 分離**:
 
-| 面向 | 本研究 P0 (`run_p0.py`) | `static_experiment/` |
+| 面向 | 本研究 P0 (`run_experiment.py`) | `static_experiment/` |
 |---|---|---|
-| harness | `benchmark_harness/`(含 `--verify-hotset`/`--readonly`/`--require-read-first`/`--cpu`/`--warm-cpu-ms`)| `static_experiment/tools/`(**皆無**;`--cold-advice none` + drop-caches)|
+| harness | `pipeline/engine/benchmark_harness/`(含 `--verify-hotset`/`--readonly`/`--require-read-first`/`--cpu`/`--warm-cpu-ms`)| `static_experiment/tools/`(**皆無**;`--cold-advice none` + drop-caches)|
 | 冷清驗證 | `cold_pct`/`delivery_pct` 兩道 mincore,>1% 剔除 | 無 in-harness 殘留驗證 |
 | 策略名 | layers_N / 2d / 2e_K / 2f_slru | range_interior / offset_topk_interior / residency_topk |
 | workload | A/B/C/Z | read/scan × uniform/zipf × full/window/tail |
@@ -273,10 +273,10 @@ checksum 凍結清單 `p0_runs/hotset_freeze.sha256`;master batch 前用 `run_p0
 
 | Strategy | Binary | 機制 | Args | 出處 |
 |---|---|---|---|---|
-| **2d access** | `prefetch_access/src/prefetch_access` | mincore 找 resident + madvise(MADV_WILLNEED) | `<db> <classify> <hotpages> <K_leaf> <ratio> <page_size>` | [prefetch_access.c](prefetch_access/src/prefetch_access.c) |
+| **2d access** | `strategies/access/src/prefetch_access` | mincore 找 resident + madvise(MADV_WILLNEED) | `<db> <classify> <hotpages> <K_leaf> <ratio> <page_size>` | [prefetch_access.c](strategies/access/src/prefetch_access.c) |
 | **2e access+K leaves** | 同上 | 同上，但允許 K > 0 個熱門 leaf | 同上，K = 10 / 50 etc. | 同上 |
 | **3a/3b ratio variants** | 同上 | 同上，不同 interior:leaf 比例 | 同上，調 ratio | 同上 |
-| **2f SLRU** | `prefetch_slru/src/prefetch_slru` | madvise(MADV_WILLNEED) on all pages in hotpages.csv | `<db> <hotpages> <page_size>` | [prefetch_slru.c](prefetch_slru/src/prefetch_slru.c) |
+| **2f SLRU** | `strategies/slru/src/prefetch_slru` | madvise(MADV_WILLNEED) on all pages in hotpages.csv | `<db> <hotpages> <page_size>` | [prefetch_slru.c](strategies/slru/src/prefetch_slru.c) |
 
 → 全部共用 `madvise(MADV_WILLNEED)`，差別在「拿哪份 hotset 餵進去」。
 
@@ -284,7 +284,7 @@ checksum 凍結清單 `p0_runs/hotset_freeze.sha256`;master batch 前用 `run_p0
 
 | 變體 | Binary | 機制 | 跟其他 prefetch 不同 |
 |---|---|---|---|
-| **warmer (pread mode, default)** | `prefetch_warmer/src/warmer.c` | **`pread()` 阻塞讀**進 scratch buffer | 不是 madvise hint！是強制把 page 拉進 OS page cache |
+| **warmer (pread mode, default)** | `pipeline/engine/prefetch_warmer/src/warmer.c` | **`pread()` 阻塞讀**進 scratch buffer | 不是 madvise hint！是強制把 page 拉進 OS page cache |
 | **warmer (fadvise mode)** | 同 binary, `WARM_METHOD=fadvise` | `posix_fadvise(POSIX_FADV_WILLNEED)` | 同其他 prefetch 系列 |
 
 **警告**：pread 與 fadvise 的「prefetch 保證等級」不同：
@@ -315,7 +315,7 @@ checksum 凍結清單 `p0_runs/hotset_freeze.sha256`;master batch 前用 `run_p0
 **2026-06-19（第二輪，本 commit）**：
 
 - ~~**prefetch_churn 跳過 harness MADV chain**~~ → Python orchestrator `--benchmark-cold-advice` default 從 `"none"` 改為 `"dontneed"`；10 個 prefetch_churn shell orchestrators 把 `--benchmark-cold-advice none` 覆寫拿掉。現在 prefetch_churn 跑出來符合 P0 第①層。
-- ~~**residency_checker 「4 個位置」+ prefetch_churn 主動關掉**~~ → 兩部分：(a)「4 個位置」原描述**事實錯誤**，實際是 **1 source（`residency_checker/residency_checker.c`）+ 1 binary（`residency_checker/residency_checker`）+ 2 symlinks（`prefetch_churn/`、`prefetch_slru/runs/` 各一個指回去）**，md5 全部相同，**從來沒有分歧**；audit 原本把 directory 名跟 binary 路徑混為一談。(b) 真正的問題是 prefetch_churn 用 `--no-run-residency-checker` 主動關掉 verify——10 個 shell orchestrators 的該覆寫已拿掉、Python default `--run-residency-checker` 仍是 `True`，現在 prefetch_churn 跑會做 P0 第④層 verify。
+- ~~**residency_checker 「4 個位置」+ prefetch_churn 主動關掉**~~ → 兩部分：(a)「4 個位置」原描述**事實錯誤**，實際是 **1 source（`pipeline/engine/residency_checker/residency_checker.c`）+ 1 binary（`pipeline/engine/residency_checker/residency_checker`）+ 2 symlinks（`prefetch_churn/`、`strategies/slru/runs/` 各一個指回去）**，md5 全部相同，**從來沒有分歧**；audit 原本把 directory 名跟 binary 路徑混為一談。(b) 真正的問題是 prefetch_churn 用 `--no-run-residency-checker` 主動關掉 verify——10 個 shell orchestrators 的該覆寫已拿掉、Python default `--run-residency-checker` 仍是 `True`，現在 prefetch_churn 跑會做 P0 第④層 verify。
 
 **2026-06-19（第一輪，commit `691bd6b`）**：
 
@@ -333,23 +333,23 @@ checksum 凍結清單 `p0_runs/hotset_freeze.sha256`;master batch 前用 `run_p0
 
 | Cell | Pipeline | Orchestrator |
 |---|---|---|
-| {A,B,C} × {orig,vacuum,ta} × {range, layers_N} | **P1** | `layout_rewriter/runs/runmatrix_Nsweep_FULL.sh` etc. |
-| Workload Z（low-key zipfian）× layers_N | **P1** | `layout_rewriter/runs/runmatrix_Nsweep_zlowkey.sh` |
+| {A,B,C} × {orig,vacuum,ta} × {range, layers_N} | **P1** | `pipeline/preparation/layout_rewriter/runs/runmatrix_Nsweep_FULL.sh` etc. |
+| Workload Z（low-key zipfian）× layers_N | **P1** | `pipeline/preparation/layout_rewriter/runs/runmatrix_Nsweep_zlowkey.sh` |
 
 ### Access pattern（2d / 2e / 3a / 3b）
 
 | Cell | Pipeline | Orchestrator |
 |---|---|---|
-| A × 2d/2e × orig | **P1** | `prefetch_access/runs/runmatrix_2d.sh`, `runmatrix_2e.sh` |
-| {A,B,C} × 2e × {orig,vacuum,ta} | **P1** | `prefetch_access/runs/runmatrix_2e_abc.sh` |
-| 3a/3b ratio sweep | **P1** | `prefetch_access/runs/runmatrix_2e_ratio.sh` |
-| RAM-pressure 2d | **P1** + cgroup | `prefetch_access/runs/runmatrix_ram_pressure*.sh` |
+| A × 2d/2e × orig | **P1** | `strategies/access/runs/runmatrix_2d.sh`, `runmatrix_2e.sh` |
+| {A,B,C} × 2e × {orig,vacuum,ta} | **P1** | `strategies/access/runs/runmatrix_2e_abc.sh` |
+| 3a/3b ratio sweep | **P1** | `strategies/access/runs/runmatrix_2e_ratio.sh` |
+| RAM-pressure 2d | **P1** + cgroup | `strategies/access/runs/runmatrix_ram_pressure*.sh` |
 
 ### SLRU（2f）
 
 | Cell | Pipeline | Orchestrator |
 |---|---|---|
-| {A,B,C} × 2f × {orig,vacuum,ta} | **P1** | `prefetch_slru/runs/runmatrix*.sh` |
+| {A,B,C} × 2f × {orig,vacuum,ta} | **P1** | `strategies/slru/runs/runmatrix*.sh` |
 
 ### Churn evolution（§6.2.1）
 
@@ -370,7 +370,7 @@ checksum 凍結清單 `p0_runs/hotset_freeze.sha256`;master batch 前用 `run_p0
 
 | Cell | Pipeline | Orchestrator |
 |---|---|---|
-| {A,B} × warmer levels | **P1**（但 prefetch 機制是 pread 不是 madvise）| `prefetch_warmer/runs/run_ablation.sh` |
+| {A,B} × warmer levels | **P1**（但 prefetch 機制是 pread 不是 madvise）| `pipeline/engine/prefetch_warmer/runs/run_ablation.sh` |
 
 ---
 
@@ -415,13 +415,13 @@ checksum 凍結清單 `p0_runs/hotset_freeze.sha256`;master batch 前用 `run_p0
 
 ## §9. 引用
 
-- `benchmark_harness/benchmark_harness.c` — 主 harness（行 36-41 cold_advice_t enum、行 136-144 flag 說明、行 816-867 MADV chain 實作 `run_madvise_step`/`apply_cold_advice`）
-- `layout_rewriter/runs/evict.c` — 「drop-caches」helper 實際就是 posix_fadvise（行 12）
+- `pipeline/engine/benchmark_harness/benchmark_harness.c` — 主 harness（行 36-41 cold_advice_t enum、行 136-144 flag 說明、行 816-867 MADV chain 實作 `run_madvise_step`/`apply_cold_advice`）
+- `pipeline/preparation/layout_rewriter/runs/evict.c` — 「drop-caches」helper 實際就是 posix_fadvise（行 12）
 - `strategies_explained.md` — 行 5 / 22 / 39 / 49-57 自承多機制並存
 - `prefetch_churn/sqlite_prefetch_churn_experiment.py` — 行 455-463、870-877、1260-1267 prefetch_churn 偏離 P1 的證據
-- `prefetch_warmer/src/warmer.c` — 行 46-70 pread vs fadvise 切換
+- `pipeline/engine/prefetch_warmer/src/warmer.c` — 行 46-70 pread vs fadvise 切換
 - `prefetch_vacuum/src/prefetch.c` — 行 41-43、111、131-139 range/perpage madvise
 - `prefetch_vacuum/src/prefetch_layers.c` — 行 23-35 4-arg 簽章（非文件宣稱的 5-arg）
-- `prefetch_access/src/prefetch_access.c` — mincore + madvise(WILLNEED)
-- `prefetch_slru/src/prefetch_slru.c` — madvise(WILLNEED) on hotpages
+- `strategies/access/src/prefetch_access.c` — mincore + madvise(WILLNEED)
+- `strategies/slru/src/prefetch_slru.c` — madvise(WILLNEED) on hotpages
 - [CONTRADICTIONS.md](../CONTRADICTIONS.md) #17, #18, #20, #24, #26 — 對應的資料矛盾條目

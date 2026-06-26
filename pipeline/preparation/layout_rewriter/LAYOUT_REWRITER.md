@@ -86,7 +86,7 @@ indexes.
 
 ### Cold-start query latency
 
-Same workload (`benchmark_harness/workloads/workload_a_zipfian.txt`, 100,000 random
+Same workload (`workloads/workload_a.txt`, 100,000 random
 point reads), same cold-start protocol (`posix_fadvise(POSIX_FADV_DONTNEED)`
 + `MADV_DONTNEED`), median of 3 reps.
 
@@ -150,7 +150,7 @@ results/                — final CSVs (classify dumps, matrix, summary)
 # 1. Build everything
 gcc -O2 -Wall -o layout_rewriter layout_rewriter.c
 gcc -O2 -Wall -o ../classify_pages/classify_pages ../classify_pages/classify_pages.c
-# benchmark_harness needs the SQLite amalgamation in benchmark_harness/
+# benchmark_harness needs the SQLite amalgamation in pipeline/engine/benchmark_harness/
 
 # 2. Build a 600k-row reference DB
 cd runs

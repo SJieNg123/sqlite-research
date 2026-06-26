@@ -881,7 +881,7 @@ def validate_benchmark_args(args: argparse.Namespace) -> None:
         elif args.prefetch_mode == "layers":
             prefetch_tool = Path("prefetch_vacuum/src/prefetch_layers")
         elif args.prefetch_mode in {"access-2d", "access-2e"}:
-            prefetch_tool = Path("prefetch_access/src/prefetch_access")
+            prefetch_tool = Path("strategies/access/src/prefetch_access")
         else:
             prefetch_tool = Path("prefetch_vacuum/src/prefetch")
         args.prefetch_tool = str(prefetch_tool)
@@ -1112,7 +1112,7 @@ def parse_args() -> argparse.Namespace:
         "--write-workload",
         "--workload",
         dest="workload",
-        default="generated_workloads/page_churn_write.txt",
+        default="generated_workloads/workload_churn_write.txt",
         help=(
             "workload replayed between checkpoints to mutate the DB; "
             "--workload is kept as a backward-compatible alias"
@@ -1215,7 +1215,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--benchmark-workload",
-        default="generated_workloads/page_churn_benchmark_high.txt",
+        default="generated_workloads/workload_c.txt",
         help="workload used by benchmark_harness to measure query latency",
     )
     parser.add_argument(
@@ -1256,7 +1256,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--drop-caches-script",
         default="/usr/local/sbin/drop-caches",
-        help="helper run by benchmark_harness to drop the OS page cache; default is the system-wide setuid wrapper (P0 pipeline). Empty disables it.",
+        help="helper run by benchmark_harness to drop the OS page cache; default is the system-wide setuid wrapper (the unified pipeline). Empty disables it.",
     )
     parser.add_argument(
         "--prefetch-mode",
@@ -1296,7 +1296,7 @@ def parse_args() -> argparse.Namespace:
         "--benchmark-cold-advice",
         choices=("none", "cold", "pageout", "dontneed"),
         default="dontneed",
-        help="cold-advice mode passed to benchmark_harness (default 'dontneed' = P0 pipeline MADV_COLD->PAGEOUT->DONTNEED chain)",
+        help="cold-advice mode passed to benchmark_harness (default 'dontneed' = the unified pipeline MADV_COLD->PAGEOUT->DONTNEED chain)",
     )
     parser.add_argument(
         "--benchmark-sqlite-open-timing",

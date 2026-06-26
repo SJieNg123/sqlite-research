@@ -4,11 +4,11 @@
 # Mirrors runmatrix_Nsweep_vacuum_abc.sh; uses test_typeaware.db + classify_after.csv.
 # Emits CSV: workload,N,rep,first_query_us,avg_us,majflt,minflt
 set -u
-DIR=/home/u03/sqlite-research-project-sharing/layout_rewriter/runs
-BH=/home/u03/sqlite-research-project-sharing/benchmark_harness/benchmark_harness
-WL_A=/home/u03/sqlite-research-project-sharing/benchmark_harness/workloads/workload_a_zipfian.txt
-WL_B=/home/u03/sqlite-research-project-sharing/benchmark_harness/workloads/workload_uniform.txt
-WL_C=/home/u03/sqlite-research-project-sharing/prefetch_churn/workloads/page_churn_benchmark_high.txt
+DIR=/home/u03/sqlite-research-project-sharing/pipeline/preparation/layout_rewriter/runs
+BH=/home/u03/sqlite-research-project-sharing/pipeline/engine/benchmark_harness/benchmark_harness
+WL_A=/home/u03/sqlite-research-project-sharing/workloads/workload_a.txt
+WL_B=/home/u03/sqlite-research-project-sharing/workloads/workload_b.txt
+WL_C=/home/u03/sqlite-research-project-sharing/workloads/workload_c.txt
 mkdir -p "$DIR/bench_records_Nsweep_ta" "$DIR/ops_csv_Nsweep_ta"
 echo "workload,N,rep,first_query_us,avg_us,majflt,minflt"
 

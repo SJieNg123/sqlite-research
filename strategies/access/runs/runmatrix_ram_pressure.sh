@@ -5,7 +5,7 @@
 # DB is ~107 MB; ceiling 20 MB ≪ working set ≪ DB. 6 reps each.
 # Emits CSV: workload,db,strategy,mem_limit,rep,first_query_us,avg_us,majflt,minflt
 set -u
-DIR=/home/u03/sqlite-research-project-sharing/prefetch_access/runs
+DIR=/home/u03/sqlite-research-project-sharing/strategies/access/runs
 BH=$DIR/benchmark_harness
 WL=$DIR/workload_a_zipfian.txt
 DB=$DIR/test.db

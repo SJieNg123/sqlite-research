@@ -9,7 +9,7 @@ Tests gap B2 from the audit: 之前 N sweep × churn 只測過 Workload C (high-
 
 - DB: `test.db` (600k rows × ~100 B = 103 MB, scatter 0.96)
 - Reads: `workload_a_zipfian.txt` (100k Zipfian reads on keys [8, 99997])
-- Writes per checkpoint: `page_churn_write.txt` (5,000-op chunk; mix: 30% update,
+- Writes per checkpoint: `workload_churn_write.txt` (5,000-op chunk; mix: 30% update,
   20% insert, 20% readmodifywrite→delete, 20% read, 10% scan)
 - Strategies: layers_N (file-offset based, prefetch 前 N 個 interior pages)
 - Evict: `posix_fadvise(POSIX_FADV_DONTNEED)` via `runs_nsweep/evict`

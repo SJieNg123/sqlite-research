@@ -4,16 +4,16 @@ Story: the "deceptive" view. Showing only first-query latency (the SQL latency,
 NOT counting prefetch preprocessing), 2f SLRU looks dominant. Pair with figure 14,
 which adds preprocessing cost and exposes 2f SLRU's end-to-end collapse.
 
-Data (P0 master batch, authoritative): p0_runs/summary_p0.csv, async arm, layout=orig,
-median of 10 reps (warmup dropped). Strategies: baseline + 6 P0 strategies.
+Data (master batch, authoritative): results/main/summary.csv, async arm, layout=orig,
+median of 10 reps (warmup dropped). Strategies: baseline + 6 strategies.
 """
-from plot_utils import ROOT, save, load_p0, P0_STRATS, P0_LABELS, STRATEGY_COLORS
+from plot_utils import ROOT, save, load_summary, STRAT_ORDER, STRAT_LABELS, STRATEGY_COLORS
 import matplotlib.pyplot as plt
 import numpy as np
 
-P0 = load_p0("async")
-STRATEGIES = P0_STRATS
-LABELS = [P0_LABELS[s] for s in STRATEGIES]
+DATA = load_summary("async")
+STRATEGIES = STRAT_ORDER
+LABELS = [STRAT_LABELS[s] for s in STRATEGIES]
 COLORS = [STRATEGY_COLORS.get(s, "#3b82f6") for s in STRATEGIES]
 WORKLOADS = ['A', 'B', 'C']
 WL_TITLE = {'A': 'Workload A (Zipfian)', 'B': 'Workload B (uniform)',
@@ -23,7 +23,7 @@ fig, axes = plt.subplots(1, 3, figsize=(13, 4.6), sharey=False)
 x = np.arange(len(STRATEGIES))
 
 for ax, wl in zip(axes, WORKLOADS):
-    medians = [float(P0[(wl, 'orig', s)]['fq_median']) for s in STRATEGIES]
+    medians = [float(DATA[(wl, 'orig', s)]['fq_median']) for s in STRATEGIES]
     bars = ax.bar(x, medians, color=COLORS, alpha=0.9, edgecolor='black', linewidth=0.5)
     baseline = medians[0]
     ax.axhline(baseline, color='#9ca3af', ls='--', lw=1.0, alpha=0.6, zorder=0)
@@ -38,7 +38,7 @@ for ax, wl in zip(axes, WORKLOADS):
     ax.set_axisbelow(True)
 
 axes[0].set_ylabel('first-query latency (µs, log scale)', fontsize=10)
-fig.suptitle('First-query latency by strategy — async arm, layout=orig (P0; preprocessing NOT included)',
+fig.suptitle('First-query latency by strategy — async arm, layout=orig (preprocessing NOT included)',
              fontsize=12, y=1.0)
 fig.tight_layout()
 save(fig, '13_strategy_firstq_bars')

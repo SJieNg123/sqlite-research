@@ -4,20 +4,20 @@
 > overall_strategies.md 講「每個策略是什麼」、[overall_results.md](overall_results.md) 講「結果數字」；
 > 本檔講「**每個策略到底是怎麼被測出來的**」——從清空快取、插入 prefetch、到量第一筆延遲。
 
-> **⚠️ 2026-06-22：本檔描述的是 P1 era 的測試引擎（`evict`/`posix_fadvise` 冷清、native prefetch tool 直接交付）。
-> Master rerun 改用 [P0 pipeline](IMPLEMENTATION_PIPELINES.md)（[`run_p0.py`](run_p0.py)），差異為:
+> **⚠️ 注意：本檔描述的是早期 (legacy) 的測試引擎（`evict`/`posix_fadvise` 冷清、native prefetch tool 直接交付）。
+> 正式重跑改用[統一 pipeline](IMPLEMENTATION_PIPELINES.md)（[`run_experiment.py`](run_experiment.py)），差異為:
 > ① 冷清一律全機 `/usr/local/sbin/drop-caches`（setuid、免 sudo）取代 `posix_fadvise`;
 > ② 殘留驗證走 harness 內建 `--verify-hotset`（`cold_pct`/`delivery_pct`）取代外部 `residency_checker`;
 > ③ 交付統一走 `warmer`（pread oracle / async hint 雙臂），native tool 降為離線 hotset 產生器;
 > ④ 每 (workload,layout) 加 no-prefetch **baseline** 當分母;`cold_pct>1%` 剔除、op[0]=read 強制、釘核升頻、ra=128。
-> 下面的步驟敘述保留作 P1 歷史對照。**正式重跑請以 P0 為準。**
+> 下面的步驟敘述保留作早期版本的歷史對照。**正式重跑請以統一 pipeline 為準。**
 
 ---
 
 ## 總綱：七個策略共用同一套引擎
 
 七個策略的測試流程**幾乎一模一樣**，因為它們都跑同一支 C 程式
-[benchmark_harness](benchmark_harness/benchmark_harness.c)。唯一會變的，是其中一個參數：
+[benchmark_harness](pipeline/engine/benchmark_harness/benchmark_harness.c)。唯一會變的，是其中一個參數：
 
 > **`--post-cold-script` 換成哪一支 prefetch 程式**，就決定了你在測哪個策略。
 
@@ -38,35 +38,35 @@ benchmark_harness --db test.db --workload workload_a_zipfian.txt \
   --post-cold-script  <某支 prefetch 腳本>   ← 換這行 = 換策略
 ```
 
-harness 拿到後，**嚴格按這個順序跑**（主流程 [benchmark_harness.c:1260-1294](benchmark_harness/benchmark_harness.c#L1260)）：
+harness 拿到後，**嚴格按這個順序跑**（主流程 [benchmark_harness.c:1260-1294](pipeline/engine/benchmark_harness/benchmark_harness.c#L1260)）：
 
 | 步驟 | 做什麼 | 在哪 |
 |---|---|---|
-| ① mmap + 盤點 | 把 DB 映射進來，數「現在記憶體裡有幾頁」（before）| [:1260](benchmark_harness/benchmark_harness.c#L1260) |
-| ② sync | 把 dirty page 刷回磁碟，確保乾淨 | [:1266](benchmark_harness/benchmark_harness.c#L1266) |
-| ③ 製造冷啟動 | 對整個 DB 下 `MADV_COLD → MADV_PAGEOUT → MADV_DONTNEED`，把 DB 趕出快取 | [:1267](benchmark_harness/benchmark_harness.c#L1267) |
-| ④ 補一刀清快取 | 跑 `cold_orig.sh` → `evict` → `posix_fadvise(DONTNEED)`，保險再清一次 | [:1268](benchmark_harness/benchmark_harness.c#L1268) |
-| ⑤ **跑 prefetch** | 跑 `--post-cold-script` 指定的腳本 → **這一步才是策略本體** | [:1270](benchmark_harness/benchmark_harness.c#L1270) |
-| ⑥ 盤點 | 再數「現在記憶體裡有幾頁」（after）→ 驗證 prefetch 真的有載進來 | [:1287](benchmark_harness/benchmark_harness.c#L1287) |
-| ⑦ 跑查詢 + 計時 | 照 workload 一筆一筆跑 SQL，每筆都計時 | [:1294](benchmark_harness/benchmark_harness.c#L1294) |
+| ① mmap + 盤點 | 把 DB 映射進來，數「現在記憶體裡有幾頁」（before）| [:1260](pipeline/engine/benchmark_harness/benchmark_harness.c#L1260) |
+| ② sync | 把 dirty page 刷回磁碟，確保乾淨 | [:1266](pipeline/engine/benchmark_harness/benchmark_harness.c#L1266) |
+| ③ 製造冷啟動 | 對整個 DB 下 `MADV_COLD → MADV_PAGEOUT → MADV_DONTNEED`，把 DB 趕出快取 | [:1267](pipeline/engine/benchmark_harness/benchmark_harness.c#L1267) |
+| ④ 補一刀清快取 | 跑 `cold_orig.sh` → `evict` → `posix_fadvise(DONTNEED)`，保險再清一次 | [:1268](pipeline/engine/benchmark_harness/benchmark_harness.c#L1268) |
+| ⑤ **跑 prefetch** | 跑 `--post-cold-script` 指定的腳本 → **這一步才是策略本體** | [:1270](pipeline/engine/benchmark_harness/benchmark_harness.c#L1270) |
+| ⑥ 盤點 | 再數「現在記憶體裡有幾頁」（after）→ 驗證 prefetch 真的有載進來 | [:1287](pipeline/engine/benchmark_harness/benchmark_harness.c#L1287) |
+| ⑦ 跑查詢 + 計時 | 照 workload 一筆一筆跑 SQL，每筆都計時 | [:1294](pipeline/engine/benchmark_harness/benchmark_harness.c#L1294) |
 
 整個設計最巧妙的地方在 ③④⑤ 的順序：**先把快取清到全冷（③④），再在查詢前的最後一刻插入 prefetch（⑤）**。
 這個「插隊時機」靠的就是 `--post-cold-script` 這個 hook——它在「冷啟動之後、查詢之前」
-fork 一個子行程跑你指定的腳本（[:1270](benchmark_harness/benchmark_harness.c#L1270)、fork 在 [:777](benchmark_harness/benchmark_harness.c#L777)）。
+fork 一個子行程跑你指定的腳本（[:1270](pipeline/engine/benchmark_harness/benchmark_harness.c#L1270)、fork 在 [:777](pipeline/engine/benchmark_harness/benchmark_harness.c#L777)）。
 
 ## 冷啟動是怎麼「無 sudo」做到的
 
 這點對本機很關鍵（u03 沒有 sudo/kvm 權限）。傳統做法 `echo 3 > /proc/sys/vm/drop_caches` **需要 root**。
 這套 harness 改用兩個**不需權限**的招數疊起來：
 
-1. `MADV_COLD → MADV_PAGEOUT → MADV_DONTNEED`（[:739-752](benchmark_harness/benchmark_harness.c#L739)）：對自己 mmap 的區域叫 kernel「這些頁回收掉」。
-2. `posix_fadvise(fd, 0, 0, POSIX_FADV_DONTNEED)`（[evict.c:12](layout_rewriter/runs/evict.c#L12)）：對檔案本身叫 kernel 丟掉它的 page cache。
+1. `MADV_COLD → MADV_PAGEOUT → MADV_DONTNEED`（[:739-752](pipeline/engine/benchmark_harness/benchmark_harness.c#L739)）：對自己 mmap 的區域叫 kernel「這些頁回收掉」。
+2. `posix_fadvise(fd, 0, 0, POSIX_FADV_DONTNEED)`（[evict.c:12](pipeline/preparation/layout_rewriter/runs/evict.c#L12)）：對檔案本身叫 kernel 丟掉它的 page cache。
 
 這也是為什麼報告一直提醒「絕對 µs 不能跨表比」——早期 prefetch_vacuum 用 `sudo drop_caches`，這套用 `posix_fadvise`，兩種冷啟動深度不同，只能比**同一張表內的相對 %**。
 
 ## 量的是什麼
 
-跑查詢時，每一筆 SQL 都被夾在計時器中間（[:1106-1167](benchmark_harness/benchmark_harness.c#L1106)）：
+跑查詢時，每一筆 SQL 都被夾在計時器中間（[:1106-1167](pipeline/engine/benchmark_harness/benchmark_harness.c#L1106)）：
 
 ```c
 clock_gettime(BEFORE);  getrusage(BEFORE);
@@ -75,7 +75,7 @@ clock_gettime(AFTER);   getrusage(AFTER);
 ```
 
 抓三個數字：
-- **`first_query_us`** = **第 0 筆**的耗時（[:1171](benchmark_harness/benchmark_harness.c#L1171) `if (i==0)`）——這就是「冷啟動延遲」，是主指標。
+- **`first_query_us`** = **第 0 筆**的耗時（[:1171](pipeline/engine/benchmark_harness/benchmark_harness.c#L1171) `if (i==0)`）——這就是「冷啟動延遲」，是主指標。
 - **`avg_us`** = 全部查詢平均。
 - **`majflt`**（major fault）= 真的去磁碟讀了幾次 → **prefetch 有沒有效的直接證據**。
 
@@ -127,7 +127,7 @@ done
 
 這個檔回答的問題是：**「每一頁是 interior（目錄）還是 leaf（資料）？在檔案哪個位置？」**
 
-**怎麼做**：跑一次 [classify_pages](classify_pages/classify_pages.c)，它直接讀 DB 檔案格式
+**怎麼做**：跑一次 [classify_pages](pipeline/preparation/classify_pages/classify_pages.c)，它直接讀 DB 檔案格式
 （看每頁第一個 byte 的 b-tree flag）就分得出來。
 
 **重點：這不需要跑任何查詢。** 就像拿到一棟大樓的設計圖，光看圖就知道哪間是倉庫、哪間是
@@ -141,7 +141,7 @@ done
 要知道答案，**唯一的辦法就是先實際跑一遍 workload，然後看結果**。
 這個「先跑一遍來觀察」的動作，就叫 **warmup pass（暖機）**。
 
-**warmup pass 的三步**（[prefetch_slru/runs/warmup.sh](prefetch_slru/runs/warmup.sh)），每步的「為什麼」：
+**warmup pass 的三步**（[strategies/slru/runs/warmup.sh](strategies/slru/runs/warmup.sh)），每步的「為什麼」：
 
 ```
 1. evict                            → 先把快取清空
@@ -158,7 +158,7 @@ done
 
 做完這三步，hotpages.csv 才存在，2d/2e/2f 的正式測試（7 步）才有東西可讀。
 
-> （2e 還要再多一步 [gen_hotleaves.py](prefetch_access/runs/gen_hotleaves.py)，從 workload
+> （2e 還要再多一步 [gen_hotleaves.py](strategies/access/runs/gen_hotleaves.py)，從 workload
 > 算出「最熱的前 K 個 leaf」疊上去——但骨架一樣，都是先跑、再觀察、產生清單。）
 
 > ⚠️ **重要前提：同 workload 暖機 = 上界估計（best-case），不是「沒看過題目」的成績**
@@ -181,12 +181,12 @@ done
 >
 > | 步驟 | 指令 / 檔案 | 用的 workload |
 > |---|---|---|
-> | ① 暖機產 hotpages | [`warmup.sh workload_a_zipfian.txt hotpages_a.csv`](prefetch_slru/runs/warmup.sh)（見 [PREFETCH_SLRU.md:44](prefetch_slru/PREFETCH_SLRU.md#L44)）| `workload_a_zipfian.txt` |
-> | ② 正式測試（量測） | [`runmatrix_2d.sh:8`](prefetch_access/runs/runmatrix_2d.sh#L8)：`benchmark_harness --workload $WL_A`，第 ⑤ 步讀 `hotpages_a.csv` | `workload_a_zipfian.txt` |
+> | ① 暖機產 hotpages | [`warmup.sh workload_a_zipfian.txt hotpages_a.csv`](strategies/slru/runs/warmup.sh)（見 [PREFETCH_SLRU.md:44](strategies/slru/PREFETCH_SLRU.md#L44)）| `workload_a_zipfian.txt` |
+> | ② 正式測試（量測） | [`runmatrix_2d.sh:8`](strategies/access/runs/runmatrix_2d.sh#L8)：`benchmark_harness --workload $WL_A`，第 ⑤ 步讀 `hotpages_a.csv` | `workload_a_zipfian.txt` |
 >
 > - **同一份 workload 檔**：兩派的 `workload_a_zipfian.txt` 都是 symlink，最後都指到同一個
->   `benchmark_harness/workloads/workload_a_zipfian.txt`（md5 `af98ec1…`，兩邊相同）。
-> - **同一份 hotpages 檔**：`hotpages_a.csv` 全專案只有一份實體檔（`prefetch_access/runs/` 那份是
+>   `workloads/workload_a.txt`（md5 `af98ec1…`，兩邊相同）。
+> - **同一份 hotpages 檔**：`hotpages_a.csv` 全專案只有一份實體檔（`strategies/access/runs/` 那份是
 >   symlink），2d / 2e / 2f 共用（md5 `4c54f44…`）。
 > - **所以「重新測試」= 同一份 query 序列被跑兩次**：第一次當 warmup（`--cold-advice none`，
 >   不 prefetch、只老實把頁拉進快取）→ mincore dump 成 hotpages；第二次當被量測的 cold-start 測試。
@@ -228,31 +228,31 @@ done
 
 ## 2a range（結構派）
 
-- **第 ⑤ 步跑**（[prefetch_range_orig.sh](layout_rewriter/runs/prefetch_range_orig.sh)）：
+- **第 ⑤ 步跑**（[prefetch_range_orig.sh](pipeline/preparation/layout_rewriter/runs/prefetch_range_orig.sh)）：
   ```sh
   prefetch  test.db  classify_before.csv  range
   ```
   → 讀 classify、取全部 interior、排序後把連號的合併成區間，一段一個 `madvise`。
 - **前置**：只要 classify.csv，免 warmup。
 - **掃什麼**：不掃參數（單一 arm）。
-- **driver**：[runmatrix.sh](layout_rewriter/runs/runmatrix.sh)（orig+ta layout × {baseline,range,perpage,layers5} × 3 reps）。
+- **driver**：[runmatrix.sh](pipeline/preparation/layout_rewriter/runs/runmatrix.sh)（orig+ta layout × {baseline,range,perpage,layers5} × 3 reps）。
 - **驗什麼**：看 ⑥ 的 resident——這策略會暴露「kernel readahead 有上限，一段 madvise 只載進 32/92 頁」。
 
 ## 2b perpage（結構派）
 
-- **第 ⑤ 步跑**（[prefetch_perpage_orig.sh](layout_rewriter/runs/prefetch_perpage_orig.sh)）：
+- **第 ⑤ 步跑**（[prefetch_perpage_orig.sh](pipeline/preparation/layout_rewriter/runs/prefetch_perpage_orig.sh)）：
   ```sh
   prefetch  test.db  classify_before.csv  perpage
   ```
   → 同一支 `prefetch` 程式，換 `perpage`：全部 interior，每頁一個 `madvise`（92 道指令）。
 - **前置**：classify.csv，免 warmup。
 - **掃什麼**：不掃。
-- **driver**：同 [runmatrix.sh](layout_rewriter/runs/runmatrix.sh)。
+- **driver**：同 [runmatrix.sh](pipeline/preparation/layout_rewriter/runs/runmatrix.sh)。
 - **驗什麼**：對比 range——perpage 指令多、覆蓋齊，但 syscall overhead 大。
 
 ## 2c layers_N（結構派）★ 標準範例
 
-- **第 ⑤ 步跑**（[prefetch_layers5_orig.sh](layout_rewriter/runs/prefetch_layers5_orig.sh)）：
+- **第 ⑤ 步跑**（[prefetch_layers5_orig.sh](pipeline/preparation/layout_rewriter/runs/prefetch_layers5_orig.sh)）：
   ```sh
   prefetch_layers  test.db  classify_before.csv  5  4096
                                                  ↑
@@ -264,13 +264,13 @@ done
   （`prefetch_layers1/5/10/20/46/92_orig.sh`）。
 - **N=0（baseline）特例**：driver 直接**不掛 `--post-cold-script`** → 第 ⑤ 步跳過 → 純冷啟動。
 - **前置**：classify.csv，免 warmup。
-- **掃什麼**：**掃 N**。sparse 掃 `0,1,5,10,20,46,92`（[runmatrix_Nsweep_orig_a.sh:10-28](layout_rewriter/runs/runmatrix_Nsweep_orig_a.sh#L10)）；
-  後來又補了 dense `N=0..92` 全掃（[runmatrix_Nsweep_FULL.sh](layout_rewriter/runs/runmatrix_Nsweep_FULL.sh)）。
+- **掃什麼**：**掃 N**。sparse 掃 `0,1,5,10,20,46,92`（[runmatrix_Nsweep_orig_a.sh:10-28](pipeline/preparation/layout_rewriter/runs/runmatrix_Nsweep_orig_a.sh#L10)）；
+  後來又補了 dense `N=0..92` 全掃（[runmatrix_Nsweep_FULL.sh](pipeline/preparation/layout_rewriter/runs/runmatrix_Nsweep_FULL.sh)）。
 - **驗什麼**：把不同 N 的 first_query_us 連起來 → 畫出那條 **U 型曲線**，找甜蜜點。
 
 ## 2d access（歷史派）
 
-- **第 ⑤ 步跑**（[prefetch_2d_a_orig.sh](prefetch_access/runs/prefetch_2d_a_orig.sh)）：
+- **第 ⑤ 步跑**（[prefetch_2d_a_orig.sh](strategies/access/runs/prefetch_2d_a_orig.sh)）：
   ```sh
   prefetch_access  test.db  classify.csv  hotpages_a.csv  0  0  4096
                                                           ↑  ↑
@@ -279,23 +279,23 @@ done
   → 把 classify 的 interior ∩ hotpages 的 resident 取交集，只載「被用過的 interior」；`cap_leaf=0` 代表 2d 模式（跳過 leaf）。
 - **前置**：✅ **先跑 warmup pass 產生 `hotpages_a.csv`**（見第二部分）。
 - **掃什麼**：不掃（2d 沒參數）。
-- **driver**：[runmatrix_2d.sh](prefetch_access/runs/runmatrix_2d.sh)（A/B/C × 3 layout）。
+- **driver**：[runmatrix_2d.sh](strategies/access/runs/runmatrix_2d.sh)（A/B/C × 3 layout）。
 - **驗什麼**：看 ⑥ 跟 syscall 數——2d 用極少的 madvise（4–26 道）就把對的 interior 全命中。
 
 ## 2e access + top-K（歷史派）
 
-- **第 ⑤ 步跑**（[prefetch_2e_C_orig_K10.sh](prefetch_access/runs/prefetch_2e_C_orig_K10.sh)）：
+- **第 ⑤ 步跑**（[prefetch_2e_C_orig_K10.sh](strategies/access/runs/prefetch_2e_C_orig_K10.sh)）：
   ```sh
   prefetch_access  test.db  classify.csv  hot2e_C_orig_K10.csv  0  10  4096
                                                                     ↑
                                                           cap_leaf=K=10（多載 10 個熱 leaf）
   ```
-- **前置**：✅ warmup pass，**外加一步** [gen_hotleaves.py](prefetch_access/runs/gen_hotleaves.py)：
+- **前置**：✅ warmup pass，**外加一步** [gen_hotleaves.py](strategies/access/runs/gen_hotleaves.py)：
   它解析每個 leaf page 的 rowid 範圍、數 workload 裡每個 key 的查詢次數、把 key 映射到 leaf page、
   取**最熱的前 K 個 leaf**，再跟 resident interior 疊起來，輸出 `hot2e_*_K*.csv`。
   （所以 2e 的「熱葉」是**按 workload key 頻率算出來的**，不是亂挑。）
 - **掃什麼**：**掃 K** ∈ `10,50,100,500`，× A/B/C × 3 layout × **6 reps**
-  （[runmatrix_2e_abc.sh](prefetch_access/runs/runmatrix_2e_abc.sh)）。
+  （[runmatrix_2e_abc.sh](strategies/access/runs/runmatrix_2e_abc.sh)）。
 - **驗什麼**：K 越大載越多熱葉、first_query 越低，但 syscall 越多——找「最少 syscall 抓最多熱葉」的點（C 上 K=10 就 −82%）。
 
 ## 3a / 3b ratio（歷史派）
@@ -304,7 +304,7 @@ done
   （`prefetch_2e_*_K40.sh` / `prefetch_2e_*_K92.sh`），用來控制 interior : leaf 的比例（7:3 / 5:5）。
 - **前置**：✅ 同 2e（warmup + gen_hotleaves，K=40/92）。
 - **掃什麼**：固定 K=40 / 92（不算掃，是兩個指定點）。
-- **driver**：[runmatrix_2e_ratio.sh](prefetch_access/runs/runmatrix_2e_ratio.sh)。
+- **driver**：[runmatrix_2e_ratio.sh](strategies/access/runs/runmatrix_2e_ratio.sh)。
 - **這一維是「對照實驗」不是新策略**：原 spec 想用「interior:leaf 比例」當旋鈕（3a=7:3、3b=5:5），
   換算成 K=40 / K=92。第十七維補跑來驗證「**比例是不是決定 first-q 的主軸**」——
   結論是**不是，K 才是；比例只是 K 的副產品**。而且因為 2e 只載 resident interior（4–32 個、
@@ -314,14 +314,14 @@ done
 
 ## 2f SLRU（歷史派）
 
-- **第 ⑤ 步跑**（[prefetch_slru_a.sh](prefetch_slru/runs/prefetch_slru_a.sh)）：
+- **第 ⑤ 步跑**（[prefetch_slru_a.sh](strategies/slru/runs/prefetch_slru_a.sh)）：
   ```sh
   prefetch_slru  test.db  hotpages_a.csv  4096
   ```
   → 讀 hotpages，**只要 `is_resident==1` 就 `madvise`，不分 interior/leaf，整個熱頁集全載**。
 - **前置**：✅ warmup pass（這裡的 `hotpages.csv` 是**整份 residency dump**，不過濾種類）。
 - **掃什麼**：不掃（全載就是全載）。
-- **driver**：[prefetch_slru/runs/runmatrix.sh](prefetch_slru/runs/runmatrix.sh)（baseline / layers5 / slru × workload × 3 reps）。
+- **driver**：[strategies/slru/runs/runmatrix.sh](strategies/slru/runs/runmatrix.sh)（baseline / layers5 / slru × workload × 3 reps）。
 - **驗什麼**：這支 driver **特別額外記 `prefetch_us` 跟 `n_prefetch`**（從 prefetch 程式 stderr 抓）——
   因為 2f 的重點就是「first_query 最快（−94%）**但** prefetch 自己花 1.2–1.8 ms」這個反差，
   非看 prefetch overhead 不可。
@@ -364,8 +364,8 @@ benchmark_harness（七個策略共用）:
 
 ## Q1. 2e/3a/3b 的「最熱 K 個 leaf」是誰挑的？為什麼說它是「寫死」的？
 
-挑熱葉的**不是** C 程式（[prefetch_access.c](prefetch_access/src/prefetch_access.c) 只照清單 madvise、不思考），而是前置腳本
-[gen_hotleaves.py](prefetch_access/runs/gen_hotleaves.py)。它在做「把 key 翻譯成頁」——因為 workload 只講 key
+挑熱葉的**不是** C 程式（[prefetch_access.c](strategies/access/src/prefetch_access.c) 只照清單 madvise、不思考），而是前置腳本
+[gen_hotleaves.py](strategies/access/runs/gen_hotleaves.py)。它在做「把 key 翻譯成頁」——因為 workload 只講 key
 （`read 150`），但 prefetch 要的是頁號。走一遍（假設一頁裝 100 筆）：
 
 1. **建 rowid→頁 對照表**：用 dbstat 列出每個 leaf 頁，只讀它「第一個 rowid」。頁 A 從 1 開始、
@@ -447,7 +447,7 @@ benchmark_harness（七個策略共用）:
 > for f in "$B" "$C"; do awk -F, 'NR>1{m=$1} END{print FILENAME, m}' "$f"; done
 >
 > # ③ 14 個熱頁種類前後比對 → 每行都印 same
-> HOT=../../../../prefetch_access/runs/hot2e_C_orig_K10.csv
+> HOT=../../../../strategies/access/runs/hot2e_C_orig_K10.csv
 > awk -F, 'NR>1&&$2==1{print $1}' "$HOT" | while read p; do
 >   b=$(awk -F, -v p=$p '$1==p{print $2}' "$B")
 >   c=$(awk -F, -v p=$p '$1==p{print $2}' "$C")

@@ -17,7 +17,7 @@
 > 注意：**「Memory-sharing 3a/3b」（MAP_SHARED / Private buffer pool）已重新編號為 4a/4b**，
 > 避免跟這裡的 ratio 系列撞名。
 
-策略 2f (`prefetch_slru/`) 跟這裡的差別：2f 只看 mincore residency snapshot
+策略 2f (`strategies/slru/`) 跟這裡的差別：2f 只看 mincore residency snapshot
 （**hot/cold 二元**），這裡的 2d/2e 用 **access count**（區分 1 次 vs 100 次），
 所以 K 個 syscall 永遠挑得到「真的最熱」的 K 個 page。
 
@@ -28,7 +28,7 @@
 | 2c Layers N（[prefetch_vacuum/](../prefetch_vacuum/)）| classify_pages（只看 page 類型 + offset）| 假設「offset 小 = 上層 = 熱」| 5~92 interior |
 | **2d**（本目錄）| classify + warmup pass 的 mincore | access count（interior 端）| **4~32 interior**（不含 leaves）|
 | **2e**（本目錄）| 同 2d，再加 access-count-ranked top-K leaves | access count（含 leaves）| **interior + K leaves**（K = 10/50/100/500）|
-| 2f SLRU（[prefetch_slru/](../prefetch_slru/)）| warmup pass 的 mincore | 只 hot/cold | ~420~4,100 pages（整個 resident set）|
+| 2f SLRU（[strategies/slru/](../strategies/slru/)）| warmup pass 的 mincore | 只 hot/cold | ~420~4,100 pages（整個 resident set）|
 
 ## Build
 
@@ -201,7 +201,7 @@ runs/
   prefetch_2d_<wl>_<layout>.sh  — 9 個 2d wrapper（A/B/C × orig/vacuum/ta）
   prefetch_2e_<WL>_<layout>_K<K>.sh — 54 個 2e wrapper (× 6 K: 10/40/50/92/100/500)
                                        — K=40 = 3a, K=92 = 3b（2026-05 補跑）
-  prefetch_2f_<WL>_<layout>.sh  — 9 個 2f wrapper（呼叫 ../../prefetch_slru/runs/prefetch_slru）
+  prefetch_2f_<WL>_<layout>.sh  — 9 個 2f wrapper（呼叫 ../../strategies/slru/runs/prefetch_slru）
   hotpages_<wl>[_<layout>].csv  — 各 workload × layout 的 mincore baseline
   hot2e_<WL>_<layout>_K<K>.csv  — gen_hotleaves.py 產生的 access-count ranked
   classify_{before,after,vacuum}.csv — 各 layout 的 page type 表

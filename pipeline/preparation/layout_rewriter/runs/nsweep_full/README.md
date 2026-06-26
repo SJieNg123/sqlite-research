@@ -1,7 +1,7 @@
 # Full N=0..92 layers_N sweep × Clean DB × A/B/C × {1a, 1b, 1c}
 
 Dense companion to the original sparse N ∈ {0, 1, 5, 10, 20, 46, 92} matrices
-in [layout_rewriter/runs/matrix_Nsweep_*.csv](../). Covers every integer N from
+in [pipeline/preparation/layout_rewriter/runs/matrix_Nsweep_*.csv](../). Covers every integer N from
 0 to 92 with 3 reps per cell = 2,511 benchmarks total.
 
 Motivation: rigor pass for 2c (第十九維 in [overall_results.md](../../../overall_results.md)).
@@ -34,7 +34,7 @@ All three have schema `workload,N,rep,first_query_us,avg_us,majflt,minflt`.
 
 ```bash
 cd /home/u03/sqlite-research-project-sharing
-bash layout_rewriter/runs/runmatrix_Nsweep_FULL.sh
+bash pipeline/preparation/layout_rewriter/runs/runmatrix_Nsweep_FULL.sh
 ```
 
 Runtime: ~10 minutes wallclock.

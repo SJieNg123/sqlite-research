@@ -12,7 +12,7 @@
 
 ## Part A — Batch warmer 家族（L0 / L1 / L2 / L5），`benchmark_harness`，baseline 510 µs
 
-設定：DB `prefetch_access/runs/test.db`（60 萬列、103 MiB、4 KiB 頁）；workload `workload_a_zipfian.txt`（Zipfian 點查）；
+設定：DB `strategies/access/runs/test.db`（60 萬列、103 MiB、4 KiB 頁）；workload `workload_a_zipfian.txt`（Zipfian 點查）；
 每 rep `evict`（fadvise DONTNEED）→ warmer（post-cold-script）→ harness 開 SQLite 量 first-query。真冷啟動（majflt≈180）。
 
 | 臂 | 暖什麼（頁數）/ 暖法 | median µs | p95 | p99 | stdev | warm 成本 µs | **TTFQ 樂觀** | **TTFQ 保守** |
@@ -89,5 +89,5 @@ cd prefetch_warmer
 ( cd runs && bash run_ablation.sh && python3 aggregate.py ablation_raw.csv )
 # 線上預取家族 (Part B)
 ( cd src && gcc -O2 trav_bench.c ../../benchmark_harness/sqlite3.c -I../../benchmark_harness -o trav_bench -lpthread -ldl -lm )
-( cd src && for m in off ahead fanout; do WARM_MODE=$m ./trav_bench ../../prefetch_access/runs/test.db 155 30; done )
+( cd src && for m in off ahead fanout; do WARM_MODE=$m ./trav_bench ../../strategies/access/runs/test.db 155 30; done )
 ```

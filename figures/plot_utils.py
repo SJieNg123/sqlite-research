@@ -61,19 +61,19 @@ STRATEGY_COLORS = {
     "2f_slru":   "#f59e0b",
 }
 
-# --- P0 master batch (authoritative) -----------------------------------------
-P0_SUMMARY = ROOT / "p0_runs/summary_p0.csv"
-# canonical strategy order for P0 figures (baseline first = the improvement-% denominator)
-P0_STRATS  = ["baseline", "layers_5", "layers_92", "2d", "2e_K10", "2e_K500", "2f_slru"]
-P0_LABELS  = {"baseline": "baseline", "layers_5": "layers_5", "layers_92": "layers_92",
+# --- master batch (authoritative) -----------------------------------------
+SUMMARY_CSV = ROOT / "results/main/summary.csv"
+# canonical strategy order for the figures (baseline first = the improvement-% denominator)
+STRAT_ORDER  = ["baseline", "layers_5", "layers_92", "2d", "2e_K10", "2e_K500", "2f_slru"]
+STRAT_LABELS  = {"baseline": "baseline", "layers_5": "layers_5", "layers_92": "layers_92",
               "2d": "2d", "2e_K10": "2e_K10", "2e_K500": "2e_K500", "2f_slru": "2f SLRU"}
 
-def load_p0(arm="async"):
-    """Return {(workload, db, strategy): row} from summary_p0.csv for one arm.
+def load_summary(arm="async"):
+    """Return {(workload, db, strategy): row} from summary.csv for one arm.
     baseline rows are stored under arm 'baseline' but exposed for every requested arm."""
     import csv
     out = {}
-    for r in csv.DictReader(open(P0_SUMMARY)):
+    for r in csv.DictReader(open(SUMMARY_CSV)):
         if r["arm"] == arm or r["strategy"] == "baseline":
             out[(r["workload"], r["db"], r["strategy"])] = r
     return out

@@ -4,9 +4,9 @@
 # N values: 0 (baseline), 1, 5, 10, 20, 46, 92. 3 reps each.
 # Emits CSV: workload,db,N,rep,first_query_us,avg_us,majflt,minflt
 set -u
-DIR=/home/u03/sqlite-research-project-sharing/layout_rewriter/runs
-BH=/home/u03/sqlite-research-project-sharing/benchmark_harness/benchmark_harness
-WL=/home/u03/sqlite-research-project-sharing/benchmark_harness/workloads/workload_zipf_lowkey.txt
+DIR=/home/u03/sqlite-research-project-sharing/pipeline/preparation/layout_rewriter/runs
+BH=/home/u03/sqlite-research-project-sharing/pipeline/engine/benchmark_harness/benchmark_harness
+WL=/home/u03/sqlite-research-project-sharing/workloads/workload_z.txt
 mkdir -p "$DIR/bench_records_Nsweep_zlowkey" "$DIR/ops_csv_Nsweep_zlowkey"
 echo "workload,db,N,rep,first_query_us,avg_us,majflt,minflt"
 

@@ -33,8 +33,8 @@ EOF
  --force --run-benchmarks \
  --source-db test.db --work-db "$outdir/test_churn.db" \
  --classifier ./classify_pages --benchmark-harness ./benchmark_harness \
- --benchmark-workload generated_workloads/page_churn_benchmark_high.txt \
- --write-workload generated_workloads/page_churn_write.txt \
+ --benchmark-workload generated_workloads/workload_c.txt \
+ --write-workload generated_workloads/workload_churn_write.txt \
  --drop-caches-script "$evict_script" \
  --prefetch-mode "$mode" $pages_arg --prefetch-tool ./prefetch_layers \
  --no-plot-checkpoints \

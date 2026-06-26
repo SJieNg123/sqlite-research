@@ -4,7 +4,7 @@
 # Workload A/B/C × layouts {orig, vacuum, ta} × K ∈ {40, 92} × 6 reps = 108 runs.
 # Emits CSV: workload,db,strategy,rep,first_query_us,avg_us,majflt,minflt
 set -u
-DIR=/home/u03/sqlite-research-project-sharing/prefetch_access/runs
+DIR=/home/u03/sqlite-research-project-sharing/strategies/access/runs
 BH=$DIR/benchmark_harness
 WL_A=$DIR/workload_a_zipfian.txt
 WL_B=$DIR/workload_b_uniform.txt

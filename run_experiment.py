@@ -1,8 +1,15 @@
 #!/usr/bin/env python3
 """
-run_p0.py — general P0 cold-start runner (locked spec: IMPLEMENTATION_PIPELINES.md §3).
+run_experiment.py — unified cold-start experiment runner (single entry point).
 
-For every (workload x layout x strategy) cell it runs BOTH arms on the SAME hotset:
+One registry-driven CLI runs any strategy x workload x db combination through the same
+cold-start measurement engine. Subcommands:
+
+  run      (default) strategy x workload x db matrix; the bare form implies `run`
+  churn    churn-checkpoint experiment (DB mutated between measurements)   [churn.py]
+  cadence  background-warmer cadence experiment (multiprocess)             [cadence.py]
+
+For every (workload x db x strategy) cell `run` measures BOTH arms on the SAME hotset:
   - pread  (oracle)  : WARM_METHOD=pread  -> fq_pread, deterministic upper bound
   - async  (realistic): WARM_METHOD=fadvise -> fq_async + delivery_pct
 delivery method is held constant (warmer) so pread vs async differ ONLY in sync/async;
@@ -15,19 +22,24 @@ harness emits (stderr): first_query_latency_us, avg_latency_us, total_majflt/min
 verify_cold_pct, verify_delivery_pct; warmer emits warmer_us (preproc).
 
 Strategy hotsets are normalised to warmer format `page_number,file_offset` by joining
-the strategy's selected pages with the layout's classify CSV (warmer reads col2 as offset).
+the strategy's selected pages with the db's classify CSV (warmer reads col2 as offset).
 
-Outputs (under <outdir>, default p0_runs/):
-  raw_p0.csv      one row per (workload,db,strategy,arm,rep)
-  summary_p0.csv  median/p95/min/stdev per (workload,db,strategy,arm), warmup dropped
-  env.txt         the P0_ENV line captured at start
+--db/--workload/--strategy take registry keys only (see DBS/WORKLOADS/STRATEGIES); each
+accepts one key, a comma-list, or is omitted (= all). A single combo is just a 1-cell run.
+
+Outputs (under <outdir>, default results/main/):
+  raw.csv      one row per (workload,db,strategy,arm,rep)
+  summary.csv  median/p95/min/stdev per (workload,db,strategy,arm), warmup dropped
+  env.txt      the ENV line captured at start
 
 Usage:
-  python3 run_p0.py                 # run the full matrix
-  python3 run_p0.py --dry-run       # print the plan + one sample command, run nothing
-  python3 run_p0.py --list          # list cells and exit
-  python3 run_p0.py --workloads A,C --strategies layers_5,2e_K10 --layouts orig,ta
-  python3 run_p0.py --pread-reps 3 --async-reps 10 --outdir p0_runs
+  python3 run_experiment.py                                              # full matrix
+  python3 run_experiment.py --db orig --workload A --strategy 2e_K10     # one combo
+  python3 run_experiment.py --dry-run        # print the plan + one sample command
+  python3 run_experiment.py --list           # list cells and exit
+  python3 run_experiment.py run --workload A,C --strategy layers_5,2e_K10 --db orig,ta
+  python3 run_experiment.py churn --workload A --db orig
+  python3 run_experiment.py cadence --workload A --db orig
 """
 import argparse
 import csv
@@ -43,36 +55,36 @@ import tempfile
 from pathlib import Path
 
 # ----------------------------------------------------------------------------- config
-ROOT = Path(os.environ.get("P0_ROOT", "/home/u03/sqlite-research-project-sharing"))
+ROOT = Path(os.environ.get("EXPERIMENT_ROOT", "/home/u03/sqlite-research-project-sharing"))
 
-BH          = ROOT / "benchmark_harness/benchmark_harness"
-WARMER      = ROOT / "prefetch_warmer/src/warmer"
+BH          = ROOT / "pipeline/engine/benchmark_harness/benchmark_harness"
+WARMER      = ROOT / "pipeline/engine/prefetch_warmer/src/warmer"
 DROP_CACHES = "/usr/local/sbin/drop-caches"
-P0_ENV      = ROOT / "p0_env.sh"
+ENV_SH      = ROOT / "env.sh"
 PAGE_SIZE   = 4096
 
-# --regen-hotsets inputs (P0-native regeneration of the P1-provenance hotsets, F7)
-RESIDENCY_CHECKER = ROOT / "residency_checker/residency_checker"
-GEN_HOTLEAVES     = ROOT / "prefetch_access/runs/gen_hotleaves.py"
-SLRU_RUNS         = ROOT / "prefetch_slru/runs"      # canonical base residency (2f/2d source)
-ACCESS_RUNS       = ROOT / "prefetch_access/runs"    # hot2e curated files (2e source)
-FREEZE_PATH       = ROOT / "p0_runs/hotset_freeze.sha256"
+# --regen-hotsets inputs (cold-clear regeneration of the legacy-provenance hotsets, F7)
+RESIDENCY_CHECKER = ROOT / "pipeline/engine/residency_checker/residency_checker"
+GEN_HOTLEAVES     = ROOT / "strategies/access/runs/gen_hotleaves.py"
+SLRU_RUNS         = ROOT / "strategies/slru/runs"      # canonical base residency (2f/2d source)
+ACCESS_RUNS       = ROOT / "strategies/access/runs"    # hot2e curated files (2e source)
+FREEZE_PATH       = ROOT / "results/main/hotset_freeze.sha256"
 
 DBS = {
-    "orig":   ROOT / "layout_rewriter/runs/test.db",
-    "vacuum": ROOT / "layout_rewriter/runs/test_vacuum.db",
-    "ta":     ROOT / "layout_rewriter/runs/test_typeaware.db",
+    "orig":   ROOT / "pipeline/preparation/layout_rewriter/runs/test.db",
+    "vacuum": ROOT / "pipeline/preparation/layout_rewriter/runs/test_vacuum.db",
+    "ta":     ROOT / "pipeline/preparation/layout_rewriter/runs/test_typeaware.db",
 }
 CLASSIFY = {
-    "orig":   ROOT / "layout_rewriter/runs/classify_before.csv",
-    "vacuum": ROOT / "layout_rewriter/runs/classify_vacuum.csv",
-    "ta":     ROOT / "layout_rewriter/runs/classify_after.csv",
+    "orig":   ROOT / "pipeline/preparation/layout_rewriter/runs/classify_before.csv",
+    "vacuum": ROOT / "pipeline/preparation/layout_rewriter/runs/classify_vacuum.csv",
+    "ta":     ROOT / "pipeline/preparation/layout_rewriter/runs/classify_after.csv",
 }
 WORKLOADS = {
-    "A": ROOT / "benchmark_harness/workloads/workload_a_zipfian.txt",
-    "B": ROOT / "benchmark_harness/workloads/workload_uniform.txt",
-    "C": ROOT / "prefetch_churn/workloads/page_churn_benchmark_high.txt",
-    "Z": ROOT / "benchmark_harness/workloads/workload_zipf_lowkey.txt",  # low-key Zipfian (robustness)
+    "A": ROOT / "workloads/workload_a.txt",
+    "B": ROOT / "workloads/workload_b.txt",
+    "C": ROOT / "workloads/workload_c.txt",
+    "Z": ROOT / "workloads/workload_z.txt",  # low-key Zipfian (robustness)
 }
 SLRU_SUFFIX = {"orig": "", "vacuum": "_vacuum", "ta": "_ta"}
 
@@ -172,14 +184,14 @@ def select_pages(strat, w, layout, classify):
                           if t.startswith("interior"))
         return {pn for _, pn in interior[: strat["n"]]}
     if kind == "resident_interior":   # 2d: resident interior pages
-        src = ROOT / f"prefetch_access/runs/hotpages_{w.lower()}{SLRU_SUFFIX[layout]}.csv"
+        src = ACCESS_RUNS / f"hotpages_{w.lower()}{SLRU_SUFFIX[layout]}.csv"
         res = _resident_pages(src)
         return {pn for pn in res if classify.get(pn, ("", 0))[0].startswith("interior")}
     if kind == "hot2e":               # 2e_K: curated interior + top-K leaves
-        src = ROOT / f"prefetch_access/runs/hot2e_{w}_{layout}_K{strat['k']}.csv"
+        src = ACCESS_RUNS / f"hot2e_{w}_{layout}_K{strat['k']}.csv"
         return _resident_pages(src)
     if kind == "slru":                # 2f: whole resident working set
-        src = ROOT / f"prefetch_slru/runs/hotpages_{w.lower()}{SLRU_SUFFIX[layout]}.csv"
+        src = SLRU_RUNS / f"hotpages_{w.lower()}{SLRU_SUFFIX[layout]}.csv"
         return _resident_pages(src)
     raise ValueError(f"unknown strategy kind: {kind}")
 
@@ -207,7 +219,7 @@ def write_deliver_script(workdir, db, hotset, method):
 
 
 def _harness_hardening(args):
-    """Flags every P0 measurement run carries: read-only open, F8 assert, freq ramp, and
+    """Flags every measurement run carries: read-only open, F8 assert, freq ramp, and
     self-pinning to one core (harness sched_setaffinity, so the warmed core == op[0]'s core
     without depending on an external taskset wrapper)."""
     return ["--readonly", "--require-read-first",
@@ -313,7 +325,7 @@ def pctl(data, q):
 def aggregate(raw_rows, summary_path, cold_pct_max=1.0):
     """Aggregate kept reps per (workload,db,strategy,arm). Rows whose cold check exceeds
     cold_pct_max are CONTAMINATED (cache wasn't cold) and excluded from the summary (F7/§3.3);
-    they stay in raw_p0.csv. p95 is suppressed when n<4 (meaningless on a tiny sample)."""
+    they stay in raw.csv. p95 is suppressed when n<4 (meaningless on a tiny sample)."""
     groups = {}
     dropped = 0
     for row in raw_rows:
@@ -356,16 +368,16 @@ def aggregate(raw_rows, summary_path, cold_pct_max=1.0):
 
 # --------------------------------------------------------------- regen / freeze (F7)
 def capture_env_line(target):
-    """Run p0_env.sh (record-only is fine) and return its single P0_ENV line."""
+    """Run env.sh (record-only is fine) and return its single ENV line."""
     try:
-        r = subprocess.run(["sh", str(P0_ENV), str(target)],
+        r = subprocess.run(["sh", str(ENV_SH), str(target)],
                            capture_output=True, text=True, timeout=60)
         for ln in (r.stdout + r.stderr).splitlines():
-            if ln.startswith("P0_ENV"):
+            if ln.startswith("ENV"):
                 return ln
     except (subprocess.SubprocessError, OSError):
         pass
-    return "P0_ENV (capture failed)"
+    return "ENV (capture failed)"
 
 
 def _sha256(path):
@@ -390,8 +402,8 @@ def _resident_count(path):
 
 
 def _backup_once(path):
-    """Copy <path> content to <path>.p1.bak once (preserve P1 provenance, never clobber)."""
-    bak = Path(str(path) + ".p1.bak")
+    """Copy <path> content to <path>.orig.bak once (preserve original provenance, never clobber)."""
+    bak = Path(str(path) + ".orig.bak")
     if bak.exists():
         return bak
     real = resolve_pointer(path)
@@ -402,21 +414,22 @@ def _backup_once(path):
 
 
 def regen_hotsets(args):
-    """P0-native regeneration of the 2d/2e/2f residency inputs (F7).
+    """Cold-clear regeneration of the 2d/2e/2f residency inputs (F7).
 
-    Only the base residency file (prefetch_slru/runs/hotpages_{w}{suffix}.csv) is P1-tainted:
-      - 2f reads it directly; 2d reads it via the prefetch_access symlink -> both auto-update.
+    Only the base residency file (strategies/slru/runs/hotpages_{w}{suffix}.csv) carries legacy
+    provenance:
+      - 2f reads it directly; 2d reads it via the strategies/access symlink -> both auto-update.
       - 2e = resident-interior(base) U top-K-leaves(workload freq, deterministic) -> re-run gen_hotleaves.
     Step A drops the page cache full-machine (echo 3) once per (w,layout); gated behind --yes.
     """
-    wls = [x for x in args.workloads.split(",") if x]
-    layouts = [x for x in args.layouts.split(",") if x]
+    wls = [x for x in args.workload.split(",") if x]
+    layouts = [x for x in args.db.split(",") if x]
     ks = [int(x) for x in args.regen_k.split(",") if x]
 
     base_for = lambda w, ly: SLRU_RUNS / f"hotpages_{w.lower()}{SLRU_SUFFIX[ly]}.csv"
     hot2e_for = lambda w, ly, k: ACCESS_RUNS / f"hot2e_{w}_{ly}_K{k}.csv"
 
-    print(f"# regen P0-native hotsets  workloads={wls} layouts={layouts} K={ks}")
+    print(f"# regen cold-clear hotsets  workloads={wls} layouts={layouts} K={ks}")
     print(f"{'cell':10} {'base file':28} {'old_resident':>12}")
     for w in wls:
         for ly in layouts:
@@ -428,7 +441,7 @@ def regen_hotsets(args):
         print("  Step A (per cell): full-machine drop-caches -> run workload (cold-advice none,")
         print("                     mmap full, no prefetch) -> residency_checker snapshot.")
         print(f"  Step B (per cell x K={ks}): re-run gen_hotleaves.py with the new base.")
-        print("  Originals are backed up to *.p1.bak; freeze manifest written to")
+        print("  Originals are backed up to *.orig.bak; freeze manifest written to")
         print(f"  {FREEZE_PATH}. Re-run with --yes during the announced window.")
         return 0
 
@@ -446,7 +459,7 @@ def regen_hotsets(args):
 
     results = []   # (w, ly, kind, path, old, new)
 
-    # --- Step A: P0-native base residency ---
+    # --- Step A: cold-clear base residency ---
     for w in wls:
         for ly in layouts:
             base = base_for(w, ly)
@@ -527,9 +540,9 @@ def _write_freeze(results, env_line, args, extra_files=None):
             continue
         seen.add(str(real))
         files.append(real)
-    lines = ["# P0 freeze manifest (F7) -- sha256  <path-relative-to-repo-root>",
+    lines = ["# freeze manifest (F7) -- sha256  <path-relative-to-repo-root>",
              f"# {env_line}",
-             f"# regen workloads={args.workloads} layouts={args.layouts} K={args.regen_k}"]
+             f"# regen workloads={args.workload} layouts={args.db} K={args.regen_k}"]
     for p in sorted(files):
         try:
             rel = p.relative_to(ROOT)
@@ -568,43 +581,64 @@ def verify_frozen(args):
     return 0
 
 
-# ------------------------------------------------------------------------------- main
-def main():
-    ap = argparse.ArgumentParser(description="General P0 cold-start runner (two-arm).")
-    ap.add_argument("--workloads", default="A,B,C")
-    ap.add_argument("--layouts", default="orig,vacuum,ta")
-    ap.add_argument("--strategies", default=",".join(s["name"] for s in STRATEGIES))
+# ----------------------------------------------------------------------- run subcommand
+def _check_keys(kind, keys, registry):
+    """Registry-keys-only: abort if any key is not a known db/workload key."""
+    bad = [k for k in keys if k not in registry]
+    if bad:
+        sys.exit(f"unknown {kind}: {','.join(bad)} (known: {','.join(registry)})")
+
+
+def resolve_strategy_checked(name):
+    try:
+        return resolve_strategy(name)
+    except ValueError:
+        names = ",".join(s["name"] for s in STRATEGIES)
+        sys.exit(f"unknown strategy: {name} (known: {names}, layers_<N>, 2e_K<K>)")
+
+
+def add_run_parser(sub):
+    ap = sub.add_parser("run", help="strategy x workload x db matrix (default)",
+                        description="Two-arm cold-start matrix runner.")
+    ap.add_argument("--workload", default="A,B,C", help="workload key(s): comma-list of A,B,C,Z")
+    ap.add_argument("--db", default="orig,vacuum,ta", help="db key(s): comma-list of orig,vacuum,ta")
+    ap.add_argument("--strategy", default=",".join(s["name"] for s in STRATEGIES),
+                    help="strategy key(s): baseline auto-runs; layers_<N>, 2d, 2e_K<K>, 2f_slru")
     ap.add_argument("--pread-reps", type=int, default=5, help="oracle arm reps (bumped 3->5 so p95 is meaningful)")
     ap.add_argument("--async-reps", type=int, default=10)
-    ap.add_argument("--baseline-reps", type=int, default=10, help="no-prefetch baseline reps per (workload,layout)")
+    ap.add_argument("--baseline-reps", type=int, default=10, help="no-prefetch baseline reps per (workload,db)")
     ap.add_argument("--no-baseline", action="store_true", help="skip the no-prefetch baseline arm")
-    ap.add_argument("--outdir", default=str(ROOT / "p0_runs"))
-    ap.add_argument("--ra-kb", type=int, default=128, help="read_ahead_kb to pin via p0_env.sh")
+    ap.add_argument("--outdir", default=str(ROOT / "results/main"))
+    ap.add_argument("--ra-kb", type=int, default=128, help="read_ahead_kb to pin via env.sh")
     ap.add_argument("--cpu", type=int, default=2, help="core the harness pins itself to via sched_setaffinity (-1 = no pin)")
     ap.add_argument("--warm-cpu-ms", type=int, default=10, help="busy-spin the pinned core this long before op[0]")
     ap.add_argument("--mem-limit", default="none", help="RAM-pressure: run harness in a systemd --user scope with MemoryMax (e.g. 20M); 'none'=unconfined")
     ap.add_argument("--cold-pct-max", type=float, default=1.0, help="exclude cells whose cold check exceeds this %% from summary")
-    ap.add_argument("--no-pin-env", action="store_true", help="skip p0_env.sh (still records)")
+    ap.add_argument("--no-pin-env", action="store_true", help="skip env.sh (still records)")
     ap.add_argument("--dry-run", action="store_true", help="print the plan + sample cmd, run nothing")
     ap.add_argument("--list", action="store_true", help="list cells and exit")
     ap.add_argument("--regen-hotsets", action="store_true",
-                    help="P0-native regen of 2d/2e/2f residency inputs (F7); dry-run unless --yes")
+                    help="cold-clear regen of 2d/2e/2f residency inputs (F7); dry-run unless --yes")
     ap.add_argument("--regen-k", default="10,500", help="K values for 2e regen (matrix uses 10,500)")
     ap.add_argument("--no-freeze", action="store_true", help="--regen-hotsets: don't rewrite the freeze manifest (supplementary regen)")
     ap.add_argument("--yes", action="store_true",
                     help="actually perform --regen-hotsets (full-machine drop-caches per cell)")
     ap.add_argument("--verify-frozen", action="store_true",
                     help="re-hash hotsets against the freeze manifest and exit (master-batch gate)")
-    args = ap.parse_args()
+    ap.set_defaults(func=cmd_run)
 
+
+def cmd_run(args):
     if args.verify_frozen:
-        sys.exit(verify_frozen(args))
+        return verify_frozen(args)
     if args.regen_hotsets:
-        sys.exit(regen_hotsets(args))
+        return regen_hotsets(args)
 
-    wls = [x for x in args.workloads.split(",") if x]
-    layouts = [x for x in args.layouts.split(",") if x]
-    strats = [resolve_strategy(x) for x in args.strategies.split(",") if x]
+    wls = [x for x in args.workload.split(",") if x]
+    layouts = [x for x in args.db.split(",") if x]
+    _check_keys("workload", wls, WORKLOADS)
+    _check_keys("db", layouts, DBS)
+    strats = [resolve_strategy_checked(x) for x in args.strategy.split(",") if x]
     cells = [(w, ly, s) for w in wls for ly in layouts for s in strats]
 
     if args.list:
@@ -622,23 +656,23 @@ def main():
         workdir.mkdir(parents=True, exist_ok=True)
 
     # capture / pin environment once
-    env_line = "P0_ENV (not captured: dry-run)"
+    env_line = "ENV (not captured: dry-run)"
     ra_kb = args.ra_kb
     if not args.dry_run:
         try:
             ev = os.environ.copy()
             ev["RA_KB"] = str(args.ra_kb)
-            cmd = ["sh", str(P0_ENV)] if args.no_pin_env else ["sh", str(P0_ENV), str(DBS[layouts[0]])]
+            cmd = ["sh", str(ENV_SH)] if args.no_pin_env else ["sh", str(ENV_SH), str(DBS[layouts[0]])]
             r = subprocess.run(cmd, capture_output=True, text=True, env=ev, timeout=60)
             for ln in (r.stdout + r.stderr).splitlines():
-                if ln.startswith("P0_ENV"):
+                if ln.startswith("ENV"):
                     env_line = ln
             (outdir / "env.txt").write_text(env_line + "\n")
             m = re.search(r"ra_kb=(\d+)", env_line)
             if m:
                 ra_kb = int(m.group(1))
         except (subprocess.SubprocessError, OSError) as e:
-            sys.stderr.write(f"p0_env.sh failed ({e}); recording ra_kb={args.ra_kb} unpinned\n")
+            sys.stderr.write(f"env.sh failed ({e}); recording ra_kb={args.ra_kb} unpinned\n")
         sys.stderr.write(env_line + "\n")
 
     # pre-build hotsets per cell (frozen inputs; reused across reps/arms)
@@ -701,7 +735,7 @@ def main():
     baseline_keep = 0 if args.no_baseline else args.baseline_reps
     max_keep = max(args.pread_reps, args.async_reps, baseline_keep)
     raw_rows = []
-    raw_path = outdir / "raw_p0.csv"
+    raw_path = outdir / "raw.csv"
     cols = ["workload", "db", "strategy", "arm", "ra_kb", "rep", "warmup",
             "cold_pct", "delivery_pct", "first_query_us", "preproc_us",
             "open_us", "deliver_us", "e2e_us", "e2e_warm_us",
@@ -762,13 +796,36 @@ def main():
                 emit(m, w, ly, s["name"], arm, rep, warmup)
     rawf.close()
 
-    aggregate(raw_rows, outdir / "summary_p0.csv", cold_pct_max=args.cold_pct_max)
-    sys.stderr.write(f"\ndone. raw={raw_path}  summary={outdir/'summary_p0.csv'}\n")
+    aggregate(raw_rows, outdir / "summary.csv", cold_pct_max=args.cold_pct_max)
+    sys.stderr.write(f"\ndone. raw={raw_path}  summary={outdir/'summary.csv'}\n")
+    return 0
 
 
 def _fmt(x):
     return "" if x is None else (f"{x:.2f}" if isinstance(x, float) else str(x))
 
 
+# ------------------------------------------------------------------------------- main
+def main():
+    ap = argparse.ArgumentParser(
+        prog="run_experiment.py",
+        description="Unified cold-start experiment runner (single entry point). "
+                    "Subcommands: run (default) / churn / cadence.")
+    sub = ap.add_subparsers(dest="cmd")
+    add_run_parser(sub)
+    # churn/cadence live in their own modules (they import this one) -> lazy import here
+    # to register their subparsers without a circular import at load time.
+    import churn, cadence
+    churn.add_parser(sub)
+    cadence.add_parser(sub)
+
+    argv = sys.argv[1:]
+    known = {"run", "churn", "cadence"}
+    if not argv or (argv[0] not in known and argv[0] not in ("-h", "--help")):
+        argv = ["run"] + argv          # `run` is the default subcommand
+    args = ap.parse_args(argv)
+    return args.func(args)
+
+
 if __name__ == "__main__":
-    main()
+    sys.exit(main() or 0)

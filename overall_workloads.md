@@ -5,7 +5,7 @@
 所有 workload 都跑在同一個 reference DB 上 (`testdb_builder.py` 產生的
 `items(id PK, k1, k2, payload BLOB(100))`，**600,000 rows**)。
 
-> 所有 workload 的 cold-start measurement 機制為 **P0 pipeline**——harness MADV chain
+> 所有 workload 的 cold-start measurement 機制為 **統一 pipeline**——harness MADV chain
 > (`--cold-advice dontneed`) + `/usr/local/sbin/drop-caches` 全機 drop + harness 內建
 > `--verify-hotset`（量 `cold_pct`/`delivery_pct`）。本檔為 workload **定義**（key 範圍、
 > 分布、ops 數）;measurement 數字權威全表見 [overall_results.md](overall_results.md)（全 cell `cold_pct`=0）。
@@ -47,8 +47,8 @@
 | **1b VACUUM** | 100.05 MiB | 25,613 | 85（340 KB）| 25,528 |
 | **1c Type-aware** | 102.86 MiB | 26,331 | **92**（368 KB）| 26,239 |
 
-資料來源：[layout_rewriter/runs/classify_before.csv](layout_rewriter/runs/classify_before.csv)（1a/1c）、
-[layout_rewriter/runs/classify_vacuum.csv](layout_rewriter/runs/classify_vacuum.csv)（1b）。
+資料來源：[pipeline/preparation/layout_rewriter/runs/classify_before.csv](pipeline/preparation/layout_rewriter/runs/classify_before.csv)（1a/1c）、
+[pipeline/preparation/layout_rewriter/runs/classify_vacuum.csv](pipeline/preparation/layout_rewriter/runs/classify_vacuum.csv)（1b）。
 
 **為什麼只有 1b VACUUM 變小、1c 不變？**
 
@@ -111,7 +111,7 @@ readmodifywrite <id>
 
 ## Workload A — Zipfian Point Read（YCSB-C 風格）
 
-**檔案：** [benchmark_harness/workloads/workload_a_zipfian.txt](benchmark_harness/workloads/workload_a_zipfian.txt)
+**檔案：** [workloads/workload_a.txt](workloads/workload_a.txt)
 **規模：** 100,000 ops，全部 `read`
 **Key 範圍：** id ∈ [8, 99997]（只打 DB 前 1/6 的 id 區段）
 **分佈：** 強 Zipfian skew
@@ -126,11 +126,11 @@ warm；唯一還是 cold 的是 interior page**。所以這個 workload 是 pref
 
 **用在哪：**
 - `prefetch_vacuum/` 第 9–11 週的全部實驗（baseline / range / perpage / layers N）
-- `layout_rewriter/` 的 type-aware layout（P0:把 A/B baseline 推高、C 較快;見 overall_results.md）
-- `layout_rewriter/runs/` 的 1b VACUUM、N sweep 全矩陣
-- 2f SLRU（**P0:first-q −76~89%**;但 deliver ~0.8–7ms 使 e2e 多半不具優勢）
+- `pipeline/preparation/layout_rewriter/` 的 type-aware layout（把 A/B baseline 推高、C 較快;見 overall_results.md）
+- `pipeline/preparation/layout_rewriter/runs/` 的 1b VACUUM、N sweep 全矩陣
+- 2f SLRU（**first-q −76~89%**;但 deliver ~0.8–7ms 使 e2e 多半不具優勢）
 
-**為什麼會出現「漂亮」的 first-query 改善（P0:2f −76~89%、2e_K10 在 C −81%）：**
+**為什麼會出現「漂亮」的 first-query 改善（2f −76~89%、2e_K10 在 C −81%）：**
 因為 cold start 的 cost 被拆成「interior fault + leaf fault + CPU」，Zipfian 下
 leaf 部分被反覆查詢拉進 cache，**剩下的瓶頸只有 interior**，prefetch 一解就
 見效。而 2f SLRU 連 leaf 一起 preload，連那點 leaf cold fault 都消掉。
@@ -139,7 +139,7 @@ leaf 部分被反覆查詢拉進 cache，**剩下的瓶頸只有 interior**，pr
 
 ## Workload B — Uniform Random Point Read
 
-**檔案：** [benchmark_harness/workloads/workload_uniform.txt](benchmark_harness/workloads/workload_uniform.txt)
+**檔案：** [workloads/workload_b.txt](workloads/workload_b.txt)
 **規模：** 100,000 ops，全部 `read`
 **Key 範圍：** id ∈ [1, 99999]（同 Workload A 的 1/6 區段）
 **分佈：** 均勻
@@ -151,10 +151,10 @@ leaf 部分被反覆查詢拉進 cache，**剩下的瓶頸只有 interior**，pr
 sampling、爬蟲式存取。**每筆 query 都打到沒看過的 leaf**，leaf fault 不可避免。
 
 **用在哪：**（最初是對照組，後來變成完整實測 workload）
-- `layout_rewriter/runs/` 的 1b VACUUM 補測、1c type-aware 補測、N sweep × {orig, vacuum} 全矩陣
+- `pipeline/preparation/layout_rewriter/runs/` 的 1b VACUUM 補測、1c type-aware 補測、N sweep × {orig, vacuum} 全矩陣
   - **發現一**：B 上 N sweep 從 N=5 開始全 plateau（沒有 A 的 U 型曲線）
-  - **發現二**：ta 在 B 上把 baseline 推高、layers_N 改善也較弱（P0:B/ta −24% vs orig −47%），非 universal best
-- `prefetch_slru/` 的 2f SLRU 驗證（P0:B first-q −83%,但 e2e 多半不具優勢）
+  - **發現二**：ta 在 B 上把 baseline 推高、layers_N 改善也較弱（B/ta −24% vs orig −47%），非 universal best
+- `strategies/slru/` 的 2f SLRU 驗證（B first-q −83%,但 e2e 多半不具優勢）
 - 原始定位：當 Workload A 量出「prefetch 省了 54%」，B 回答「這效益只在熱點下
   才有意義嗎」 — 答案是 prefetch 仍然有效，但比例會被「無法被解決的 leaf
   fault」攤薄
@@ -163,7 +163,7 @@ sampling、爬蟲式存取。**每筆 query 都打到沒看過的 leaf**，leaf 
 
 ## Workload C — High-key Uniform Read（churn 後段查詢）
 
-**檔案：** [prefetch_churn/workloads/page_churn_benchmark_high.txt](prefetch_churn/workloads/page_churn_benchmark_high.txt)
+**檔案：** [workloads/workload_c.txt](workloads/workload_c.txt)
 **規模：** 100,000 ops，全部 `read`
 **Key 範圍：** id ∈ [590000, 609999]（**只打 DB 末段 20k id**，含 churn 後新增的 id）
 **分佈：** 均勻覆蓋這 20k 個 id（剛好每個 id 平均被打 5 次）
@@ -177,13 +177,13 @@ INSERT 會把新資料放在檔尾，這個 workload 就在量「檔尾新資料
 - `prefetch_churn/` 的 10 個 checkpoint：每個 checkpoint 之間先用 Workload D
   製造寫入壓力，然後 drop cache，再跑這個 workload 量 cold-start latency；
   N sweep（N=0/1/5/10/20/46/92 × 10 checkpoints）見 [overall_results.md](overall_results.md) churn 段
-- `layout_rewriter/runs/` 的 1b VACUUM、1c type-aware、N sweep × {orig, vacuum}
+- `pipeline/preparation/layout_rewriter/runs/` 的 1b VACUUM、1c type-aware、N sweep × {orig, vacuum}
   全矩陣
   - **關鍵發現**：C 上 layers_N 必須 N=92（載全部 interior）才有 -46% 改善，
     N≤46 只有 ~15%。原因：C 走的 interior path 不在 file 前段，按 offset 排
     top-N 完全選錯 page。**這直接證明「layers_N 是 zipfian-friendly 啟發式」**
-  - **churned DB 上同樣的形狀**（P0）：N=92 −50%、N≤46 plateau ~−14%
-- `prefetch_slru/` 的 2f SLRU 驗證（C 上 hot set ~1.7 MB，preproc 只 ~1.1 ms
+  - **churned DB 上同樣的形狀**：N=92 −50%、N≤46 plateau ~−14%
+- `strategies/slru/` 的 2f SLRU 驗證（C 上 hot set ~1.7 MB，preproc 只 ~1.1 ms
   vs A/B 的 ~7.5 ms — 是 2f preproc 最低的情境）
 
 **為什麼選 high-key 而不是低 key：** 因為 prefetch_churn 想觀察 layout 隨寫入
@@ -195,7 +195,7 @@ INSERT 會把新資料放在檔尾，這個 workload 就在量「檔尾新資料
 
 ## Workload D — Mixed Write-heavy Churn Generator
 
-**檔案：** [prefetch_churn/workloads/page_churn_write.txt](prefetch_churn/workloads/page_churn_write.txt)
+**檔案：** [workloads/workload_churn_write.txt](workloads/workload_churn_write.txt)
 **檔案規模：** 100,000 ops，混合操作（**檔內定義**）
 **每 batch 實際用量：** 5,000 ops（**取前 5,000 行**，跑 10 batch = 累計 50,000 ops）
 **Op 組成：**
@@ -233,13 +233,13 @@ layout 上還剩多少效益」。
 | 實驗 | 用的 workload | 想回答的問題 |
 |---|---|---|
 | `prefetch_vacuum/` (Week 9–11) | A (Zipfian) | Prefetch interior pages 在熱點 workload 下能省多少？甜蜜點是 N=幾個 page？|
-| `layout_rewriter/` (type-aware vacuum 端到端) | A (Zipfian) | 把 interior 重排到檔頭，能不能救回 prefetch 效益？(P0:A/ta baseline 反被推高 +31%) |
-| `layout_rewriter/runs/` (1b VACUUM × B/C) | B + C | VACUUM 對 baseline 和 prefetch 的影響在非 Zipfian workload 上是什麼樣 |
-| `layout_rewriter/runs/` (1c type-aware × B/C) | B + C | ta layout 是否 universal best？(答案：B 上反效果) |
-| `layout_rewriter/runs/` (N sweep × A/B/C × {orig, vacuum}) | A + B + C | 「N=5 甜蜜點」是 zipfian-friendly 還是 universal？(答案：zipfian-only) |
-| `prefetch_slru/` (2f SLRU × A/B/C × {orig, vacuum}) | A + B + C | mincore-dumped resident set preload 在三種 workload 的效益 (P0:first-q −76~89%,但 deliver 太重→e2e 多半不具優勢;warm-process 下 C 例外) |
+| `pipeline/preparation/layout_rewriter/` (type-aware vacuum 端到端) | A (Zipfian) | 把 interior 重排到檔頭，能不能救回 prefetch 效益？(A/ta baseline 反被推高 +31%) |
+| `pipeline/preparation/layout_rewriter/runs/` (1b VACUUM × B/C) | B + C | VACUUM 對 baseline 和 prefetch 的影響在非 Zipfian workload 上是什麼樣 |
+| `pipeline/preparation/layout_rewriter/runs/` (1c type-aware × B/C) | B + C | ta layout 是否 universal best？(答案：B 上反效果) |
+| `pipeline/preparation/layout_rewriter/runs/` (N sweep × A/B/C × {orig, vacuum}) | A + B + C | 「N=5 甜蜜點」是 zipfian-friendly 還是 universal？(答案：zipfian-only) |
+| `strategies/slru/` (2f SLRU × A/B/C × {orig, vacuum}) | A + B + C | mincore-dumped resident set preload 在三種 workload 的效益 (first-q −76~89%,但 deliver 太重→e2e 多半不具優勢;warm-process 下 C 例外) |
 | `prefetch_churn/` 量測 (N=5 only) | C (high-key uniform) | Layout 隨 churn 漂移後，prefetch 效益怎麼變？|
-| `prefetch_churn/runs_nsweep/` (N=0,1,5,10,20,46,92) | C (high-key uniform) | churned DB 的 N sweep 形狀是否跟乾淨 DB 一致？(P0:形狀一致,N=92 −50%) |
+| `prefetch_churn/runs_nsweep/` (N=0,1,5,10,20,46,92) | C (high-key uniform) | churned DB 的 N sweep 形狀是否跟乾淨 DB 一致？(形狀一致,N=92 −50%) |
 | `prefetch_churn/` churn 生成 | D (mixed write) | 製造真實的 layout 漂移壓力（不量 latency）|
 | `multiprocess/` | 不用 workload（只測 residency / RSS）| MAP_SHARED 是否真的跨 process 共享 page cache？|
 

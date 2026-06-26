@@ -15,10 +15,10 @@
 set -u
 DIR=/home/u03/sqlite-research-project-sharing/prefetch_churn
 RUNS=$DIR/runs_access_churn_b
-HOT_BASE=/home/u03/sqlite-research-project-sharing/prefetch_access/runs/hotpages_b.csv
-HOT_2E_K10=/home/u03/sqlite-research-project-sharing/prefetch_access/runs/hot2e_B_orig_K10.csv
-HOT_2E_K50=/home/u03/sqlite-research-project-sharing/prefetch_access/runs/hot2e_B_orig_K50.csv
-PA=/home/u03/sqlite-research-project-sharing/prefetch_access/src/prefetch_access
+HOT_BASE=/home/u03/sqlite-research-project-sharing/strategies/access/runs/hotpages_b.csv
+HOT_2E_K10=/home/u03/sqlite-research-project-sharing/strategies/access/runs/hot2e_B_orig_K10.csv
+HOT_2E_K50=/home/u03/sqlite-research-project-sharing/strategies/access/runs/hot2e_B_orig_K50.csv
+PA=/home/u03/sqlite-research-project-sharing/strategies/access/src/prefetch_access
 cd "$DIR"
 
 run_one() {
@@ -47,7 +47,7 @@ EOF
  --classifier ./classify_pages \
  --benchmark-harness ./benchmark_harness \
  --benchmark-workload generated_workloads/workload_b_uniform.txt \
- --write-workload generated_workloads/page_churn_write.txt \
+ --write-workload generated_workloads/workload_churn_write.txt \
  --drop-caches-script "$evict_script" \
  --prefetch-mode "$mode" \
  --prefetch-tool "$PA" \

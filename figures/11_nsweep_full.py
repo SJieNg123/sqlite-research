@@ -1,9 +1,9 @@
-"""Figure 11: Dense layers_N sweep × 3 layouts (clean DB) — P0.
+"""Figure 11: Dense layers_N sweep × 3 layouts (clean DB).
 
 Story: the layers_N plateau, now across all three layouts. Per workload, one line
 per layout (1a orig / 1b vacuum / 1c type-aware). N=0 = no-prefetch baseline.
 
-Data (P0): p0_runs_nsweep_dense/summary_p0.csv — layers_N (dense N) × A/B/C ×
+Data: results/nsweep_dense/summary.csv — layers_N (dense N) × A/B/C ×
 {orig,vacuum,ta}, async arm, first-query median (warmup dropped).
 """
 import csv, re
@@ -11,7 +11,7 @@ from collections import defaultdict
 from plot_utils import ROOT, LAYOUT_COLORS, save
 import matplotlib.pyplot as plt
 
-SUMMARY = ROOT / "p0_runs_nsweep_dense/summary_p0.csv"
+SUMMARY = ROOT / "results/nsweep_dense/summary.csv"
 
 # (workload, db) -> {N: fq_median}
 data = defaultdict(dict)
@@ -44,7 +44,7 @@ for ax, w in zip(axes, WORKLOADS):
         ax.set_ylabel("first-query latency (µs, async, median)")
         ax.legend(loc="upper right", fontsize=8)
 axes[0].set_ylim(0, ymax * 1.05)
-fig.suptitle("Dense layers_N sweep · clean DB · A/B/C × 3 layouts · P0 (async first-query)",
+fig.suptitle("Dense layers_N sweep · clean DB · A/B/C × 3 layouts (async first-query)",
              fontsize=12, y=1.02)
 fig.tight_layout()
 save(fig, "11_nsweep_full")

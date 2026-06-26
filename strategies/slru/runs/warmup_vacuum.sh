@@ -3,7 +3,7 @@
 set -e
 WORKLOAD="$1"
 OUT="$2"
-DIR=/home/u03/sqlite-research-project-sharing/prefetch_slru/runs
+DIR=/home/u03/sqlite-research-project-sharing/strategies/slru/runs
 DB="$DIR/test_vacuum.db"
 
 "$DIR/evict" "$DB"

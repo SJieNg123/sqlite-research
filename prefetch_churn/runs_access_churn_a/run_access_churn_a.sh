@@ -2,7 +2,7 @@
 # B1: Access-pattern prefetch on a churned DB × Workload A (Zipfian, low/mid-key reads).
 #
 # Hypothesis: workload A reads keys [8, 99997]; existing churn workload
-# (page_churn_write.txt) has 20% readmodifywrite that maps to DELETE starting at
+# (workload_churn_write.txt) has 20% readmodifywrite that maps to DELETE starting at
 # id=1, which DIRECTLY DISTURBS A's hot leaves. So static t=0 hotpages should
 # DECAY here (unlike the C × insert-churn case where insert target id=600001+
 # overlaps the read range coincidentally).
@@ -16,10 +16,10 @@
 set -u
 DIR=/home/u03/sqlite-research-project-sharing/prefetch_churn
 RUNS=$DIR/runs_access_churn_a
-HOT_BASE=/home/u03/sqlite-research-project-sharing/prefetch_access/runs/hotpages_a.csv
-HOT_2E_K10=/home/u03/sqlite-research-project-sharing/prefetch_access/runs/hot2e_A_orig_K10.csv
-HOT_2E_K50=/home/u03/sqlite-research-project-sharing/prefetch_access/runs/hot2e_A_orig_K50.csv
-PA=/home/u03/sqlite-research-project-sharing/prefetch_access/src/prefetch_access
+HOT_BASE=/home/u03/sqlite-research-project-sharing/strategies/access/runs/hotpages_a.csv
+HOT_2E_K10=/home/u03/sqlite-research-project-sharing/strategies/access/runs/hot2e_A_orig_K10.csv
+HOT_2E_K50=/home/u03/sqlite-research-project-sharing/strategies/access/runs/hot2e_A_orig_K50.csv
+PA=/home/u03/sqlite-research-project-sharing/strategies/access/src/prefetch_access
 cd "$DIR"
 
 run_one() {
@@ -48,7 +48,7 @@ EOF
  --classifier ./classify_pages \
  --benchmark-harness ./benchmark_harness \
  --benchmark-workload generated_workloads/workload_a_zipfian.txt \
- --write-workload generated_workloads/page_churn_write.txt \
+ --write-workload generated_workloads/workload_churn_write.txt \
  --drop-caches-script "$evict_script" \
  --prefetch-mode "$mode" \
  --prefetch-tool "$PA" \

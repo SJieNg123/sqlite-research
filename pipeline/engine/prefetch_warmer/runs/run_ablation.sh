@@ -15,9 +15,9 @@
 # Output: ablation_raw.csv  (mode,rep,first_query_us,avg_us,majflt,minflt,warmer_us,warmed_pages)
 set -u
 ROOT=/home/u03/sqlite-research-project-sharing
-DB=$ROOT/prefetch_access/runs/test.db
+DB=$ROOT/strategies/access/runs/test.db
 BH=$ROOT/benchmark_harness/benchmark_harness
-WL=$ROOT/prefetch_access/runs/workload_a_zipfian.txt
+WL=$ROOT/strategies/access/runs/workload_a_zipfian.txt
 DIR=$ROOT/prefetch_warmer/runs
 REPS=${REPS:-30}
 cd "$DIR"

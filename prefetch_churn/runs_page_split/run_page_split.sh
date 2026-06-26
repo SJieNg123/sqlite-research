@@ -1,7 +1,7 @@
 #!/bin/bash
 # PAGE-SPLIT churn: the opposite of runs_access_churn* — a churn that MOVES hot pages.
 #
-# Every prior churn series (runs_access_churn / _a / _b) replays page_churn_write.txt,
+# Every prior churn series (runs_access_churn / _a / _b) replays workload_churn_write.txt,
 # which is layout-preserving: the 26,331 existing pages never move (verified 0-diff at
 # every checkpoint), so the frozen t=0 hotpages list can't decay.
 #
@@ -22,9 +22,9 @@
 set -u
 DIR=/home/u03/sqlite-research-project-sharing/prefetch_churn
 RUNS=$DIR/runs_page_split
-HOT_BASE=/home/u03/sqlite-research-project-sharing/prefetch_access/runs/hotpages_a.csv
-HOT_2E_K10=/home/u03/sqlite-research-project-sharing/prefetch_access/runs/hot2e_A_orig_K10.csv
-PA=/home/u03/sqlite-research-project-sharing/prefetch_access/src/prefetch_access
+HOT_BASE=/home/u03/sqlite-research-project-sharing/strategies/access/runs/hotpages_a.csv
+HOT_2E_K10=/home/u03/sqlite-research-project-sharing/strategies/access/runs/hot2e_A_orig_K10.csv
+PA=/home/u03/sqlite-research-project-sharing/strategies/access/src/prefetch_access
 WL_A=generated_workloads/workload_a_zipfian.txt
 WRITE=generated_workloads/page_split_write.txt # UPDATEs on workload-A hot keys
 cd "$DIR"

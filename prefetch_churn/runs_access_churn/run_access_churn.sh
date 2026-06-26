@@ -6,9 +6,9 @@
 set -u
 DIR=/home/u03/sqlite-research-project-sharing/prefetch_churn
 RUNS=$DIR/runs_access_churn
-HOT_BASE=/home/u03/sqlite-research-project-sharing/prefetch_access/runs/hotpages_c.csv
-HOT_2E_K10=/home/u03/sqlite-research-project-sharing/prefetch_access/runs/hot2e_C_orig_K10.csv
-PA=/home/u03/sqlite-research-project-sharing/prefetch_access/src/prefetch_access
+HOT_BASE=/home/u03/sqlite-research-project-sharing/strategies/access/runs/hotpages_c.csv
+HOT_2E_K10=/home/u03/sqlite-research-project-sharing/strategies/access/runs/hot2e_C_orig_K10.csv
+PA=/home/u03/sqlite-research-project-sharing/strategies/access/src/prefetch_access
 cd "$DIR"
 
 run_one() {
@@ -36,8 +36,8 @@ EOF
  --work-db "$outdir/test_churn.db" \
  --classifier ./classify_pages \
  --benchmark-harness ./benchmark_harness \
- --benchmark-workload generated_workloads/page_churn_benchmark_high.txt \
- --write-workload generated_workloads/page_churn_write.txt \
+ --benchmark-workload generated_workloads/workload_c.txt \
+ --write-workload generated_workloads/workload_churn_write.txt \
  --drop-caches-script "$evict_script" \
  --prefetch-mode "$mode" \
  --prefetch-tool "$PA" \

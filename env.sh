@@ -1,8 +1,8 @@
 #!/bin/sh
-# p0_env.sh — pin + record the environment knobs that drive cold-start latency.
+# env.sh — pin + record the environment knobs that drive cold-start latency.
 #
-# Run ONCE at the start of a P0 master batch (needs root for the sysfs writes).
-# Prints a single "P0_ENV ..." line on stdout that the runner embeds into every
+# Run ONCE at the start of a master batch (needs root for the sysfs writes).
+# Prints a single "ENV ..." line on stdout that the runner embeds into every
 # run record, so any later environment drift is visible after the fact.
 #
 # Locked knobs (IMPLEMENTATION_PIPELINES.md §3.0 F4/F5/F6):
@@ -10,8 +10,8 @@
 #   read_ahead_kb   -> $RA_KB (def 128) (caps madvise load = 2*ra_pages; F5)
 #   THP             -> madvise
 #
-# Usage:  p0_env.sh [db_path_or_dir]      (default: current dir)
-#         RA_KB=<n> p0_env.sh ...         (override read_ahead_kb; default 128)
+# Usage:  env.sh [db_path_or_dir]      (default: current dir)
+#         RA_KB=<n> env.sh ...         (override read_ahead_kb; default 128)
 #
 # Writes are best-effort: if not root, it warns but still prints the read-back
 # values so a recording-only (non-pinning) invocation still works.
@@ -20,7 +20,7 @@ set -u
 TARGET="${1:-.}"
 RA_KB="${RA_KB:-128}"
 
-warn() { echo "p0_env: WARN $*" >&2; }
+warn() { echo "env: WARN $*" >&2; }
 
 # --- resolve the whole-disk block device backing TARGET ---
 SRC=$(df --output=source "$TARGET" 2>/dev/null | tail -1)
@@ -60,5 +60,5 @@ epp=$(cat "$CPU0/energy_performance_preference" 2>/dev/null || echo NA)
 boost=$(cat /sys/devices/system/cpu/cpufreq/boost 2>/dev/null || echo NA)
 maxfreq=$(cat "$CPU0/cpuinfo_max_freq" 2>/dev/null || echo NA)
 
-printf 'P0_ENV kernel=%s disk=%s ra_kb=%s governor=%s driver=%s epp=%s boost=%s maxfreq_khz=%s thp=%s loadavg=%s memavail_kb=%s\n' \
+printf 'ENV kernel=%s disk=%s ra_kb=%s governor=%s driver=%s epp=%s boost=%s maxfreq_khz=%s thp=%s loadavg=%s memavail_kb=%s\n' \
   "$(uname -r)" "$DISK" "$ra" "$gov" "$driver" "$epp" "$boost" "$maxfreq" "$thp" "$load" "$memfree"

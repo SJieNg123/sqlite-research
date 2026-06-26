@@ -1,9 +1,9 @@
 #!/bin/bash
 # 3 strategies × 2 workloads × 3 reps = 18 runs.
 # Strategies: baseline (no prefetch), strategy 1 (layers N=5), strategy 4 (slru)
-# Workloads:  A (uniform) = workload_uniform.txt, B (skewed) = workload_a_zipfian.txt
+# Workloads:  A (uniform) = workload_b.txt, B (skewed) = workload_a_zipfian.txt
 set -u
-DIR=/home/u03/sqlite-research-project-sharing/prefetch_slru/runs
+DIR=/home/u03/sqlite-research-project-sharing/strategies/slru/runs
 DB="$DIR/test.db"
 REPS=3
 RESULTS="$DIR/matrix_results.csv"

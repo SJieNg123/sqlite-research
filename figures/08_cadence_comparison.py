@@ -1,19 +1,19 @@
-"""Figure 8: Prefetch cadence — first-query latency vs background re-warm cadence — P0.
+"""Figure 8: Prefetch cadence — first-query latency vs background re-warm cadence.
 
 Story: a background prefetcher re-warms the hotset every `cadence` seconds; each probe does
-a P0 full-machine drop-caches then waits a fixed gap (3 s) before measuring first-query. If
+a full-machine drop-caches then waits a fixed gap (3 s) before measuring first-query. If
 cadence < gap the prefetcher fires during the gap → warm probe; if cadence >> gap it doesn't
 fire in time → cold probe. Rule of thumb: cadence ≤ gap_s.
 
-Data (P0): p0_runs_cadence/cadence_results.csv — measurement via benchmark_harness with P0
-discipline (full drop-caches + --verify-hotset); cadence = background warmer (run_p0_cadence.py).
+Data: results/cadence/cadence_results.csv — measurement via benchmark_harness with the pipeline
+discipline (full drop-caches + --verify-hotset); cadence = background warmer (cadence.py).
 """
 import csv, statistics
 from collections import defaultdict
 from plot_utils import ROOT, save
 import matplotlib.pyplot as plt
 
-CSV = ROOT / "p0_runs_cadence/cadence_results.csv"
+CSV = ROOT / "results/cadence/cadence_results.csv"
 
 g = defaultdict(list)
 for r in csv.DictReader(open(CSV)):
@@ -46,7 +46,7 @@ ax.text(len(xs) - 0.5, meds[-1] - 30, f"never (no prefetcher) = {meds[-1]:.0f} �
 ax.set_xticks(xs, labels)
 ax.set_xlabel("prefetcher cadence  (1 re-warm / cadence sec)")
 ax.set_ylabel("first-query latency (µs, median; bars = min/max of 8 rounds)")
-ax.set_title("Prefetch cadence (P0) · background re-warmer + P0 drop-caches probe (gap 3 s)\n"
+ax.set_title("Prefetch cadence · background re-warmer + drop-caches probe (gap 3 s)\n"
              "rule of thumb: cadence ≤ gap_s → warm",
              fontsize=11)
 ax.set_ylim(0, max(hi) * 1.18)

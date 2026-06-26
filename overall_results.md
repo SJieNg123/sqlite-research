@@ -1,9 +1,9 @@
 # Overall Results — 策略 × Workload 結果矩陣
 
-本檔列出**每個策略 × 每個 workload × 每個 layout 的 P0 結果**（對照
+本檔列出**每個策略 × 每個 workload × 每個 layout 的 實驗結果**（對照
 [overall_workloads.md](overall_workloads.md) 的 workload 定義）。
 
-> 本檔所有數字來自 **P0 pipeline**（`run_p0.py` 家族 → `p0_runs*/`,全 cell `cold_pct`=0)。
+> 本檔所有數字來自 **統一 pipeline**（`run_experiment.py` 家族 → `results/main*/`,全 cell `cold_pct`=0)。
 > Workload D 是 churn generator,無自身 latency 結果。
 >
 > **Preprocessing 計入 e2e（兩個部署模型）**:preprocessing 拆成 **open(db)(冷開 DB ~200µs,per-layout 常數)**
@@ -16,12 +16,12 @@
 
 ---
 
-<!-- P0-MASTER-RESULTS-START -->
-## P0 master batch 結果
+<!-- MASTER-RESULTS-START -->
+## master batch 結果
 
-> 由 `run_p0.py` 一次跑齊:54 strategy cells × pread/async + 9 baseline,pread 5 / async 10 / baseline 10 reps(丟 warmup)、rep-major、全機 drop-caches、in-harness `--verify-hotset`、釘核升頻、ra=128。**全 117 cell `cold_pct`=0**。原始檔:[`p0_runs/summary_p0.csv`](p0_runs/summary_p0.csv) / [`p0_runs/raw_p0.csv`](p0_runs/raw_p0.csv)。
+> 由 `run_experiment.py` 一次跑齊:54 strategy cells × pread/async + 9 baseline,pread 5 / async 10 / baseline 10 reps(丟 warmup)、rep-major、全機 drop-caches、in-harness `--verify-hotset`、釘核升頻、ra=128。**全 117 cell `cold_pct`=0**。原始檔:[`results/main/summary.csv`](results/main/summary.csv) / [`results/main/raw.csv`](results/main/raw.csv)。
 > `fq` = first-query median µs;`impr%` = async 相對該 (workload,layout) baseline;`e2e_std` = open+deliver+fq(standalone warmer);`e2e_warm` = deliver+fq(warm-process,≈static,本研究主張);`deliv%` = async delivery_pct;`oracle` = pread 臂 fq(可達上界)。
-> 此為 A/B/C 的詳表(含 delivery_pct/oracle);下方「全維度 P0 數據」涵蓋全 workload(含 Z)× layout × 策略 + N/K-sweep + RAM + churn + cadence。
+> 此為 A/B/C 的詳表(含 delivery_pct/oracle);下方「全維度數據」涵蓋全 workload(含 Z)× layout × 策略 + N/K-sweep + RAM + churn + cadence。
 
 ### Workload A (Zipfian)
 
@@ -102,18 +102,18 @@
 | ta | 2f_slru | 122 | 86% | 100 | 1153 | 930 | 120 |
 
 **讀法**:① first-query 最低一律是 **2f_slru**(載整個 working set),但其 deliver(A/B ~7ms、C ~0.76ms)使 `e2e` 多半輸——除 C 外兩個 e2e 模型都超 baseline。② **layers_5 / 2d / 2e_K10** 用極少 syscall:`e2e_warm`(= deliver+fq,warm-process/integrated,本研究主張)在三個 workload 都改善(A −7~9%、B −29~34%、**C × 2e_K10 −73% / 291µs**);`e2e_std`(= open+deliver+fq,standalone warmer)則在快 workload 因 ~200µs 冷 open 而變差。③ 兩個 e2e 模型唯一差是 per-layout 的冷 open(db)(~200µs)。④ `oracle` 欄是同步 pread 的可達下界。
-<!-- P0-MASTER-RESULTS-END -->
+<!-- MASTER-RESULTS-END -->
 
 ---
 
-## 全維度 P0 數據
+## 全維度數據
 
-> 本節為 **P0 pipeline**(`run_p0.py` 家族 → `p0_runs*/`,全 cell `cold_pct`=0)的全 workload(含 **Z**)× layout × 策略 + N/K-sweep + RAM + churn + cadence 彙整;上方「P0 master batch 結果」為 A/B/C 含 delivery_pct/oracle 的詳表。
+> 本節為 **統一 pipeline**(`run_experiment.py` 家族 → `results/main*/`,全 cell `cold_pct`=0)的全 workload(含 **Z**)× layout × 策略 + N/K-sweep + RAM + churn + cadence 彙整;上方「master batch 結果」為 A/B/C 含 delivery_pct/oracle 的詳表。
 
-## 全策略 × layout × workload（P0,async first-query / e2e µs,median）
+## 全策略 × layout × workload（async first-query / e2e µs,median）
 
-> baseline = no-prefetch;此處 cell = first-query µs (impr% 相對該 (workload,layout) baseline)。e2e 兩模型(`e2e_std`/`e2e_warm`)見上方「P0 master batch 結果」詳表。
-> 來源 [`p0_runs/summary_p0.csv`](p0_runs/summary_p0.csv)(A/B/C)+ [`p0_runs_z/`](p0_runs_z/summary_p0.csv)(Z)。
+> baseline = no-prefetch;此處 cell = first-query µs (impr% 相對該 (workload,layout) baseline)。e2e 兩模型(`e2e_std`/`e2e_warm`)見上方「master batch 結果」詳表。
+> 來源 [`results/main/summary.csv`](results/main/summary.csv)(A/B/C)+ [`results/z/`](results/z/summary.csv)(Z)。
 
 ### Workload A
 
@@ -147,7 +147,7 @@
 | vacuum (1b) | 705 | 570 (−19%) | 572 (−19%) | 571 (−19%) | 205 (−71%) | 203 (−71%) | 117 (−83%) |
 | ta (1c) | 737 | 598 (−19%) | 460 (−38%) | 467 (−37%) | 203 (−72%) | 203 (−72%) | 117 (−84%) |
 
-### 2f_slru first-q vs e2e（preprocessing trap,P0）
+### 2f_slru first-q vs e2e（preprocessing trap）
 
 | workload×layout | fq | open | deliver | e2e_std | e2e_warm | e2e_warm vs base |
 |---|--:|--:|--:|--:|--:|--:|
@@ -161,9 +161,9 @@
 | C/vacuum | 124 | 222 | 585 | 934 | 712 | 0.7× |
 | C/ta | 122 | 222 | 808 | 1153 | 930 | 1.1× |
 
-## layers_N sweep（P0 clean,async first-q µs;N=0=baseline）
+## layers_N sweep（clean,async first-q µs;N=0=baseline）
 
-> 來源 [`p0_runs_nsweep_dense/`](p0_runs_nsweep_dense/summary_p0.csv)。
+> 來源 [`results/nsweep_dense/`](results/nsweep_dense/summary.csv)。
 
 ### Workload A
 
@@ -197,9 +197,9 @@
 | vacuum | 708 | 968 | 963 | 964 | 543 | 554 | 555 | 555 | 552 | 552 | 559 | 555 | 552 | 552 | 562 |
 | ta | 728 | 901 | 835 | 905 | 575 | 571 | 576 | 575 | 572 | 562 | 552 | 558 | 564 | 540 | 438 |
 
-## 2e K-sweep（P0,async first-q µs;K=0=2d interior-only）
+## 2e K-sweep（async first-q µs;K=0=2d interior-only）
 
-> 來源 [`p0_runs_ksweep/`](p0_runs_ksweep/summary_p0.csv)。
+> 來源 [`results/ksweep/`](results/ksweep/summary.csv)。
 
 ### Workload A
 
@@ -225,9 +225,9 @@
 | vacuum | 493 | 187 | 185 | 186 | 185 | 187 | 188 |
 | ta | 480 | 189 | 189 | 188 | 189 | 188 | 189 |
 
-## RAM-pressure（cgroup MemoryMax=20M / unlimited 比值,P0 async first-q）
+## RAM-pressure（cgroup MemoryMax=20M / unlimited 比值,async first-q）
 
-> 來源 [`p0_runs_ram20m/`](p0_runs_ram20m/summary_p0.csv) ÷ master。比值近 1.0 → 壓力幾乎不影響。
+> 來源 [`results/ram20m/`](results/ram20m/summary.csv) ÷ master。比值近 1.0 → 壓力幾乎不影響。
 
 | workload×layout | layers_5 | layers_92 | 2d | 2e_K10 | 2e_K500 | 2f_slru |
 |---|--:|--:|--:|--:|--:|--:|
@@ -241,9 +241,9 @@
 | C/vacuum | 1.00 | 1.00 | 1.00 | 1.01 | 1.00 | 1.00 |
 | C/ta | 0.99 | 1.01 | 0.99 | 1.00 | 1.00 | 1.00 |
 
-## Churn-evolution（P0,layout orig,static t=0 hotset,first-q µs;CSV 另含 vacuum/ta）
+## Churn-evolution（layout orig,static t=0 hotset,first-q µs;CSV 另含 vacuum/ta）
 
-> 來源 [`p0_runs_churn/churn_evolution.csv`](p0_runs_churn/churn_evolution.csv)。
+> 來源 [`results/churn/churn_evolution.csv`](results/churn/churn_evolution.csv)。
 
 ### Workload A
 
@@ -269,9 +269,9 @@
 | 2e_K10_static | 86 | 89 | 83 | 81 | 265 | 86 | 82 | 88 | 86 | 84 | 82 |
 | layers_92_static | 252 | 245 | 278 | 274 | 303 | 309 | 268 | 592 | 265 | 264 | 266 |
 
-## Multi-process cadence（P0,背景 warmer 重暖 + 全機 drop probe,first-q µs）
+## Multi-process cadence（背景 warmer 重暖 + 全機 drop probe,first-q µs）
 
-> 來源 [`p0_runs_cadence/cadence_results.csv`](p0_runs_cadence/cadence_results.csv)。
+> 來源 [`results/cadence/cadence_results.csv`](results/cadence/cadence_results.csv)。
 
 | cadence | round | first_q_us | delivery_pct |
 |---|---|---|---|
@@ -288,10 +288,10 @@
 | 5.0 | 2 | 24.71 | 100.0 |
 | 5.0 | 3 | 273.25 | 0.7 |
 
-## 資料來源（P0）
+## 資料來源
 
-- 主矩陣:[`p0_runs/summary_p0.csv`](p0_runs/summary_p0.csv)、Z:[`p0_runs_z/`](p0_runs_z/summary_p0.csv)
-- N-sweep:[`p0_runs_nsweep_dense/`](p0_runs_nsweep_dense/summary_p0.csv)、K-sweep:[`p0_runs_ksweep/`](p0_runs_ksweep/summary_p0.csv)
-- RAM 20M:[`p0_runs_ram20m/`](p0_runs_ram20m/summary_p0.csv)、churn:[`p0_runs_churn/`](p0_runs_churn/)、cadence:[`p0_runs_cadence/`](p0_runs_cadence/cadence_results.csv)
-- 凍結清單:[`p0_runs/hotset_freeze.sha256`](p0_runs/hotset_freeze.sha256)。完整執行覆蓋見 [IMPLEMENTATION_PIPELINES.md §3.8](IMPLEMENTATION_PIPELINES.md)。
+- 主矩陣:[`results/main/summary.csv`](results/main/summary.csv)、Z:[`results/z/`](results/z/summary.csv)
+- N-sweep:[`results/nsweep_dense/`](results/nsweep_dense/summary.csv)、K-sweep:[`results/ksweep/`](results/ksweep/summary.csv)
+- RAM 20M:[`results/ram20m/`](results/ram20m/summary.csv)、churn:[`results/churn/`](results/churn/)、cadence:[`results/cadence/`](results/cadence/cadence_results.csv)
+- 凍結清單:[`results/main/hotset_freeze.sha256`](results/main/hotset_freeze.sha256)。完整執行覆蓋見 [IMPLEMENTATION_PIPELINES.md §3.8](IMPLEMENTATION_PIPELINES.md)。
 

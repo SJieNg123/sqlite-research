@@ -1,11 +1,11 @@
-"""Figure 10: 2e K-sweep (interior + top-K leaves) — P0.
+"""Figure 10: 2e K-sweep (interior + top-K leaves).
 
 Story: 2e prefetches resident interior pages PLUS the top-K hot leaf pages.
 Sweeping K shows how first-query latency falls as more hot leaves are pinned;
 the shape is workload×layout dependent (A/C have natural hot leaves → drop fast;
 B uniform has none → flat). K=0 is 2d (interior-only).
 
-Data (P0): p0_runs_ksweep/summary_p0.csv — 2d + 2e_K{10,40,50,92,100,500} on
+Data: results/ksweep/summary.csv — 2d + 2e_K{10,40,50,92,100,500} on
 A/B/C × {orig,vacuum,ta}, async arm, first-query median (warmup dropped).
 """
 import csv, re
@@ -13,7 +13,7 @@ from collections import defaultdict
 from plot_utils import ROOT, LAYOUT_COLORS, save
 import matplotlib.pyplot as plt
 
-SUMMARY = ROOT / "p0_runs_ksweep/summary_p0.csv"
+SUMMARY = ROOT / "results/ksweep/summary.csv"
 
 # (workload, db) -> {K: fq_median}; 2d => K=0
 g = defaultdict(dict)
@@ -49,6 +49,6 @@ for ax, w in zip(axes, WORKLOADS):
         ax.set_ylabel("first-query latency (µs, async, median)")
         ax.legend(loc="upper right", fontsize=8)
 axes[0].set_ylim(0, ymax * 1.05)
-fig.suptitle("2e K-sweep · interior + top-K hot leaves · P0 (async first-query)", fontsize=12, y=1.02)
+fig.suptitle("2e K-sweep · interior + top-K hot leaves (async first-query)", fontsize=12, y=1.02)
 fig.tight_layout()
 save(fig, "10_ratio_sweep")

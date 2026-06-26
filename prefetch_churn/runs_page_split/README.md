@@ -5,7 +5,7 @@
 prefetch 的做法是：在 t=0（暖機那一刻）拍下一張**靜態的 hotpages 清單**（哪些頁是熱的），之後每次冷啟動就照這張
 清單把熱頁預載進來。問題是——**資料庫會一直被寫入改動，這張不再更新的清單，會不會過期、指到錯的頁？**
 
-既有的三個 churn 系列（`runs_access_churn` / `_a` / `_b`）都重放同一份 `page_churn_write.txt`。它的寫入是
+既有的三個 churn 系列（`runs_access_churn` / `_a` / `_b`）都重放同一份 `workload_churn_write.txt`。它的寫入是
 **layout-preserving（不重排頁面）**的：
 
 - `INSERT` 的 rowid 自增、**接在檔案尾巴**（id 600001+）；
@@ -38,7 +38,7 @@ prefetch 的做法是：在 t=0（暖機那一刻）拍下一張**靜態的 hotp
 
 共同條件：量測讀取用 Workload A（`workload_a_zipfian.txt`），prefetch 用 t=0 靜態 hotpages，10 checkpoint × 5000 ops。
 寫入 workload 一律用 **`generated_workloads/page_split_write.txt`**——把 `workload_a_zipfian.txt` 的 read key 直接轉成
-`update <key>`，讓寫入**精準命中清單預載的那幾個熱葉**（用原本散射式的 `page_churn_write.txt` 幾乎打不到熱葉，
+`update <key>`，讓寫入**精準命中清單預載的那幾個熱葉**（用原本散射式的 `workload_churn_write.txt` 幾乎打不到熱葉，
 coverage 不會動）。
 
 | arm | payload | 預期 |
@@ -52,7 +52,7 @@ coverage 不會動）。
 既有指標（latency、majflt）量的是「快不快」，量不出「清單對不對」。因此新增
 [measure_staleness.py](../measure_staleness.py)：
 
-- 沿用 [gen_hotleaves.py](../../prefetch_access/runs/gen_hotleaves.py) 的方法（讀每個葉頁的 first_rowid、用 bisect
+- 沿用 [gen_hotleaves.py](../../strategies/access/runs/gen_hotleaves.py) 的方法（讀每個葉頁的 first_rowid、用 bisect
   做 `page_for_key`），在**當下這個 churn 過的 DB** 上重建 rowid→leaf 對照。
 - 算 **`hot_key_coverage`** = Workload A 的 read ops 中，**「現在所在的葉頁仍在凍結清單內」的比例**。高 = 清單還準；
   掉 = 清單過期。
@@ -117,9 +117,9 @@ column -t -s, runs_page_split/2e_k10_p100/staleness_summary.csv
 
 # (4) VACUUM demo：未 churn 的 DB，VACUUM 前後比對
 cp test.db /tmp/v.db
-python3 measure_staleness.py /tmp/v.db ../prefetch_access/runs/hot2e_A_orig_K10.csv generated_workloads/workload_a_zipfian.txt 20000
+python3 measure_staleness.py /tmp/v.db ../strategies/access/runs/hot2e_A_orig_K10.csv generated_workloads/workload_a_zipfian.txt 20000
 python3 -c "import sqlite3;c=sqlite3.connect('/tmp/v.db');c.execute('VACUUM');c.close()"
-python3 measure_staleness.py /tmp/v.db ../prefetch_access/runs/hot2e_A_orig_K10.csv generated_workloads/workload_a_zipfian.txt 20000
+python3 measure_staleness.py /tmp/v.db ../strategies/access/runs/hot2e_A_orig_K10.csv generated_workloads/workload_a_zipfian.txt 20000
 ```
 
 ## 結論
@@ -138,7 +138,7 @@ python3 measure_staleness.py /tmp/v.db ../prefetch_access/runs/hot2e_A_orig_K10.
    只需 `--payload-size` 一個旋鈕。
 2. **補一把直接量 decay 的尺**：寫 `measure_staleness.py`，用 additive、預設關閉的 flag 接進 harness。先單獨驗證——
    對未 churn 與「良性 churn」的 DB 量都是 0.241（尺正確，也復現「良性 churn 不 decay」）。
-3. **第一次 smoke test 失敗**：偷懶用舊的 `page_churn_write.txt` + payload 512，coverage **卡在 0.241 不動**。診斷：
+3. **第一次 smoke test 失敗**：偷懶用舊的 `workload_churn_write.txt` + payload 512，coverage **卡在 0.241 不動**。診斷：
    舊 workload 的 UPDATE 均勻散射，那 10 個熱葉只佔全部葉頁 ~0.05%，幾千筆改動幾乎碰不到 → **「有頁分裂」不等於
    「熱葉分裂」**。
 4. **對症下藥**：生成 `page_split_write.txt`（把 Workload A 的熱 key 轉成 `update`），讓寫入精準命中熱葉。再試：

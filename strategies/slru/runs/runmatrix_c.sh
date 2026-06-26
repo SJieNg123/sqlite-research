@@ -2,7 +2,7 @@
 # Strategy 2f SLRU × Workload C (high-key uniform)
 # 3 strategies (baseline, layers5, slru) × 1 workload × 3 reps = 9 runs
 set -u
-DIR=/home/u03/sqlite-research-project-sharing/prefetch_slru/runs
+DIR=/home/u03/sqlite-research-project-sharing/strategies/slru/runs
 DB="$DIR/test.db"
 REPS=3
 RESULTS="$DIR/matrix_c_results.csv"

@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Convert a Markdown file to PDF with the `markdown-pdf` package (markdown-it + PyMuPDF).
 
-Usage:
+Usage (run from the repo root, so relative paths like REPORT.md / figures/ resolve):
     pip install markdown-pdf
-    python3 md_to_pdf.py                 # REPORT.md -> REPORT.pdf
-    python3 md_to_pdf.py in.md out.pdf
+    python3 tools/md_to_pdf.py               # REPORT.md -> REPORT.pdf
+    python3 tools/md_to_pdf.py in.md out.pdf
 
 Handles:
   * Chinese (CJK) text — this box has no system CJK font, so we embed PyMuPDF's

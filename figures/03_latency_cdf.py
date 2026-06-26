@@ -4,8 +4,8 @@ Story: the cold→warm transition is where prefetch saves time. The slope = curr
 per-query latency; baseline is steep for the first ~10 queries (cold faults), while
 2e_K500 / 2f_SLRU keep the slope shallow from query 1 (hot pages already mapped).
 
-Data (P0): one representative cold run per strategy from the P0 master batch,
-p0_runs/work/rec_{baseline_,}A_orig_<strategy>/ops.csv (async arm, layout=orig).
+Data: one representative cold run per strategy from the master batch,
+results/main/work/rec_{baseline_,}A_orig_<strategy>/ops.csv (async arm, layout=orig).
 Single trace each (the batch keeps the last rep's per-op CSV), so no rep band.
 """
 import csv
@@ -13,7 +13,7 @@ import numpy as np
 from plot_utils import ROOT, save
 import matplotlib.pyplot as plt
 
-WORK = ROOT / "p0_runs/work"
+WORK = ROOT / "results/main/work"
 ARMS = [
     ("baseline", "baseline (no prefetch)",            "#9ca3af"),
     ("layers_5", "layers_5 (5 interior)",             "#3b82f6"),
@@ -58,7 +58,7 @@ for v, color in end_vals:
 
 ax.set_xlabel("query # (1 = first, cold)")
 ax.set_ylabel("cumulative latency to N-th query (µs)")
-ax.set_title("Cold→warm transition · Workload A · layout orig · P0 (one cold run each)")
+ax.set_title("Cold→warm transition · Workload A · layout orig (one cold run each)")
 ax.set_xlim(0, N_WARMUP + 7)
 ax.legend(loc="upper left", fontsize=9)
 fig.tight_layout()

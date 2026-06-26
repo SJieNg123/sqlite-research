@@ -2,7 +2,7 @@
 # 2e Access-pattern prefetch (interior + top-K hot leaves) × Workload A × 3 layouts × K∈{10,50,100,500} × 6 reps.
 # Emits CSV: workload,db,strategy,rep,first_query_us,avg_us,majflt,minflt
 set -u
-DIR=/home/u03/sqlite-research-project-sharing/prefetch_access/runs
+DIR=/home/u03/sqlite-research-project-sharing/strategies/access/runs
 BH=$DIR/benchmark_harness
 WL=$DIR/workload_a_zipfian.txt
 mkdir -p "$DIR/bench_records_2e" "$DIR/ops_csv_2e"

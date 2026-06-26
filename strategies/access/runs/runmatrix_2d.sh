@@ -3,7 +3,7 @@
 #   × Workload A/B/C × Layout 1a/1b/1c × {baseline, 2d} × 3 reps.
 # Emits CSV: workload,db,strategy,rep,first_query_us,avg_us,majflt,minflt
 set -u
-DIR=/home/u03/sqlite-research-project-sharing/prefetch_access/runs
+DIR=/home/u03/sqlite-research-project-sharing/strategies/access/runs
 BH=$DIR/benchmark_harness
 WL_A=$DIR/workload_a_zipfian.txt
 WL_B=$DIR/workload_b_uniform.txt

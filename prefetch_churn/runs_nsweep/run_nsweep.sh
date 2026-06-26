@@ -1,7 +1,7 @@
 #!/bin/bash
 # N-sweep on churned DB: baseline + N∈{1,5,10,20,46,92} × 10 checkpoints
 # Uses posix_fadvise (evict) instead of sudo drop_caches → comparable to
-# layout_rewriter/prefetch_slru harnesses but NOT to the original N=5 churn result.
+# pipeline/preparation/layout_rewriter/prefetch_slru harnesses but NOT to the original N=5 churn result.
 set -u
 DIR=/home/u03/sqlite-research-project-sharing/prefetch_churn
 RUNS=$DIR/runs_nsweep
@@ -37,8 +37,8 @@ EOF
  --work-db "$outdir/test_churn.db" \
  --classifier ./classify_pages \
  --benchmark-harness ./benchmark_harness \
- --benchmark-workload generated_workloads/page_churn_benchmark_high.txt \
- --write-workload generated_workloads/page_churn_write.txt \
+ --benchmark-workload generated_workloads/workload_c.txt \
+ --write-workload generated_workloads/workload_churn_write.txt \
  --drop-caches-script "$evict_script" \
  --prefetch-mode "$mode" $pages_arg \
  --prefetch-tool ./prefetch_layers \

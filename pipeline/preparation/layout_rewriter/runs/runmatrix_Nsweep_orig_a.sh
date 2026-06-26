@@ -1,9 +1,9 @@
 #!/bin/sh
 # A only N-sweep on Layout 1a (orig) to complete cross-layout matrix
 set -u
-DIR=/home/u03/sqlite-research-project-sharing/layout_rewriter/runs
-BH=/home/u03/sqlite-research-project-sharing/benchmark_harness/benchmark_harness
-WL_A=/home/u03/sqlite-research-project-sharing/benchmark_harness/workloads/workload_a_zipfian.txt
+DIR=/home/u03/sqlite-research-project-sharing/pipeline/preparation/layout_rewriter/runs
+BH=/home/u03/sqlite-research-project-sharing/pipeline/engine/benchmark_harness/benchmark_harness
+WL_A=/home/u03/sqlite-research-project-sharing/workloads/workload_a.txt
 mkdir -p "$DIR/bench_records_Nsweep_orig" "$DIR/ops_csv_Nsweep_orig"
 echo "workload,N,rep,first_query_us,avg_us,majflt,minflt"
 

@@ -1,11 +1,11 @@
-"""Figure 6: RAM-pressure ratio heatmap (20M cgroup / unlimited) — P0.
+"""Figure 6: RAM-pressure ratio heatmap (20M cgroup / unlimited).
 
 Story: for each (workload × layout × strategy), ratio of first-query latency under a
 20 MB cgroup MemoryMax vs unlimited RAM. Ratios near 1.0 → RAM pressure barely changes
 first-query — the dominant axis is workload, not RAM.
 
-Data (P0): unlimited = master batch p0_runs/summary_p0.csv; 20M = p0_runs_ram20m/
-summary_p0.csv (run under `systemd-run --user --scope -p MemoryMax=20M` via run_p0
+Data: unlimited = master batch results/main/summary.csv; 20M = results/ram20m/
+summary.csv (run under `systemd-run --user --scope -p MemoryMax=20M` via run_experiment
 --mem-limit). async arm, first-query median.
 """
 import csv
@@ -14,8 +14,8 @@ from plot_utils import ROOT, save
 import matplotlib.pyplot as plt
 import numpy as np
 
-UNLIM = ROOT / "p0_runs/summary_p0.csv"
-CAP   = ROOT / "p0_runs_ram20m/summary_p0.csv"
+UNLIM = ROOT / "results/main/summary.csv"
+CAP   = ROOT / "results/ram20m/summary.csv"
 LAYOUTS = ["orig", "vacuum", "ta"]
 LAYOUT_LBL = {"orig": "1a", "vacuum": "1b", "ta": "1c"}
 STRATS = ["layers_5", "layers_92", "2d", "2e_K10", "2e_K500", "2f_slru"]
@@ -56,7 +56,7 @@ for k in range(1, len(WORKLOADS)):
     ax.axvline(k * len(LAYOUTS) - 0.5, color="black", lw=1.0)
 cbar = fig.colorbar(im, ax=ax, fraction=0.025, pad=0.02)
 cbar.set_label("first-query latency ratio (20 MB cap / unlimited)")
-ax.set_title("RAM-pressure ratio · P0 (async first-q) · values near 1.0 → pressure barely matters",
+ax.set_title("RAM-pressure ratio (async first-q) · values near 1.0 → pressure barely matters",
              fontsize=11)
 fig.tight_layout()
 save(fig, "06_ram_pressure_heatmap")

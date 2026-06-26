@@ -1,29 +1,29 @@
 # --- Compiled binaries (sit next to .c sources) ---
-benchmark_harness/benchmark_harness
-classify_pages/classify_pages
-residency_checker/residency_checker
-layout_rewriter/layout_rewriter
-layout_rewriter/runs/evict
-layout_rewriter/runs/check_resident
-multiprocess/src/multiprocess_buffer_pool
-multiprocess/src/multiprocess_residency
-prefetch_vacuum/src/prefetch
-prefetch_vacuum/src/prefetch_layers
-prefetch_slru/src/prefetch_slru
-prefetch_slru/runs/benchmark_harness
-prefetch_slru/runs/evict
-prefetch_slru/runs/prefetch_layers
-prefetch_slru/runs/prefetch_slru
-prefetch_slru/runs/residency_checker
+pipeline/engine/benchmark_harness/benchmark_harness
+pipeline/preparation/classify_pages/classify_pages
+pipeline/engine/residency_checker/residency_checker
+pipeline/preparation/layout_rewriter/layout_rewriter
+pipeline/preparation/layout_rewriter/runs/evict
+pipeline/preparation/layout_rewriter/runs/check_resident
+legacy/multiprocess/src/multiprocess_buffer_pool
+legacy/multiprocess/src/multiprocess_residency
+legacy/prefetch_vacuum/src/prefetch
+legacy/prefetch_vacuum/src/prefetch_layers
+strategies/slru/src/prefetch_slru
+strategies/slru/runs/benchmark_harness
+strategies/slru/runs/evict
+strategies/slru/runs/prefetch_layers
+strategies/slru/runs/prefetch_slru
+strategies/slru/runs/residency_checker
 prefetch_churn/benchmark_harness
 prefetch_churn/classify_pages
 prefetch_churn/prefetch_layers
 prefetch_churn/residency_checker
 prefetch_churn/runs_nsweep/evict
-prefetch_access/src/prefetch_access
-prefetch_access/runs/benchmark_harness
-prefetch_access/runs/prefetch_access
-prefetch_access/runs/prefetch_slru
+strategies/access/src/prefetch_access
+strategies/access/runs/benchmark_harness
+strategies/access/runs/prefetch_access
+strategies/access/runs/prefetch_slru
 
 # --- Convenience symlinks to canonical workloads/ ---
 prefetch_churn/generated_workloads/
@@ -33,7 +33,7 @@ prefetch_churn/generated_workloads/
 *.so
 *.a
 
-# NOTE: benchmark_harness/sqlite3.c and sqlite3.h are vendored and DO get
+# NOTE: pipeline/engine/benchmark_harness/sqlite3.c and sqlite3.h are vendored and DO get
 # committed — pinning the SQLite version is essential for benchmark
 # reproducibility (a 3.x → 3.y bump could shift latencies).
 
@@ -45,11 +45,11 @@ prefetch_churn/generated_workloads/
 
 # --- Generated SQL patches (layout_rewriter emits this per-DB to fix
 #     sqlite_master.rootpage; regenerable by re-running layout_rewriter) ---
-layout_rewriter/runs/fix.sql
+pipeline/preparation/layout_rewriter/runs/fix.sql
 
 # --- Early prefetch_vacuum per-rep ops traces (same category as the global
 #     ops_*_r[0-9].csv rule below, just with the legacy naming missing _rN) ---
-prefetch_vacuum/results/ops_*.csv
+legacy/prefetch_vacuum/results/ops_*.csv
 
 # --- Benchmark run artifacts ---
 bench_records/
@@ -124,15 +124,15 @@ prefetch_churn/runs_nsweep_full_c/n*/evict.sh
 prefetch_churn/runs_nsweep_full_c/n*/test_churn.db*
 
 # Clean-DB full N-sweep matrix intermediates (final = full_{orig,vacuum,ta}.csv)
-layout_rewriter/runs/nsweep_full/bench_records/
-layout_rewriter/runs/nsweep_full/ops_csv/
-layout_rewriter/runs/nsweep_full/run_all.log
+pipeline/preparation/layout_rewriter/runs/nsweep_full/bench_records/
+pipeline/preparation/layout_rewriter/runs/nsweep_full/ops_csv/
+pipeline/preparation/layout_rewriter/runs/nsweep_full/run_all.log
 
 # Multi-process prefetch cadence: rec/ holds per-probe benchmark_harness records
 # + 100-line workload slices, regenerable from cadence_experiment.py
-multiprocess/runs_prefetch_cadence/rec/
-multiprocess/runs_prefetch_cadence/work*.db
-multiprocess/runs_prefetch_cadence/cadence_run*.log
+legacy/multiprocess/runs_prefetch_cadence/rec/
+legacy/multiprocess/runs_prefetch_cadence/work*.db
+legacy/multiprocess/runs_prefetch_cadence/cadence_run*.log
 
 # Page-split churn per-checkpoint intermediates (final = staleness_summary.csv /
 # benchmark_summary.csv / interior_summary.csv + scripts + README)
@@ -145,35 +145,28 @@ prefetch_churn/runs_page_split/driver.log
 
 # prefetch_warmer build artifacts + run intermediates (final = ablation_raw.csv /
 # ablation_summary.txt / hotset_*.csv / scripts + README)
-prefetch_warmer/src/warmer
-prefetch_warmer/src/test_page_classify
-prefetch_warmer/runs/classify.csv
-prefetch_warmer/runs/ablation_driver.log
+pipeline/engine/prefetch_warmer/src/warmer
+pipeline/engine/prefetch_warmer/src/test_page_classify
+pipeline/engine/prefetch_warmer/runs/classify.csv
+pipeline/engine/prefetch_warmer/runs/ablation_driver.log
 
 .claude/
 
 __pycache__/
 # trav_bench compiled binary (L3/L4 VFS bench; rebuild from trav_bench.c)
-prefetch_warmer/src/trav_bench
+pipeline/engine/prefetch_warmer/src/trav_bench
 
-# --- P0 master batch (run_p0.py): keep raw_p0.csv / summary_p0.csv / env.txt /
-#     hotset_freeze.sha256; ignore the bulky per-cell intermediates (~3 GB) ---
-p0_runs/work/
-p0_runs/regen_work/
-# P1 hotset backups from --regen-hotsets (old versions live in git history)
+# --- experiment batches (run_experiment.py): keep raw.csv / summary.csv / env.txt /
+#     hotset_freeze.sha256; ignore the bulky per-cell intermediates (~3 GB each) ---
+# hotset backups from --regen-hotsets (old versions live in git history)
+*.orig.bak
 *.p1.bak
+results*_matrix.log
 
-# --- P0 sweep batches (N-sweep / K-sweep): keep CSVs, ignore intermediates ---
-p0_runs_nsweep/work/
-p0_runs_nsweep/regen_work/
-p0_runs_ksweep/work/
-p0_runs_ksweep/regen_work/
-p0_runs*_matrix.log
+# all result outdirs (results/main, results/nsweep, ...): keep CSVs, ignore intermediates
+results/*/work/
+results/*/regen_work/
 
-# all P0 sweep outdirs: keep CSVs, ignore intermediates
-p0_runs*/work/
-p0_runs*/regen_work/
-
-# md_to_pdf.py outputs
+# tools/md_to_pdf.py outputs (written next to the source .md = repo root)
 REPORT.pdf
 _md2pdf_cjk.ttf

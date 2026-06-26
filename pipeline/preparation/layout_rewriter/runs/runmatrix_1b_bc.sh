@@ -2,10 +2,10 @@
 # Strategy 1b (VACUUM) × Workload B (uniform) and C (high-key uniform)
 # Emits CSV: workload,db,strategy,rep,first_query_us,avg_us,majflt,minflt
 set -u
-DIR=/home/u03/sqlite-research-project-sharing/layout_rewriter/runs
-BH=/home/u03/sqlite-research-project-sharing/benchmark_harness/benchmark_harness
-WL_B=/home/u03/sqlite-research-project-sharing/benchmark_harness/workloads/workload_uniform.txt
-WL_C=/home/u03/sqlite-research-project-sharing/prefetch_churn/workloads/page_churn_benchmark_high.txt
+DIR=/home/u03/sqlite-research-project-sharing/pipeline/preparation/layout_rewriter/runs
+BH=/home/u03/sqlite-research-project-sharing/pipeline/engine/benchmark_harness/benchmark_harness
+WL_B=/home/u03/sqlite-research-project-sharing/workloads/workload_b.txt
+WL_C=/home/u03/sqlite-research-project-sharing/workloads/workload_c.txt
 mkdir -p "$DIR/bench_records_1b_bc" "$DIR/ops_csv_1b_bc"
 echo "workload,db,strategy,rep,first_query_us,avg_us,majflt,minflt"
 

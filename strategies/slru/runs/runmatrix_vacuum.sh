@@ -2,7 +2,7 @@
 # Strategy 2f SLRU × Workload A/B/C × Layout 1b (VACUUM DB)
 # 2 strategies (baseline, slru) × 3 workloads × 3 reps = 18 runs
 set -u
-DIR=/home/u03/sqlite-research-project-sharing/prefetch_slru/runs
+DIR=/home/u03/sqlite-research-project-sharing/strategies/slru/runs
 DB="$DIR/test_vacuum.db"
 REPS=3
 RESULTS="$DIR/matrix_vacuum_results.csv"

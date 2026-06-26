@@ -7,7 +7,7 @@ split and move their rows to other pages, so a key that used to live on a frozen
 page may now live somewhere else — the frozen list goes stale.
 
 This reuses the rowid->leaf mapping trick from
-`prefetch_access/runs/gen_hotleaves.py`: every rowid-table leaf stores its rows
+`strategies/access/runs/gen_hotleaves.py`: every rowid-table leaf stores its rows
 in sorted order, so the page that owns key `k` is the last leaf whose first
 rowid <= k (binary search over each leaf's first rowid).
 

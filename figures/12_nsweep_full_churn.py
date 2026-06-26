@@ -1,10 +1,10 @@
-"""Figure 12: layers_N sweep on a CHURNED DB (A/B/C) — P0.
+"""Figure 12: layers_N sweep on a CHURNED DB (A/B/C).
 
 Story: companion to figure 11 (clean DB). After 50k churn ops, re-run the layers_N
 sweep (static t=0 layers hotsets) on the churned DB. Confirms the plateau shape
 survives churn. N=0 = no-prefetch baseline on the churned DB.
 
-Data (P0): p0_runs_churn/churn_nsweep.csv — measurement via run_p0 on the final
+Data: results/churn/churn_nsweep.csv — measurement via run_experiment on the final
 churned DB (after 50k mutation ops), layout=orig, async first-query (median of 3).
 """
 import csv
@@ -12,7 +12,7 @@ from collections import defaultdict
 from plot_utils import ROOT, WORKLOAD_COLORS, save
 import matplotlib.pyplot as plt
 
-CSVP = ROOT / "p0_runs_churn/churn_nsweep.csv"
+CSVP = ROOT / "results/churn/churn_nsweep.csv"
 data = defaultdict(dict)   # workload -> {N: fq}  (layout orig headline; CSV also has vacuum/ta)
 for r in csv.DictReader(open(CSVP)):
     if r.get("layout", "orig") != "orig":
@@ -32,6 +32,6 @@ ax.set_xlabel("N (interior pages prefetched; N=0=baseline)")
 ax.set_ylabel("first-query latency (µs, async, median)")
 ax.set_ylim(0, max((max(d.values()) for d in data.values() if d), default=1) * 1.1)
 ax.legend(loc="upper right")
-ax.set_title("layers_N plateau on CHURNED DB (after 50k churn ops) · layout orig · P0")
+ax.set_title("layers_N plateau on CHURNED DB (after 50k churn ops) · layout orig")
 fig.tight_layout()
 save(fig, "12_nsweep_full_churn")

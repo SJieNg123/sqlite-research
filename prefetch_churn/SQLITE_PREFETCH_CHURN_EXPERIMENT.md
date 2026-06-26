@@ -58,12 +58,12 @@ make
 python3 sqlite_prefetch_churn_experiment.py \
   --force \
   --run-benchmarks \
-  --write-workload generated_workloads/page_churn_write.txt \
+  --write-workload generated_workloads/workload_churn_write.txt \
   --drop-caches-script /usr/local/bin/dropcache.sh \
   --prefetch-mode layers \
   --prefetch-pages 5 \
   --benchmark-cold-advice none \
-  --benchmark-workload generated_workloads/page_churn_benchmark_high.txt
+  --benchmark-workload generated_workloads/workload_c.txt
 ```
 
 `--benchmark-cold-advice none` 很重要。冷啟動由 `benchmark_harness` 在 SQLite open/prepare 之後呼叫 `dropcache.sh` 完成，接著透過 `post_cold_<label>.sh` 執行 prefetch；如果讓 `benchmark_harness` 再做 madvise cold advice，就可能把 prefetch 結果清掉。
@@ -89,12 +89,12 @@ residency_after outside the memory-limited scope
 python3 sqlite_prefetch_churn_experiment.py \
   --force \
   --run-benchmarks \
-  --write-workload generated_workloads/page_churn_write.txt \
+  --write-workload generated_workloads/workload_churn_write.txt \
   --drop-caches-script /usr/local/bin/dropcache.sh \
   --prefetch-mode layers \
   --prefetch-pages 5 \
   --benchmark-cold-advice none \
-  --benchmark-workload generated_workloads/page_churn_benchmark_high.txt \
+  --benchmark-workload generated_workloads/workload_c.txt \
   --systemd-memory-max 512M
 ```
 
@@ -110,7 +110,7 @@ benchmark_harness -> drop cache -> prefetch -> residency snapshot -> query bench
 
 ```bash
 systemd-run --user --scope -p MemoryMax=512M \
-  ./benchmark_harness --db test.db --workload generated_workloads/page_churn_benchmark_high.txt
+  ./benchmark_harness --db test.db --workload generated_workloads/workload_c.txt
 ```
 
 ## Workloads
@@ -119,8 +119,8 @@ The experiment has two primary workload inputs:
 
 | workload | default | role |
 | --- | --- | --- |
-| `--write-workload` | `generated_workloads/page_churn_write.txt` | Mutates the DB between checkpoints. This file can contain `read`, `update`, `insert`, `scan`, and `readmodifywrite`; `readmodifywrite` is mapped by `--rmw-action`, defaulting to `delete`. |
-| `--benchmark-workload` | `generated_workloads/page_churn_benchmark_high.txt` | Read-only workload used by `benchmark_harness` to measure cold-start latency. `first_query_latency_us` comes from this file's first operation. |
+| `--write-workload` | `generated_workloads/workload_churn_write.txt` | Mutates the DB between checkpoints. This file can contain `read`, `update`, `insert`, `scan`, and `readmodifywrite`; `readmodifywrite` is mapped by `--rmw-action`, defaulting to `delete`. |
+| `--benchmark-workload` | `generated_workloads/workload_c.txt` | Read-only workload used by `benchmark_harness` to measure cold-start latency. `first_query_latency_us` comes from this file's first operation. |
 
 `--workload` remains as a backward-compatible alias for `--write-workload`.
 `--insert-workload` is a legacy optional third stream and is disabled by default.
@@ -199,7 +199,7 @@ sqlite_page_churn_runs/prefetch_perpage/
 | `--benchmark-cold-advice` | `none` | 傳給 harness 的 cold advice 模式 |
 | `--benchmark-sqlite-open-timing` | `before-cold` | SQLite open 在 drop cache 前完成 |
 | `--benchmark-schema-init-timing` | `before-cold` | prepared statements 在 drop cache 前完成 |
-| `--benchmark-workload` | `generated_workloads/page_churn_benchmark_high.txt` | benchmark query workload |
+| `--benchmark-workload` | `generated_workloads/workload_c.txt` | benchmark query workload |
 | `--systemd-memory-max` | 無 | 以 `systemd-run --user --scope -p MemoryMax=<value>` 執行每輪 cold-start measurement segment |
 
 ## 注意事項

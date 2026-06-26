@@ -9,7 +9,7 @@ Tests gap B2 from the audit: 之前 N sweep × churn 只在 Workload C (high-key
 
 - DB: `test.db` (600k rows × ~100 B = 103 MB, scatter 0.96)
 - Reads: `workload_b_uniform.txt` (100k uniform reads on keys [1, 99999])
-- Writes per checkpoint: `page_churn_write.txt` (5,000-op chunk;
+- Writes per checkpoint: `workload_churn_write.txt` (5,000-op chunk;
   30% update / 20% insert / 20% rmw→delete / 20% read / 10% scan)
 - Strategies: layers_N (file-offset based, prefetch 前 N 個 interior pages)
 - Evict: `posix_fadvise(POSIX_FADV_DONTNEED)` via `runs_nsweep/evict`

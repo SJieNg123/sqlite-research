@@ -1,1 +1,1 @@
-../../../layout_rewriter/runs/cold_vacuum.sh
+../../../pipeline/preparation/layout_rewriter/runs/cold_vacuum.sh
