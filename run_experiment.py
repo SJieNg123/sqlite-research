@@ -88,6 +88,35 @@ WORKLOADS = {
 }
 SLRU_SUFFIX = {"orig": "", "vacuum": "_vacuum", "ta": "_ta"}
 
+# --seed N: run the whole matrix against the seed-N workload variants
+# (workloads/workload_<key>_<N>.txt) with per-seed outputs and per-seed hotset files,
+# so a 10-seed workload-sensitivity sweep never clobbers the master (seed-less) data.
+# None => default behavior, every path below is unchanged.
+SEED = None
+
+
+def _seed_suffix():
+    return f"_seed{SEED}" if SEED is not None else ""
+
+
+def apply_seed(args):
+    """Repoint workloads / outdir / freeze manifest to the --seed N variant, in place.
+    No-op when --seed is absent. Hotset filenames pick up the suffix via _seed_suffix()."""
+    global SEED, FREEZE_PATH
+    seed = getattr(args, "seed", None)
+    if seed is None:
+        return
+    SEED = seed
+    for k in WORKLOADS:
+        p = ROOT / f"workloads/workload_{k.lower()}_{seed}.txt"
+        if not p.exists():
+            sys.exit(f"--seed {seed}: missing workload file {p} "
+                     f"(generate it with workloads/gen_workload.py)")
+        WORKLOADS[k] = p
+    if args.outdir == str(ROOT / "results/main"):       # default -> per-seed tree
+        args.outdir = str(ROOT / f"results/seeds/seed{seed:02d}")
+    FREEZE_PATH = Path(args.outdir) / "hotset_freeze.sha256"
+
 # Each strategy = a rule that selects page numbers; the runner joins them with
 # classify to make a warmer-format hotset. kind dispatches in select_pages().
 STRATEGIES = [
@@ -176,23 +205,37 @@ def _resident_pages(path):
     return pages
 
 
+def _require_hotset(src):
+    """Fail with an actionable message (not a bare traceback) when a strategy's
+    residency input is absent -- the common case for a fresh --seed before regen."""
+    if Path(resolve_pointer(src)).exists():
+        return src
+    hint = ("" if SEED is None else
+            f"\n  per-seed hotsets not built yet -- run "
+            f"`python3 run_experiment.py run --seed {SEED} --regen-hotsets --yes` first")
+    sys.exit(f"missing hotset input: {src}{hint}")
+
+
 def select_pages(strat, w, layout, classify):
     """Return the set of page numbers a strategy selects for this cell."""
     kind = strat["kind"]
-    if kind == "layers":
+    if kind == "layers":              # structural: classify only, seed-independent
         interior = sorted((off, pn) for pn, (t, off) in classify.items()
                           if t.startswith("interior"))
         return {pn for _, pn in interior[: strat["n"]]}
     if kind == "resident_interior":   # 2d: resident interior pages
-        src = ACCESS_RUNS / f"hotpages_{w.lower()}{SLRU_SUFFIX[layout]}.csv"
-        res = _resident_pages(src)
+        # seeded base files live only at the canonical SLRU location (no access-symlink);
+        # unseeded 2d keeps reading via the access-runs symlink to the same file.
+        root = SLRU_RUNS if SEED is not None else ACCESS_RUNS
+        src = root / f"hotpages_{w.lower()}{SLRU_SUFFIX[layout]}{_seed_suffix()}.csv"
+        res = _resident_pages(_require_hotset(src))
         return {pn for pn in res if classify.get(pn, ("", 0))[0].startswith("interior")}
     if kind == "hot2e":               # 2e_K: curated interior + top-K leaves
-        src = ACCESS_RUNS / f"hot2e_{w}_{layout}_K{strat['k']}.csv"
-        return _resident_pages(src)
+        src = ACCESS_RUNS / f"hot2e_{w}_{layout}_K{strat['k']}{_seed_suffix()}.csv"
+        return _resident_pages(_require_hotset(src))
     if kind == "slru":                # 2f: whole resident working set
-        src = SLRU_RUNS / f"hotpages_{w.lower()}{SLRU_SUFFIX[layout]}.csv"
-        return _resident_pages(src)
+        src = SLRU_RUNS / f"hotpages_{w.lower()}{SLRU_SUFFIX[layout]}{_seed_suffix()}.csv"
+        return _resident_pages(_require_hotset(src))
     raise ValueError(f"unknown strategy kind: {kind}")
 
 
@@ -426,8 +469,8 @@ def regen_hotsets(args):
     layouts = [x for x in args.db.split(",") if x]
     ks = [int(x) for x in args.regen_k.split(",") if x]
 
-    base_for = lambda w, ly: SLRU_RUNS / f"hotpages_{w.lower()}{SLRU_SUFFIX[ly]}.csv"
-    hot2e_for = lambda w, ly, k: ACCESS_RUNS / f"hot2e_{w}_{ly}_K{k}.csv"
+    base_for = lambda w, ly: SLRU_RUNS / f"hotpages_{w.lower()}{SLRU_SUFFIX[ly]}{_seed_suffix()}.csv"
+    hot2e_for = lambda w, ly, k: ACCESS_RUNS / f"hot2e_{w}_{ly}_K{k}{_seed_suffix()}.csv"
 
     print(f"# regen cold-clear hotsets  workloads={wls} layouts={layouts} K={ks}")
     print(f"{'cell':10} {'base file':28} {'old_resident':>12}")
@@ -609,6 +652,9 @@ def add_run_parser(sub):
     ap.add_argument("--baseline-reps", type=int, default=10, help="no-prefetch baseline reps per (workload,db)")
     ap.add_argument("--no-baseline", action="store_true", help="skip the no-prefetch baseline arm")
     ap.add_argument("--outdir", default=str(ROOT / "results/main"))
+    ap.add_argument("--seed", type=int, default=None,
+                    help="run against seed-N workload variants (workloads/workload_<k>_<N>.txt); "
+                         "default outdir -> results/seeds/seedNN, per-seed hotsets + freeze manifest")
     ap.add_argument("--ra-kb", type=int, default=128, help="read_ahead_kb to pin via env.sh")
     ap.add_argument("--cpu", type=int, default=2, help="core the harness pins itself to via sched_setaffinity (-1 = no pin)")
     ap.add_argument("--warm-cpu-ms", type=int, default=10, help="busy-spin the pinned core this long before op[0]")
@@ -629,6 +675,7 @@ def add_run_parser(sub):
 
 
 def cmd_run(args):
+    apply_seed(args)          # --seed N: repoint workloads/outdir/freeze/hotsets (no-op if unset)
     if args.verify_frozen:
         return verify_frozen(args)
     if args.regen_hotsets:
