@@ -16,6 +16,32 @@
 
 ---
 
+## 資料可比性（先讀）— 跨表/策略/workload 怎麼比才對
+
+各批資料**在不同日期、不同機器狀態下量測**。用 machine-independent 的 `2f_slru` first-query 當錨點
+(它載整個 working set,first-q 只看當下 CPU 狀態,與 workload 無關)可看出至少 **4 個狀態群**:
+
+| 來源 | 日期 | `2f_slru` 錨點 | 狀態群 |
+|---|---|--:|---|
+| `nsweep` / `nsweep_dense` / `ksweep` / `ram20m` | 06-22 | ~110µs | ① 較快 |
+| `z` | 06-23 | 119µs | ② 中間 |
+| **`main`(master)** / `seeds/seed01–10` | 06-24 / 27 | 126–127µs | ③ 基準 |
+| `size_1gb` / `seeds_1gb` | 06-28 | 96–98µs | ④ 最快 |
+
+**規則:**
+- ✅ **相對量跨任何表/策略/workload 都可比** —— `impr%`(相對同批 baseline)、跨-seed `Δ% + CI`、RAM `ratio`、
+  churn 各 checkpoint 演化。**本報告所有結論都建立在相對量上,不受機器狀態影響。**
+- ✅ **絕對 µs 只在「同狀態群內」可比** —— 例:`main`↔`seeds`(群③同尺度,故跨-seed 對 master 比對有效);
+  `size_1gb`↔`seeds_1gb`(群④);1gb 的 100MB 對照基準用**同批 `orig` 列**(見 DB 尺寸 scaling 章)。
+- ⚠️ **絕對 µs 跨群勿逐格對** —— 同一個量測 `layers_92 A/orig` 在 master(群③)= **393µs**、在 nsweep(群①)= **333µs**,
+  15% 差**純機器狀態**;`z`(群②)整列比 A/B/C(群③)低 ~6%;`size_1gb`(群④)比 master 低 ~25%。這些都不是真效應。
+
+> **特別注意 RAM-pressure 表**:其 ratio 必須用**同 session 的 unconfined** 當分母。表上 ~1.0 是當年對「同期(06-22)unconfined」算的(正確);
+> 但**現在的 `results/main` 是 06-24 重跑(群③,慢 ~15%)**,若拿它當分母重算會得 ~0.85——那 0.85 是機器狀態假象,不是記憶體壓力效應。
+> (`figures/06_ram_pressure_heatmap.py` 註解寫「unlimited = results/main」已過時,同理。)
+
+---
+
 <!-- MASTER-RESULTS-START -->
 ## master batch 結果
 
@@ -227,7 +253,8 @@
 
 ## RAM-pressure（cgroup MemoryMax=20M / unlimited 比值,async first-q）
 
-> 來源 [`results/ram20m/`](results/ram20m/summary.csv) ÷ master。比值近 1.0 → 壓力幾乎不影響。
+> 來源 [`results/ram20m/`](results/ram20m/summary.csv)(20M cgroup)÷ **同期(06-22)unconfined** baseline。比值近 1.0 → 壓力幾乎不影響。
+> ⚠️ 分母**必須是同 session** 的 unconfined run(群①);**勿** ÷ 現在的 `results/main`(06-24 重跑、群③、慢 ~15%)——那會得 ~0.85 的**機器狀態假象**,非壓力效應。詳見上方「資料可比性」。
 
 | workload×layout | layers_5 | layers_92 | 2d | 2e_K10 | 2e_K500 | 2f_slru |
 |---|--:|--:|--:|--:|--:|--:|
