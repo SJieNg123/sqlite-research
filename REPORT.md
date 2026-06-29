@@ -810,6 +810,33 @@ layout 槓桿(orig→ta)只改 deliver 成本、不改上述 selection 故事:ta
 
 > **命名校正(回應 R2 W4 / CONSENSUS-2 #9)**:本框架其實同時用了**兩個** selection 槓桿——**page-type 感知**(選 interior,扛 uniform B 與 A 的主力)與 **access-frequency 感知**(選熱 leaf,解鎖 C 的 headline)。單用「page-type-aware」命名會低估後者;準確說法是 **type-aware(interior)＋ access-frequency-aware(hot leaf)的複合 targeting**。
 
+#### 5.4.2 競爭性 baseline：targeted vs 調校過的 ranked dump（RR1 / S4）
+
+§5.5 會說「cache-dump（2f_slru）e2e 輸」,但 2f_slru 是**最 naive 的 blind full-dump**（載整份 ~4400 page working set）。為排除「我們只是贏了稻草人」的質疑,我們補一個**調校過的競爭對手 `2f_topN`**：把 resident working set 按 **traversal frequency** 排序、只 dump 前 N 個（InnoDB `innodb_buffer_pool_dump_pct` 的類比，**完全不用 page-type 知識**——`strategies/access/runs/gen_freqdump.py` replay 每筆 read 的 B+tree root→leaf path 計次）。N 掃 {14, 28, 100, 500, full}，放進同一 e2e accounting，10-seed bootstrap CI。
+
+e2e_warm Δ% vs baseline（async、orig、跨 10 seed mean [95% CI]，footprint = 頁數）：
+
+| arm | footprint | A | B | C |
+|---|---:|---:|---:|---:|
+| **2e_K10**（targeted） | 14–28 | **−38 [−53,−25]** | **−24 [−31,−12]** | **−72 [−74,−71]** |
+| 2f_top14（ranked dump） | 14 | −33 [−43,−24] | −27 [−34,−16] | −57 [−68,−45] |
+| 2f_top28 | 28 | −37 [−52,−24] | −26 [−32,−16] | −60 [−69,−49] |
+| 2f_top100 | 100 | −32 [−45,−19] | −18 [−32,−4] | −52 [−60,−42] |
+| 2f_top500 | 500 | **+81 [34,151]** | **+44 [28,60]** | −13 [−17,−8] |
+| 2f_slru（full dump） | ~4400 | **+762 [674,899]** | **+730 [644,848]** | −12 [−17,−7] |
+
+三個結論：
+
+1. **cost-accounting headline 不靠稻草人**：e2e_warm 隨 dump footprint **單調惡化**——full dump 在 A/B 爆到 **+730 ~ +762%**，唯有**小而排序的 partial dump 才贏**（sweet spot 在 N≈14–28）。「dump 整份」輸的不是 dump 機制本身、而是 **dump 太多**；這正是本研究 cost-accounting 要量化的 deliver trade-off。
+2. **broad workload（A/B）：page-type 非必要**——tuned `2f_topN`（純頻率、零 page-type）在 matched footprint 下**追平** `2e_K10`（A `2e_K10` −38% vs `2f_top28` −37%、B −24% vs `2f_top14` −27%，CI 重疊；first-q 亦同）。與 §5.4.1 ablation 一致：有效的是 **access-frequency**、不是 page-type。
+3. **narrow workload（C）：page-type 仍有價值**——`2e_K10` **−72% [−74,−71]** robustly 勝過 matched `2f_top14` **−57% [−68,−45]**（CI 分離；first-q −81% vs −65% 亦然），且 `2f_top28/100` 加大預算也追不上。機制：C 的 query 很窄，純頻率 top-14 只挑到 **2 個**最熱 interior，而 `2e_K10` 用 page-type 知識**保證載入整個 interior skeleton（4 個）**，在跨 seed 抽樣下對 path coverage 更 robust。
+
+> **綜合**：`2e_K10` **從未被任何 tuned dump 打敗**（broad A/B 打平、narrow C 勝），故 §5.5「targeted > dump」結論**成立且非稻草人勝**。但機制歸因要精確——**勝利主要來自「小 footprint + frequency ranking」（這點 page-type 與純頻率等價），page-type 的額外價值在 narrow workload 下保證 path coverage 的 robustness**。完整表見 [overall_results.md](https://github.com/wongzinc/sqlite-research-project-sharing/blob/main/overall_results.md)「競爭性 baseline」節。
+
+![競爭性 baseline：tuned ranked dump vs targeted](figures/out/18_competitive_baseline.png)
+
+*圖 18：competitive baseline（10-seed mean Δ%、bootstrap 95% CI）。x = dump footprint（頁、log）；`2f_topN`（線）= 純頻率 ranked partial dump，`2e_K10`（★）= page-type＋frequency targeted。**右（e2e_warm）**：footprint 一大、deliver 成本就吃掉一切——full dump（~4400 頁）在 A/B 爆到 +700~800%；小而排序的 dump 才在 0 線下。**★ 落在 A/B 的 partial-dump curve 上（page-type 非必要），但 C 的紅★明顯低於紅線（narrow workload 上 page-type 仍勝）**。*
+
 ### 5.5 The preprocessing trade-off （本研究的核心觀察）
 
 前面所有 first-q numbers 都**只算 SQL 第一筆 query 的時間**，但 prefetch 自己也要時間。

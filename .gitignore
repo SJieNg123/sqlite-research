@@ -196,3 +196,9 @@ results/ablation/*.log
 results/ablation_k500/*/work/
 results/ablation_k500/*/regen_work/
 results/ablation_k500/*.log
+
+# --- RR1/S4 competitive baseline (2f_topN): keep per-seed CSVs + uncertainty;
+#     ignore the bulky per-cell work/ scratch ---
+results/competitive/*/work/
+results/competitive/*/regen_work/
+results/competitive/*.log

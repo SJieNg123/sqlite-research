@@ -310,6 +310,41 @@
 
 → 命名校正:本框架是 **type-aware(interior)＋ access-frequency-aware(hot leaf) 的複合 targeting**;page-type 扛 B/A 主力、access-frequency 解鎖 C headline。圖見 [figures/out/17_lever_ablation.png](figures/out/17_lever_ablation.png)。
 
+## 競爭性 baseline（RR1 / S4：targeted vs 調校過的 ranked dump）
+
+> 來源 [`results/competitive/`](results/competitive/)；`2f_topN` 由 [`strategies/access/runs/gen_freqdump.py`](strategies/access/runs/gen_freqdump.py) 產（replay 每筆 read 的 B+tree path 計次、按頻率排序 resident WS 取前 N，**不用 page-type**），CI 由 `tools/stats_uncertainty.py` 出。
+> 問題：§5.5 的「targeted > dump」是「機制贏」還是只是「dump 少一點」？對照 `2f_topN`（tuned ranked partial dump）掃 footprint {14,28,100,500,full}，同 e2e accounting、10-seed CI。
+
+跨 10 seed mean Δ% vs 同 seed baseline [95% CI]（async、orig；皆 robust）：
+
+### first-query
+
+| arm（footprint） | A | B | C |
+|---|---:|---:|---:|
+| 2e_K10（targeted, 14–28p） | −50 [−64,−38] | −35 [−42,−25] | −81 [−82,−80] |
+| 2f_top14 | −42 [−52,−35] | −36 [−43,−27] | −65 [−76,−53] |
+| 2f_top28 | −49 [−63,−37] | −37 [−43,−29] | −70 [−80,−59] |
+| 2f_top100 | −56 [−68,−44] | −41 [−53,−30] | −70 [−80,−60] |
+| 2f_top500 | −16 [−62,+58] | −50 [−63,−37] | −90 [−90,−90] |
+| 2f_slru（full） | −88 [−89,−86] | −89 [−90,−87] | −90 [−90,−90] |
+
+### e2e_warm（本研究主張的部署模型）
+
+| arm（footprint） | A | B | C |
+|---|---:|---:|---:|
+| **2e_K10（targeted, 14–28p）** | **−38 [−53,−25]** | **−24 [−31,−12]** | **−72 [−74,−71]** |
+| 2f_top14 | −33 [−43,−24] | −27 [−34,−16] | −57 [−68,−45] |
+| 2f_top28 | −37 [−52,−24] | −26 [−32,−16] | −60 [−69,−49] |
+| 2f_top100 | −32 [−45,−19] | −18 [−32,−4] | −52 [−60,−42] |
+| 2f_top500 | **+81 [+34,+151]** | **+44 [+28,+60]** | −13 [−17,−8] |
+| 2f_slru（full, ~4400p） | **+762 [+674,+899]** | **+730 [+644,+848]** | −12 [−17,−7] |
+
+**讀法：**
+1. **first-q 看 footprint 越大越低**（2f_slru 全載 → −88~90% 最低），但 **e2e_warm 越大越糟**（deliver 成本）——正是 §5.5「first-q ≠ e2e」的 trade-off。sweet spot 在小 footprint（N≈14–28）。
+2. **broad A/B**：tuned `2f_topN`（純頻率）在 matched footprint 下 e2e_warm **追平** `2e_K10`（CI 重疊）→ **page-type 非必要**，與 §5.4.1 ablation 一致。
+3. **narrow C**：`2e_K10` −72%[−74,−71] **robustly 勝** matched `2f_top14` −57%[−68,−45]（CI 分離）→ page-type 用「保證載入 interior skeleton」在窄 workload 提供 robustness（純頻率 top-14 只挑到 2 個 interior）。
+4. **結論**：`2e_K10` **從未被 tuned dump 打敗**（A/B 平、C 勝）→ §5.5 非稻草人勝；機制歸因＝「**小 footprint + frequency ranking**」為主、page-type 在 narrow workload 加 robustness。圖見 [figures/out/18_competitive_baseline.png](figures/out/18_competitive_baseline.png)。
+
 ## RAM-pressure（cgroup MemoryMax=20M / unlimited 比值,async first-q）
 
 > 來源 [`results/ram20m/`](results/ram20m/summary.csv)(20M cgroup)÷ **同期(06-22)unconfined** baseline。比值近 1.0 → 壓力幾乎不影響。

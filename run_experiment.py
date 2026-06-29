@@ -157,6 +157,12 @@ def resolve_strategy(name):
     m = re.fullmatch(r"leaf_rand_K(\d+)", name)
     if m:
         return {"name": name, "kind": "leaf_rand", "k": int(m.group(1))}
+    # RR1/S4 competitive baseline: frequency-ranked PARTIAL dump (InnoDB dump_pct
+    # analog). Ranks the resident working set by traversal frequency, dumps top-N --
+    # no page-type knowledge. Tells "targeted mechanism" apart from "dump fewer".
+    m = re.fullmatch(r"2f_top(\d+)", name)
+    if m:
+        return {"name": name, "kind": "freqdump", "n": int(m.group(1))}
     raise ValueError(f"unknown strategy: {name}")
 
 # --------------------------------------------------------------------------- parsing
@@ -264,6 +270,9 @@ def select_pages(strat, w, layout, classify):
         # deterministic per (seed, workload, layout, K) so the control is frozen/reproducible
         rng = random.Random(f"leafrand|{SEED}|{w}|{layout}|{strat['k']}")
         return set(rng.sample(pool, min(len(top_leaves), len(pool))))
+    if kind == "freqdump":            # 2f_topN: frequency-ranked partial dump (RR1/S4)
+        src = ACCESS_RUNS / f"freqdump_{w}_{layout}_N{strat['n']}{_seed_suffix()}.csv"
+        return _resident_pages(_require_hotset(src))
     if kind == "slru":                # 2f: whole resident working set
         src = SLRU_RUNS / f"hotpages_{w.lower()}{SLRU_SUFFIX[layout]}{_seed_suffix()}.csv"
         return _resident_pages(_require_hotset(src))

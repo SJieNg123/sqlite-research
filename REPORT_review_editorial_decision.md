@@ -120,7 +120,7 @@
 ## Revision Roadmap
 
 ### Round 2 — 本輪必改/建議
-- [ ] RR1 競爭性 partial-dump baseline（`2f_topN`）— **= open S4**，需新實驗
+- [x] RR1 競爭性 partial-dump baseline（`2f_topN`）— **= S4 完成**。新增 frequency-ranked partial dump `2f_topN`（`gen_freqdump.py` replay B+tree path 計次、按頻率排序 resident WS、**不用 page-type**），掃 footprint {14,28,100,500,full}、同 e2e accounting、10-seed CI（`tools/competitive_baseline.sh` → `results/competitive/`）。**結論**：(1) e2e_warm 隨 footprint 單調惡化、full dump A/B 爆 +730~762% → cost-accounting headline **非稻草人勝**、sweet spot 在小 footprint；(2) **broad A/B：tuned `2f_topN` 追平 `2e_K10`（CI 重疊）→ page-type 非必要**（與 §5.4.1 一致）；(3) **narrow C：`2e_K10` −72%[−74,−71] robustly 勝 matched `2f_top14` −57%[−68,−45]（CI 分離）→ page-type 保證 interior skeleton、在窄 workload 加 robustness**；(4) `2e_K10` 從未被 tuned dump 打敗。機制歸因精確化為「小 footprint + frequency ranking 為主、page-type 在 narrow workload 加值」。新 §5.4.2 + 圖 18 + overall_results「競爭性 baseline」節；`{gen_freqdump.py, competitive_baseline.sh, 18_competitive_baseline.py}`。
 - [x] RR2 收斂「首個」novelty 用詞 — Abstract + §1-C3 改為「把 prefetch preprocessing 拆解到 OS-syscall 粒度（open/deliver）+ pread-oracle 隔離 + 兩部署模型對齊」；明述「貢獻在粒度與對齊、非首次意識到成本」
 - [x] RR3 Abstract 重平衡 — 拆成 4 段（problem+scope / method / findings / robustness+scope）；A/B 改用 cross-seed CI（A 2e_K10 −36%[−50,−23]、B 2d −25%[−32,−16]、C 2e_K10 −70%[−72,−69]）；明標 structural layers_5 在 A/B 為 tie/directional 不可恃；§8 結論同步改寫
 - [x] RR4 framing 收斂到 commodity-NVMe / serverless — Abstract 首句以 serverless/microservice/桌面 app 冷啟領銜；mobile/IoT 明標為 motivating context、非 evaluated platform；§2.3.3 加「未在 mobile 量測、僅確立 read-path niche」clause
