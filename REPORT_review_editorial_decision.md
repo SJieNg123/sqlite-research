@@ -121,18 +121,18 @@
 
 ### Round 2 — 本輪必改/建議
 - [ ] RR1 競爭性 partial-dump baseline（`2f_topN`）— **= open S4**，需新實驗
-- [ ] RR2 收斂「首個」novelty 用詞
-- [ ] RR3 Abstract 重平衡（cross-seed CI + 標 layers_5 不 robust + 拆段）
-- [ ] RR4 framing 收斂到 commodity-NVMe / serverless、mobile 退為 motivation
-- [ ] RR5 Index Terms / §1 提升 access-frequency 至同等
-- [ ] SR1 ra-sweep — **= open S2**
-- [ ] SR2 §3.7 bootstrap CI 方法補強
-- [ ] SR3 open_us 變異 + standalone「baseline+open」列
-- [ ] SR4 C 的 RAM-robustness 標為演繹 / 補放大-WS datapoint
-- [ ] SR5 §2.1 interior 駐留表述修正
-- [ ] SR6 §3.4 hotset-generation amortized 界定
-- [ ] SR7 寫作潤飾 + reader's guide
-- [ ] SR8 figure-6 caption + 跨批 baseline 註記 + 近零分母 suppress
+- [x] RR2 收斂「首個」novelty 用詞 — Abstract + §1-C3 改為「把 prefetch preprocessing 拆解到 OS-syscall 粒度（open/deliver）+ pread-oracle 隔離 + 兩部署模型對齊」；明述「貢獻在粒度與對齊、非首次意識到成本」
+- [x] RR3 Abstract 重平衡 — 拆成 4 段（problem+scope / method / findings / robustness+scope）；A/B 改用 cross-seed CI（A 2e_K10 −36%[−50,−23]、B 2d −25%[−32,−16]、C 2e_K10 −70%[−72,−69]）；明標 structural layers_5 在 A/B 為 tie/directional 不可恃；§8 結論同步改寫
+- [x] RR4 framing 收斂到 commodity-NVMe / serverless — Abstract 首句以 serverless/microservice/桌面 app 冷啟領銜；mobile/IoT 明標為 motivating context、非 evaluated platform；§2.3.3 加「未在 mobile 量測、僅確立 read-path niche」clause
+- [x] RR5 Index Terms / §1 提升 access-frequency 至同等 — Index Terms 已含「Access-frequency aware」；Abstract method 段並列「page-type-aware（選 interior）與 access-frequency-aware（選熱 leaf）兩個對等 selection 槓桿」
+- [ ] SR1 ra-sweep — **= open S2**（需 sysfs 寫 / 或把 ra-養熱解釋降為 conjecture；保留待 S2 決策）
+- [x] SR2 §3.7 bootstrap CI 方法補強 — 註明 10,000 resample / percentile / seed=42 + n=10 under-coverage 侷限 + 以符號一致性（≈sign-test）交叉驗證
+- [ ] SR3 open_us 變異 + standalone「baseline+open」列 — **需從 raw.csv 抽 p95/stdev（非純改寫，defer）**
+- [x] SR4 C 的 RAM-robustness 標為演繹 — §6.2.2 改述「為演繹推論（WS<量測下限、reclaim 碰不到）、非實測」+ 放大-WS C 變體列為 future work
+- [x] SR5 §2.1 interior 駐留表述修正 — 「所有 interior 必須駐留」改為「單筆 query 只需 root→leaf path 的 interior（≈tree height）；累積才需 working-set 內子集」
+- [x] SR6 §3.4 hotset-generation amortized 界定 — §3.4.1 加「離線產生 one-time/periodic、跨多次 cold-start 攤提、churn 不 decay 故不計入 per-event e2e」
+- [x] SR7 寫作潤飾 — 修 8 處 `full`/`shared` find-replace typo（走full條/跑full段/shared一個/full定義/full實作/最新full…→整條/完整段/共用/完整…）；Abstract 拆段降密度
+- [x] SR8 figure-6 caption + 跨批 baseline 註記 — 圖 6 caption 加「unlimited 分母取自同 session、非 results/main」；§3.5.1 表加「deliver_sweep 批 baseline 與 main 批屬不同機器狀態群、勿跨表比絕對 µs」
 
 ### Round 1 — 完成狀態（carry forward；詳版見 git history）
 - [x] **P1 結構性**：R1 兩模型對稱、R2 warm 模型內歸因、R3 不確定性（10-seed sweep）、R5 收斂 novelty + layout rewriter 定位
