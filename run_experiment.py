@@ -252,13 +252,26 @@ def build_hotset(pages, classify, dest):
 
 
 # ------------------------------------------------------------------------- execution
-def write_deliver_script(workdir, db, hotset, method):
-    """Tiny post-cold-script that warms <hotset> via <method> (paths baked in)."""
+def write_deliver_script(workdir, db, hotset, method, sleep_ms=0):
+    """Tiny post-cold-script that warms <hotset> via <method> (paths baked in).
+
+    sleep_ms>0 (fadvise arm only): sleep that many ms AFTER the async madvise/fadvise
+    hints are issued but BEFORE the harness measures the first query, so kernel readahead
+    gets time to land. This is the S5 intermediate delivery point between the tight-timing
+    lower bound (sleep=0, async readahead has no time) and the pread oracle upper bound. The
+    sleep is wall-time the app would spend on other work between prefetch and first query; it
+    is NOT counted in deliver_us (the warmer self-times) nor in fq, so e2e_warm is unaffected."""
     fd, path = tempfile.mkstemp(prefix=f"deliver_{method}_", suffix=".sh", dir=workdir)
+    warmer_cmd = (f'{shlex.quote(str(WARMER))} '
+                  f'{shlex.quote(str(db))} {shlex.quote(str(hotset))} {PAGE_SIZE}')
     with os.fdopen(fd, "w") as f:
         f.write("#!/bin/sh\n")
-        f.write(f'WARM_METHOD={method} exec {shlex.quote(str(WARMER))} '
-                f'{shlex.quote(str(db))} {shlex.quote(str(hotset))} {PAGE_SIZE}\n')
+        if method == "fadvise" and sleep_ms > 0:
+            # warmer first (emits open_us/deliver_us on stderr), then let readahead land.
+            f.write(f'WARM_METHOD={method} {warmer_cmd}\n')
+            f.write(f'sleep {sleep_ms / 1000.0:.3f}\n')
+        else:
+            f.write(f'WARM_METHOD={method} exec {warmer_cmd}\n')
     os.chmod(path, 0o755)
     return path
 
@@ -300,7 +313,8 @@ def _sys_load():
 
 def run_one(db, workload, hotset, method, recdir, args, use_drop_caches=True):
     """One harness invocation for one arm; returns parsed metrics (or None on failure)."""
-    deliver = write_deliver_script(recdir, db, hotset, method)
+    deliver = write_deliver_script(recdir, db, hotset, method,
+                                   sleep_ms=getattr(args, "deliver_sleep_ms", 0))
     cmd = _mem_prefix(args) + [str(BH), "--db", str(db), "--workload", str(workload),
            "--output", str(Path(recdir) / "ops.csv"),
            "--record-dir", str(recdir),
@@ -658,6 +672,10 @@ def add_run_parser(sub):
                     help="run against seed-N workload variants (workloads/workload_<k>_<N>.txt); "
                          "default outdir -> results/seeds/seedNN, per-seed hotsets + freeze manifest")
     ap.add_argument("--ra-kb", type=int, default=128, help="read_ahead_kb to pin via env.sh")
+    ap.add_argument("--deliver-sleep-ms", type=int, default=0,
+                    help="S5 intermediate delivery point: sleep this many ms after the async "
+                         "(fadvise) warmer, before first query, so kernel readahead can land "
+                         "(0=tight-timing lower bound; pread arm=upper bound). fadvise arm only.")
     ap.add_argument("--cpu", type=int, default=2, help="core the harness pins itself to via sched_setaffinity (-1 = no pin)")
     ap.add_argument("--warm-cpu-ms", type=int, default=10, help="busy-spin the pinned core this long before op[0]")
     ap.add_argument("--mem-limit", default="none", help="RAM-pressure: run harness in a systemd --user scope with MemoryMax (e.g. 20M); 'none'=unconfined")

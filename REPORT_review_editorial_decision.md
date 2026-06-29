@@ -148,13 +148,13 @@
 - [ ] S6 補/修引用
 
 ### Priority 3 — 文字與格式（~3 天）
-- [ ] S5 中間 delivery 點
+- [x] S5 中間 delivery 點 — **實跑 intermediate-delivery sweep**（async hint 後插 5/20/50 ms sleep 再 query；`tools/deliver_sweep.sh` + `--deliver-sleep-ms`；資料 `results/deliver_sweep/`）。結果**否證** R3 W5：hotset 在 sleep=0 就 100% 落地，Workload A 殘餘 `fq_async−fq_pread` gap（~165–196 µs）給 50 ms 也補不回（majflt 兩臂相同），故 async e2e 數字**非緊湊時序高估**、`fq_pread` 是 async 光等到不了的理想線。新 §3.5.1 + §6.4 bullet。
 - [x] S7 降溫 0.35% — Abstract + §2.1 改述為「B+tree fanout 的結構結果、非本研究發現」（§1 原已有此 framing）
-- [ ] S8 澄清 1c 淨價值
+- [x] S8 澄清 1c 淨價值 — §6.1 bullet 3 + §4.1：給出**明確 net-win 三條件**（部署 prefetch ∧ 只能用 structural ∧ workload 夠傾斜），逐格證明本矩陣 **1c 沒有任何一格贏過 1a**（A 481 vs 525、B 504 vs 693、C 290 vs 334 µs），且「放大的 first-q %」是 baseline 被墊高的假象（pread 地板 212 vs 210 µs 幾乎相同）→ **誠實降級為探索性負面結果，預設用 1a**。
 - [x] 統一 churn 規模數字不一致 — 全文統一為 **50k（10 輪 × 5k，11 個 checkpoint ck0–ck10）**；順帶統一 robustness 軸數為 **5**
-- [ ] 統一中英術語密度
+- [x] 統一中英術語密度 — 政策「專業術語英文、非專業詞回中文」；`tools/term_sweep.py`（保護 code/連結 URL/標題/math）掃 **112 處**：measurement→量測、deployment→部署、comparison→比較、conclusion→結論、validation→驗證、framework→框架、isolation→隔離、magnitude→量級、recommendation→建議、experiment→實驗、預取→prefetch；並清掉替換後 CJK 間殘留空白。技術詞（kernel/page cache/prefetch/workload/baseline/B+tree/madvise…）保留英文。
 - [x] 標題改為點出 cost-accounting — 「SQLite Cold-Start Prefetch 的 Preprocessing Cost-Accounting：為何 first-query 改善 ≠ end-to-end 加速」
-- [~] 圖 14 內嵌並簡化（標「翻盤是否落在 noise 內」）— 已內嵌（§5.5），尚未做「簡化 + 標 noise」的註記
+- [x] 圖 14 內嵌並簡化（標「翻盤是否落在 noise 內」）— 已內嵌（§5.5）；**新增 ‡ 標記**：以 10-seed 跨-seed CI 標出「單一 workload 勝出但落在雜訊內」的格（A/B layers_5，CI 跨 0），footnote 指向 §6.2.4；caption 同步更新。圖已重生。
 
 ### 額外完成（roadmap 外，2026-06-28）
 - **DB-size scaling robustness 軸（§6.2.5 + 圖 15）**：102 MB → ~1 GiB，A/B/C × 10 seed 跨-seed CI。first-query size-robust（18/18 cell）、warm-e2e 翻盤集中在窄域 C。**部分補強外部效度（CONSENSUS #4 的「單一 102 MB DB」一項，但不替代 R4 的 ARM/mobile）**。資料 `results/{size_1gb,seeds_1gb,stats/uncertainty_1gb.csv}`。

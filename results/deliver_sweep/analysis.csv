@@ -1,0 +1,7 @@
+workload,strategy,baseline_fq,pread_fq,async_fq_sleep0,async_fq_sleep5,async_fq_sleep20,async_fq_sleep50,delivery_pct_sleep0,gap_async0_minus_pread_us,gap_recovered_by_50ms_pct
+A,2d,487.1,179.0,344.4,363.5,376.0,361.7,100,165,-10
+A,2e_K10,487.1,180.5,367.1,357.2,361.9,363.8,100,187,2
+A,layers_5,487.1,176.0,372.2,379.0,364.8,379.8,100,196,-4
+C,2d,1010.4,652.0,654.7,658.1,655.5,657.2,100,3,-90
+C,2e_K10,1010.4,173.3,175.7,180.1,176.3,177.8,100,2,-89
+C,layers_5,1010.4,1034.6,1036.7,1031.5,1031.9,1039.1,100,2,-121
