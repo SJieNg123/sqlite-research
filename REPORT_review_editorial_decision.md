@@ -141,7 +141,7 @@
 
 ### Priority 2 — 內容補充（~1–2 週）
 - [ ] R4 ARM sanity check 或全面 scope 到 desktop
-- [ ] S1 三槓桿 ablation
+- [x] S1 三槓桿 ablation — **拆 2e_K 為 (ii)page-type / (iii)access-frequency 兩槓桿 + 對照組**（`leaf_freq_K`＝只熱 leaf、`leaf_rand_K`＝同型別同張數隨機非熱 leaf；集合上 `2e_K = 2d ∪ leaf_freq_K`，exact 分解）。10-seed bootstrap CI（A/B/C × orig+ta，`tools/ablation_levers.sh` → `results/{ablation,ablation_k500}/`）。**結論坐實 R2:C 的 headline 是 access-frequency 驅動、非 page-type**——C orig first-q：`leaf_rand` −2%[−3,−1]（對照、無效）vs `leaf_freq` −40%[−43,−37]，同 page-type/同張數,38 點全是頻率訊號;−81% = interior(2d −43%)＋熱 leaf 疊加。對稱面:**B(uniform)leaf_freq≈leaf_rand≈0、全靠 2d(interior −36%)**;A 居中(leaf_freq −13% robust,主力 2d −37%)。layout 槓桿只改 deliver 不改 selection。**命名校正為「type-aware(interior)＋access-frequency-aware(hot leaf) 複合 targeting」**。新 §5.4.1 + 圖 17 + overall_results.md「三槓桿 ablation」節 + `tools/{ablation_levers.sh,ablation_table.py}`。
 - [ ] S2 ra sweep
 - [x] S3 真 RAM pressure（cap < working set）— **sub-WS sweep**（`tools/ram_pressure.sh`、cap `{∞,16,12,8,6}M` = `{∞,.92,.69,.46,.35}×WS`，量 `delivery_pct`＝prefetch 殘留率）。發現：**targeted（2e_K10 112KB / 2e_K500 2MB）delivery 全程 100%、first-q 全程平 → RAM-robust by construction；2f_slru（dump=17.7MB=整個WS）delivery 隨 cap 線性塌（100→77→54→32→19%）、first-q 一跌破 100% 就直跳回 baseline（all-or-nothing）**。可量測下限 ~6M；C(WS 1.8MB)天生不敏感。新 §6.2.2 改寫 + 圖 16 + overall_results.md。
 - [ ] S4 競爭 baseline 對拼

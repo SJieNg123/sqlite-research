@@ -12,7 +12,7 @@
 **摘要** —— 隨著 SQLite 廣泛部署於行動裝置、IoT 與桌面應用，其 cold-start read效能逐漸成為使用者體驗的關鍵bottleneck，並衍生出兩個尚未被同時解決的core
 挑戰：**prefetch 目標選擇（targeting）** 與 **preprocessing cost核算（cost-accounting）**。就 targeting 而言，作業系統與應用層皆缺乏對 SQLite B+tree internal page-type structure的visibility，盲目 prefetch 會將 I/O 浪費在大量無關 page 上，無法精準命中真正 dominate cold-start cost 的少數關鍵 page；就 cost-accounting 而言，既有 prefetch strategy多僅優化 first-query latency，未將 prefetch 本身的 preprocessing overhead 納入 end-to-end cold-start real cost evaluation，造成「first-query improvement幅度」與「real cold-start cost」之間的系統性misleading。SQLite 因其輕量embedded design、零組態部署與廣泛 SQL compatibility，是此topic最具代表性的研究subject，然而現有 SQLite 相關literature多聚焦於writepath（fsync、WAL、journal mode），對 cold-start readpath的系統性分析較少；現有跨領域工作中，作業系統層的 readahead 僅依賴 sequential pattern detection、無法針對 page-type 做精準預判，DBMS 層的 buffer pool warming 又須侵入式修改 engine、且皆未將 preprocessing 計入real cost。為彌補此 gap，我們提出一套結合 **page-type-aware physical layout reorder** 與 **基於 mincore 的 targeted madvise prefetch** 的兩層 cold-start 框架（下稱本框架）。在固定的 reference DB（**600k rows、102 MB**）上，我們依 SQLite B+tree role（interior/leaf）對 page 做精確classification，僅針對 query path 必經的 interior page（92個、368 KB，占 DB 0.35%——此比例是 B+tree fanout 的結構結果、非本研究發現）進行 prefetch，避免盲目 preload 帶來的 I/O 與 page reclaim 浪費，且整套design無需修改 SQLite internal。本研究針對 SQLite 的 **cold-start read path**,提出**首個端到端的 preprocessing cost-accounting 框架**——將 prefetch 自身的 preprocessing overhead 顯式拆解、並與 first-query latency 共同納入 end-to-end cold-start real cost（本研究處理 empty OS page cache cold-start,區別於 Yi et al. [2026] 處理的 hotspot-shift buffer cold-start）（以下數字完整表見 §5 / [overall_results.md](https://github.com/wongzinc/sqlite-research-project-sharing/blob/main/overall_results.md);全 cell `cold_pct`=0）：實驗顯示既有 cache-dump strategy（2f_slru,load整個 resident working set）雖能把 first-query latency 降到最低（**−76 ~ −89%**,A/orig 529→127 µs、C/orig 1096→123 µs），但其 **~0.8–7 ms 的 deliver overhead** 反讓 end-to-end cold start **慢上一個量級**，這個 trade-off 在既有 prefetch literature 中長期被忽略。相對地,**page-type-aware 的structural / access-pattern prefetch（layers_5 / 2e_K10）** 以**極少 syscall** 取得 first-query **−22 ~ −81%**;關鍵在於 end-to-end **取決於部署模型**:我們把 preprocessing 拆成「冷 open(db)(~200 µs,per-layout 常數)」與「deliver(隨 hotset)」,並分兩個模型呈現——**standalone warmer**(另起 process、付冷 open)與 **warm-process / integrated**(app 已在跑、重用 handle、不付冷 open，即本研究主張的部署)。**在 standalone 模型下,preprocessing overhead 會吃掉 prefetch 紅利(快 workload A/B 反而 e2e 變慢);但在 warm-process 模型(如 serverless 函式喚醒、microservice 重啟、長駐 app worker 重用既有 handle [Shahrad+20, Wang+18, Du+20])下,精準 prefetch 能把 end-to-end 延遲降低高達 73%**(慢 workload C 的 2e_K10,1096→291 µs;A −7~9%、B −29~34%);只有 cache-dump 式 2f 因 deliver 過重而 e2e 多半不具優勢。五條 robustness 軸：**50k write churn**(static t=0 hotset 不decay)、**cgroup `MemoryMax=20M`** memory 壓縮(20M/unlimited ratio近 1.0)、多 process **cadence re-warm**、**10-seed workload-instantiation sweep**(access-pattern targeted prefetch 三 workload warm e2e 跨 seed 皆 robust——A 2e_K10 −36%、B 2d −25%、C 2e_K10 −70%,95% CI 皆不跨 0;唯 structural layers_5 在 A/B 落在雜訊內)、與 **DB 放大 10×(102 MB→~1 GiB)的 size-scaling**(冷啟動 first-query 效益 size-robust、18/18 個 workload×strategy cell 跨尺寸方向一致且 1gb 全 robust;唯 cache-dump 2f 的 deliver 陷阱在窄域 workload C 隨 DB 變大而由贏轉輸)下結論皆穩定。
 
-**Index Terms** —— SQLite, Cold-start latency, Prefetch, Page-type aware
+**Index Terms** —— SQLite, Cold-start latency, Prefetch, Page-type aware, Access-frequency aware
 
 ---
 
@@ -785,6 +785,34 @@ layout orig(baseline 1096 µs):
 > **`e2e_warm` 291 µs(−73%)/ `e2e_std` 512 µs(−53%)**，全矩陣最佳 e2e。三者 deliver 都小
 > (~70–200 µs)、冷 open ~220 µs,所以 e2e 由 first-q 決定，而 2e_K10 的少量 hot leaf 是最有效益的選擇。
 > **此 −73% 是全研究最穩健的勝負**:經 **10-seed** 驗證為 warm e2e **−70%(CI [−72, −69])、10/10 seed 皆改善**(§6.2.4)。
+
+#### 5.4.1 三槓桿 ablation：C 的勝利來自 access-frequency，不是 page-type（S1）
+
+§5.4 的 2e_K10 把 C 的 first-q 從 2d 的 −38% 再壓到 −81%——多出來那 −43 點，到底是「page-type 感知」還是「access-frequency 選熱 leaf」？我們把 2e_K10 的 hotset 拆成兩個 selection 槓桿、再加一個對照組(同 layout、同一批跑、10-seed bootstrap CI):
+
+- **2d** = 只載 interior（**page-type** 槓桿）
+- **leaf_freq_K10** = 只載 top-10 熱 leaf（**access-frequency** 槓桿，= 2e_K10 扣掉 interior）
+- **leaf_rand_K10** = 載「**同型別(leaf_table)、同 10 張、但隨機抽的非熱 leaf**」(對照組:只差「有沒有照頻率挑」)
+- **2e_K10** = interior ∪ 熱 leaf（合併）
+
+集合上 `2e_K10 = 2d ∪ leaf_freq_K10`，是 exact 分解。Workload C、orig、async first-q（10-seed mean Δ% [95% CI]、皆 robust）:
+
+| arm | 隔離的槓桿 | pages | first-q Δ% | e2e_warm Δ% |
+|---|---|---:|---:|---:|
+| 2d | page-type（interior） | 4 | −43% [−46,−41] | −36% |
+| **leaf_rand_K10** | 對照·隨機 leaf | 10 | **−2% [−3,−1]** | +6%(更慢) |
+| **leaf_freq_K10** | **access-frequency** | 10 | **−40% [−43,−37]** | −32% |
+| 2e_K10 | 合併 | 14 | −81% [−82,−80] | −73% |
+
+**結論:同型別、同張數下,隨機 10 葉幾乎無效(−2%),照頻率挑的 10 葉 −40%——這 38 點全是 access-frequency 訊號、與 page-type 無關。** C 的 headline −81% = interior(−43%)疊加熱 leaf(−40%)。對照之下:**B(uniform、無熱 leaf)的 leaf_freq≈leaf_rand≈0,全靠 2d(interior, −36%)扛**;A 居中(leaf_freq −13% robust、leaf_rand 打平,主力仍是 2d −37%)。三 workload 跨 10 seed 皆 robust。
+
+layout 槓桿(orig→ta)只改 deliver 成本、不改上述 selection 故事:ta 把 interior collocate,卻也讓 2d/2e 的 interior 集合變大(C: 4→48 頁),warm e2e 反而略遜(C 2e_K10 orig −73% vs ta −65%),與 §6.1「type-aware layout 非淨贏」一致。全表見 [overall_results.md](https://github.com/wongzinc/sqlite-research-project-sharing/blob/main/overall_results.md) 「三槓桿 ablation」節。
+
+![三槓桿 ablation:勝利來自 access-frequency,非 page-type](figures/out/17_lever_ablation.png)
+
+*圖 17:三槓桿 ablation(10-seed mean Δ%、bootstrap 95% CI)。每組 4 條 = 4 個 selection 槓桿;**grey=leaf_rand 對照幾乎貼 0、green=leaf_freq 才是真正出力的那根**(C 最明顯)。e2e_warm 欄裡 leaf_rand 甚至微正(多付 deliver 卻無 first-q 紅利)。故 targeted prefetch 在 C 的效益是 **access-frequency-driven**;page-type 感知負責 interior(撐起 uniform B 與 A 的主力)。*
+
+> **命名校正(回應 R2 W4 / CONSENSUS-2 #9)**:本框架其實同時用了**兩個** selection 槓桿——**page-type 感知**(選 interior,扛 uniform B 與 A 的主力)與 **access-frequency 感知**(選熱 leaf,解鎖 C 的 headline)。單用「page-type-aware」命名會低估後者;準確說法是 **type-aware(interior)＋ access-frequency-aware(hot leaf)的複合 targeting**。
 
 ### 5.5 The preprocessing trade-off （本研究的核心觀察）
 

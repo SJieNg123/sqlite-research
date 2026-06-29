@@ -187,3 +187,12 @@ results/seeds_1gb/*/regen_work/
 results/seeds_1gb/*.log
 results/seeds_1gb/*.nohup
 results/size_1gb/*.log
+
+# --- S1 three-lever ablation: keep per-seed raw.csv/summary.csv/env.txt + uncertainty +
+#     ablation_table.md; ignore the bulky per-cell work/ scratch (~1.3 GB/seed) ---
+results/ablation/*/work/
+results/ablation/*/regen_work/
+results/ablation/*.log
+results/ablation_k500/*/work/
+results/ablation_k500/*/regen_work/
+results/ablation_k500/*.log

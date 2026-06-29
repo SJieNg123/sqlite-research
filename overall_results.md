@@ -251,6 +251,65 @@
 | vacuum | 493 | 187 | 185 | 186 | 185 | 187 | 188 |
 | ta | 480 | 189 | 189 | 188 | 189 | 188 | 189 |
 
+## 三槓桿 ablation（S1：勝利來自哪個 selection 槓桿）
+
+> 來源 [`results/ablation/`](results/ablation/) + [`results/ablation_k500/`](results/ablation_k500/);跨-seed CI 由 [`tools/stats_uncertainty.py`](tools/stats_uncertainty.py) 產 [`results/ablation/uncertainty.csv`](results/ablation/uncertainty.csv)、表由 [`tools/ablation_table.py`](tools/ablation_table.py) 產。
+> 把 2e_K 的 hotset 拆成兩個 selection 槓桿並加對照組,**同 layout、同一批跑、10-seed bootstrap 95% CI**。集合上 `2e_K = 2d ∪ leaf_freq_K`,故為 exact 分解。
+> - **2d** = 只載 interior（page-type 槓桿 (ii)）
+> - **leaf_freq_K** = 只載 top-K 熱 leaf（access-frequency 槓桿 (iii)，= 2e_K 扣 interior）
+> - **leaf_rand_K** = 同型別(leaf_table)、同張數、但隨機抽的非熱 leaf（**對照組**:只差「有沒有照頻率挑」）
+> - **2e_K** = interior ∪ 熱 leaf（合併 (ii)+(iii)）
+>
+> 關鍵讀法:**leaf_rand vs leaf_freq**——同 page-type、同張數,任何差距就是 access-frequency 訊號。
+
+效應 = strategy median vs **同 seed baseline** median,跨 seed mean Δ%、bootstrap 95% CI（async arm）。
+
+### layout orig
+
+| workload | arm | 槓桿 | pages | first-q Δ% [CI] | e2e_warm Δ% [CI] |
+|---|---|---|--:|---|---|
+| A | 2d | (ii) page-type | 18 | −37% [−41,−34] robust | −27% [−31,−22] robust |
+| A | **leaf_rand_K10** | 對照 | 10 | **+0% [−2,+3] tie** | +10% [+7,+12] robust |
+| A | **leaf_freq_K10** | (iii) access-freq | 10 | **−13% [−26,−1] robust** | −4% [−18,+8] directional |
+| A | 2e_K10 | 合併 | 28 | −50% [−63,−37] robust | −38% [−52,−25] robust |
+| A | leaf_rand_K500 | 對照 | 500 | −3% [−7,+1] dir. | +99% [+87,+116] robust |
+| A | leaf_freq_K500 | (iii) access-freq | 500 | +21% [−26,+98] dir. | +114% [+62,+191] robust |
+| A | 2e_K500 | 合併 | 518 | −17% [−62,+58] dir. | +81% [+34,+151] robust |
+| B | 2d | (ii) page-type | 18 | −36% [−43,−25] robust | −26% [−34,−14] robust |
+| B | **leaf_rand_K10** | 對照 | 10 | **−2% [−3,−1] robust** | +7% [+6,+8] robust |
+| B | **leaf_freq_K10** | (iii) access-freq | 10 | **−3% [−4,−2] robust** | +6% [+5,+7] robust |
+| B | 2e_K10 | 合併 | 28 | −37% [−43,−28] robust | −26% [−32,−15] robust |
+| C | 2d | (ii) page-type | 4 | −43% [−46,−41] robust | −36% [−38,−34] robust |
+| C | **leaf_rand_K10** | 對照 | 10 | **−2% [−3,−1] robust** | +6% [+5,+7] robust |
+| C | **leaf_freq_K10** | (iii) access-freq | 10 | **−40% [−43,−37] robust** | −32% [−35,−28] robust |
+| C | 2e_K10 | 合併 | 14 | **−81% [−82,−80] robust** | **−73% [−74,−72] robust** |
+
+### layout ta
+
+| workload | arm | 槓桿 | pages | first-q Δ% [CI] | e2e_warm Δ% [CI] |
+|---|---|---|--:|---|---|
+| A | 2d | (ii) page-type | 43 | −37% [−44,−30] robust | −24% [−33,−16] robust |
+| A | leaf_rand_K10 | 對照 | 10 | −2% [−3,+0] dir. | +8% [+6,+9] robust |
+| A | leaf_freq_K10 | (iii) access-freq | 10 | −12% [−25,−0] robust | −3% [−17,+9] dir. |
+| A | 2e_K10 | 合併 | 53 | −48% [−63,−34] robust | −34% [−51,−18] robust |
+| A | 2e_K500 | 合併 | 543 | −51% [−66,−35] robust | +39% [+20,+57] robust |
+| B | 2d | (ii) page-type | 40 | −36% [−44,−28] robust | −22% [−32,−13] robust |
+| B | leaf_rand_K10 | 對照 | 10 | −1% [−3,+0] dir. | +8% [+6,+10] robust |
+| B | leaf_freq_K10 | (iii) access-freq | 10 | −1% [−3,+3] dir. | +9% [+6,+13] robust |
+| B | 2e_K10 | 合併 | 50 | −37% [−44,−30] robust | −22% [−31,−14] robust |
+| C | 2d | (ii) page-type | 48 | −44% [−45,−43] robust | −31% [−32,−29] robust |
+| C | leaf_rand_K10 | 對照 | 10 | −2% [−3,−1] robust | +7% [+5,+8] robust |
+| C | leaf_freq_K10 | (iii) access-freq | 10 | −32% [−36,−29] robust | −24% [−28,−20] robust |
+| C | 2e_K10 | 合併 | 58 | −80% [−81,−79] robust | −65% [−67,−64] robust |
+
+**讀法總結:**
+1. **C(churn-heavy)**:`leaf_rand` −2%(對照,無效)vs `leaf_freq` −40%——同 page-type、同 10 張,38 點全是 **access-frequency 訊號**。headline −81% = interior(2d −43%)＋熱 leaf(−40%)疊加。**這是「page-type-aware」命名對不上 headline 的直接證據。**
+2. **B(uniform)**:無熱 leaf → `leaf_freq ≈ leaf_rand ≈ 0`,改善全由 **2d(interior, page-type, −36%)** 提供;2e_K10 ≈ 2d。
+3. **A(zipfian)**:居中——leaf_freq_K10 −13%(robust、真有頻率訊號)但主力仍是 2d(−37%);**K=500 的 leaf-only 在 orig 反而 +21%(載 500 散落 leaf 的 deliver 成本壓過紅利)**,且所有 K500 的 `e2e_warm` 皆轉正(+39~114%,deliver ~0.8 ms 吃掉一切)——**access-frequency 的價值在於「小而準」(K=10),不在「多」**。
+4. **layout 槓桿(orig→ta)**:只改 deliver 成本、不改 selection 故事;ta collocate interior 卻使 2d/2e 的 interior 集合變大(C 4→48 頁),warm e2e 反略遜(C 2e_K10 orig −73% vs ta −65%),呼應 §6.1「type-aware layout 非淨贏」。
+
+→ 命名校正:本框架是 **type-aware(interior)＋ access-frequency-aware(hot leaf) 的複合 targeting**;page-type 扛 B/A 主力、access-frequency 解鎖 C headline。圖見 [figures/out/17_lever_ablation.png](figures/out/17_lever_ablation.png)。
+
 ## RAM-pressure（cgroup MemoryMax=20M / unlimited 比值,async first-q）
 
 > 來源 [`results/ram20m/`](results/ram20m/summary.csv)(20M cgroup)÷ **同期(06-22)unconfined** baseline。比值近 1.0 → 壓力幾乎不影響。

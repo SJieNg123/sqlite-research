@@ -45,6 +45,7 @@ import argparse
 import csv
 import hashlib
 import os
+import random
 import re
 import shlex
 import shutil
@@ -146,6 +147,16 @@ def resolve_strategy(name):
     m = re.fullmatch(r"2e_K(\d+)", name)
     if m:
         return {"name": name, "kind": "hot2e", "k": int(m.group(1))}
+    # S1 three-lever ablation: split 2e_K's hotset into its two selection levers.
+    # leaf_freq = top-K hot leaves only (access-frequency lever); leaf_rand = an
+    # equal-count random-leaf control. Both reuse the same frozen hot2e_*_K<K>.csv,
+    # so 2e_K = 2d (interior) u leaf_freq_K by construction.
+    m = re.fullmatch(r"leaf_freq_K(\d+)", name)
+    if m:
+        return {"name": name, "kind": "leaf_freq", "k": int(m.group(1))}
+    m = re.fullmatch(r"leaf_rand_K(\d+)", name)
+    if m:
+        return {"name": name, "kind": "leaf_rand", "k": int(m.group(1))}
     raise ValueError(f"unknown strategy: {name}")
 
 # --------------------------------------------------------------------------- parsing
@@ -235,6 +246,24 @@ def select_pages(strat, w, layout, classify):
     if kind == "hot2e":               # 2e_K: curated interior + top-K leaves
         src = ACCESS_RUNS / f"hot2e_{w}_{layout}_K{strat['k']}{_seed_suffix()}.csv"
         return _resident_pages(_require_hotset(src))
+    if kind == "leaf_freq":           # S1 ablation: top-K hot leaves only (no interior)
+        src = ACCESS_RUNS / f"hot2e_{w}_{layout}_K{strat['k']}{_seed_suffix()}.csv"
+        res = _resident_pages(_require_hotset(src))
+        # hot2e marks resident_interior u top_leaves; non-interior == top_leaves.
+        return {pn for pn in res if not classify.get(pn, ("", 0))[0].startswith("interior")}
+    if kind == "leaf_rand":           # S1 ablation: equal-count random non-hot leaves (control)
+        src = ACCESS_RUNS / f"hot2e_{w}_{layout}_K{strat['k']}{_seed_suffix()}.csv"
+        res = _resident_pages(_require_hotset(src))
+        top_leaves = {pn for pn in res if not classify.get(pn, ("", 0))[0].startswith("interior")}
+        # subtype-matched control: draw from the SAME leaf subtype(s) the hot leaves
+        # occupy (here leaf_table), so the only difference vs leaf_freq is the frequency
+        # signal -- not a table-vs-index confound.
+        top_types = {classify[pn][0] for pn in top_leaves if pn in classify}
+        pool = sorted(pn for pn, (t, _o) in classify.items()
+                      if t in top_types and pn not in top_leaves)
+        # deterministic per (seed, workload, layout, K) so the control is frozen/reproducible
+        rng = random.Random(f"leafrand|{SEED}|{w}|{layout}|{strat['k']}")
+        return set(rng.sample(pool, min(len(top_leaves), len(pool))))
     if kind == "slru":                # 2f: whole resident working set
         src = SLRU_RUNS / f"hotpages_{w.lower()}{SLRU_SUFFIX[layout]}{_seed_suffix()}.csv"
         return _resident_pages(_require_hotset(src))
