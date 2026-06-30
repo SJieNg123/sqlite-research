@@ -125,9 +125,9 @@
 - [x] RR3 Abstract 重平衡 — 拆成 4 段（problem+scope / method / findings / robustness+scope）；A/B 改用 cross-seed CI（A 2e_K10 −36%[−50,−23]、B 2d −25%[−32,−16]、C 2e_K10 −70%[−72,−69]）；明標 structural layers_5 在 A/B 為 tie/directional 不可恃；§8 結論同步改寫
 - [x] RR4 framing 收斂到 commodity-NVMe / serverless — Abstract 首句以 serverless/microservice/桌面 app 冷啟領銜；mobile/IoT 明標為 motivating context、非 evaluated platform；§2.3.3 加「未在 mobile 量測、僅確立 read-path niche」clause
 - [x] RR5 Index Terms / §1 提升 access-frequency 至同等 — Index Terms 已含「Access-frequency aware」；Abstract method 段並列「page-type-aware（選 interior）與 access-frequency-aware（選熱 leaf）兩個對等 selection 槓桿」
-- [ ] SR1 ra-sweep — **= open S2**（需 sysfs 寫 / 或把 ra-養熱解釋降為 conjecture；保留待 S2 決策）
+- [x] SR1 ra-sweep — **= S2，走 fallback 結案**。實驗環境無 root（`read_ahead_kb` 須寫 `/sys/block/*/queue/`），故不掃 {0,64,512}，改採 roadmap 既定的替代路徑：§3.5.1 把 async/pread gap 的「readahead-warming」成因**降為 labeled conjecture**（明述需 ra-sweep 才能證實、本環境無權限），並把 robust 結論「gap 為真實成本差、非時序假象」與機制歸因切開（後者由 `majflt` 兩臂相同 + 50 ms 補不回兩項獨立證據支撐）；§5.5 limitations 同步註記
 - [x] SR2 §3.7 bootstrap CI 方法補強 — 註明 10,000 resample / percentile / seed=42 + n=10 under-coverage 侷限 + 以符號一致性（≈sign-test）交叉驗證
-- [ ] SR3 open_us 變異 + standalone「baseline+open」列 — **需從 raw.csv 抽 p95/stdev（非純改寫，defer）**
+- [x] SR3 open_us 變異 + standalone「baseline+open」列 — 從 `results/main/raw.csv`（n=810 non-warmup rep）抽 `open_us` 變異：**median 221 / stdev 17（CV 8%）/ p95 231 µs**，逐 strategy（220–222）與逐 layout（orig/ta/vacuum ~221）皆恆定 → **strategy/layout 無關的 common-mode 固定成本**。§5.5.1 加變異量化；§5.5.2 加「baseline+open（standalone 對齊）」對照表——把 baseline 放上同一 standalone 基準後 open 兩邊相消、`e2e_std` 排序精確重現 `e2e_warm` verdict（A layers_5 +27% vs bare → **−7% vs base+open**，對照 e2e_warm −9%），證明 open 非 prefetch 獨有稅。overall_results.md「讀法」③同步
 - [x] SR4 C 的 RAM-robustness 標為演繹 — §6.2.2 改述「為演繹推論（WS<量測下限、reclaim 碰不到）、非實測」+ 放大-WS C 變體列為 future work
 - [x] SR5 §2.1 interior 駐留表述修正 — 「所有 interior 必須駐留」改為「單筆 query 只需 root→leaf path 的 interior（≈tree height）；累積才需 working-set 內子集」
 - [x] SR6 §3.4 hotset-generation amortized 界定 — §3.4.1 加「離線產生 one-time/periodic、跨多次 cold-start 攤提、churn 不 decay 故不計入 per-event e2e」
@@ -137,7 +137,7 @@
 ### Round 1 — 完成狀態（carry forward；詳版見 git history）
 - [x] **P1 結構性**：R1 兩模型對稱、R2 warm 模型內歸因、R3 不確定性（10-seed sweep）、R5 收斂 novelty + layout rewriter 定位
 - [x] **P2 內容**：R4（採出路 b：scope 到 commodity desktop NVMe）、S1（三槓桿 ablation，§5.4.1 + 圖 17）、S3（sub-WS RAM-pressure，§6.2.2 + 圖 16）
-- [ ] **P2 仍 open**：S2（ra sweep）→ 本輪 SR1 重申；S4（競爭 baseline）→ 本輪 RR1 升為必改
+- [x] **P2 原 open 兩項皆結案**：S4（競爭 baseline）→ RR1 完成（`2f_topN`）；S2（ra sweep）→ SR1 走 fallback（無 root，降為 labeled conjecture）
 - [x] **P3 文字格式**：S5（intermediate-delivery sweep）、S7（0.35% 降溫）、S8（1c 淨價值澄清）、churn 規模統一、術語密度、標題 cost-accounting 定錨、圖 14 ‡ 標記
 - [x] **額外**：DB-size scaling（§6.2.5 + 圖 15）、資料可比性方法學（2f_slru 錨點）
 

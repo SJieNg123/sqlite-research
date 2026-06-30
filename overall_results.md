@@ -127,7 +127,7 @@
 | ta | 2e_K500 | 209 | 76% | 100 | 1053 | 830 | 210 |
 | ta | 2f_slru | 122 | 86% | 100 | 1153 | 930 | 120 |
 
-**讀法**:① first-query 最低一律是 **2f_slru**(載整個 working set),但其 deliver(A/B ~7ms、C ~0.76ms)使 `e2e` 多半輸——除 C 外兩個 e2e 模型都超 baseline。② **layers_5 / 2d / 2e_K10** 用極少 syscall:`e2e_warm`(= deliver+fq,warm-process/integrated,本研究主張)在三個 workload 都改善(A −7~9%、B −29~34%、**C × 2e_K10 −73% / 291µs**);`e2e_std`(= open+deliver+fq,standalone warmer)則在快 workload 因 ~200µs 冷 open 而變差。③ 兩個 e2e 模型唯一差是 per-layout 的冷 open(db)(~200µs)。④ `oracle` 欄是同步 pread 的可達下界。
+**讀法**:① first-query 最低一律是 **2f_slru**(載整個 working set),但其 deliver(A/B ~7ms、C ~0.76ms)使 `e2e` 多半輸——除 C 外兩個 e2e 模型都超 baseline。② **layers_5 / 2d / 2e_K10** 用極少 syscall:`e2e_warm`(= deliver+fq,warm-process/integrated,本研究主張)在三個 workload 都改善(A −7~9%、B −29~34%、**C × 2e_K10 −73% / 291µs**);`e2e_std`(= open+deliver+fq,standalone warmer)則在快 workload 因 ~200µs 冷 open 而變差。③ 兩個 e2e 模型唯一差是冷 open(db):**median 221µs、stdev 17µs(CV 8%)、p95 231µs**(n=810 non-warmup rep),逐 strategy 與逐 layout 皆 ~221µs → **strategy/layout 無關的 common-mode 固定成本**,非 prefetch 獨有稅。把 baseline 也放上 standalone 基準(`baseline+open`)後 open 兩邊相消、`e2e_std` 排序重現 `e2e_warm` verdict(如 A layers_5 對 base+open **−7%**、對照 e2e_warm −9%);快 workload 在 standalone 變差是「prefetch 省下的 first-query 不足以額外 cover 它自己那次 open」,而非 open 偏袒 baseline。詳見 REPORT §5.5.1–§5.5.2。④ `oracle` 欄是同步 pread 的可達下界。
 <!-- MASTER-RESULTS-END -->
 
 ---
