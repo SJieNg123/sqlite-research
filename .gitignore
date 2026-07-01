@@ -171,6 +171,9 @@ results/*/regen_work/
 REPORT.pdf
 _md2pdf_cjk.ttf
 
+# tools/build_slides.py output (generated deck, regenerable from REPORT.md)
+REPORT_slides.pptx
+
 # --- R3 seed sweep (keep result CSVs + per-seed freeze; ignore heavy/regenerable) ---
 results/seeds/*/work/
 results/seeds/*/regen_work/
@@ -202,3 +205,8 @@ results/ablation_k500/*.log
 results/competitive/*/work/
 results/competitive/*/regen_work/
 results/competitive/*.log
+
+# --- S3 sub-WS RAM-pressure sweep: keep summary/raw/env per cap; ignore the
+#     per-cap work/ scratch (~1.8 GB total, regenerable via tools/ram_pressure.sh) ---
+results/ram_pressure/*/work/
+results/ram_pressure/*/regen_work/
