@@ -964,6 +964,8 @@ shared、跨 10 個 workload seed（§6.2.4）、以及 DB 放大 10× 到 ~1 Gi
 DB 被持續 write（**50k mutation = 10 輪 × 5k**，在 11 個 checkpoint ck0–ck10 上量測，ck0 = t=0 baseline）後，**static t=0 hotset
 完全沒 decay**:實驗量到 C 上 2e_K10_static 跨 checkpoint maintain ~82–86 µs(vs baseline ~580 µs)，ck0→ck10 無上升趨勢；三 layout(orig/vacuum/ta)皆然。
 
+> **註（單點尖峰）**:C 的 ck4 在 orig/vacuum 出現單次 265 / 291 µs 尖峰(ta 無)，前後 ck3/ck5 立即回到 ~82–86 µs——係該 checkpoint 的一次性量測擾動、非 decay(decay 會單調上升)；其餘 10/11 checkpoint 全落在 ~80–89 µs。
+
 ![50k churn（10 輪 × 5k，11 個 checkpoint ck0–ck10）下 A/B/C 的 first query 演化](figures/out/07_churn_evolution.png)
 
 *圖 7：DB 被持續 write 後,static t=0 hot pages 在 A/B/C 三種 workload 上都不 decay
@@ -1051,7 +1053,7 @@ C（WS 僅 1.8 MB ≈ 量測下限）**無法以 cgroup 施壓 → 其 RAM-robus
 
 前述結果都在 102 MB reference DB 上。為驗證「當 DB **遠大於** hot working set 時 prefetch 是否還靈」，我們把 DB 放大到 **6,000,000 row（~1 GiB、263,991 page）**，用**同一份 seed-1 query stream**（即原始 workload）讓 `orig`(100 MB) 與 `1gb` **在同一批次** rep-major 量測（A/B/C/Z × 6 strategy），並把 §6.2.4 的 10-seed 不確定性分析**原樣套到 1gb**（A/B/C × 10 seed）。兩個 finding：
 
-1. **冷啟動 first-query 的 prefetch 效益 size-robust**：18/18 個 (workload×strategy) cell 跨尺寸**方向一致、且 1gb 全部 `robust`**（CI 不跨 0）。`2f_slru` 兩尺寸都收斂到 ~96–98 µs——first-query 只看 hot working set、**與 DB 大小無關**；小 hotset 的 **2d / 2e_K10 在 1gb 改善反而更大**（A 2d first-q −35%→−55%），因為同一批 hot key 散到 6M-row DB 的更多 page、no-prefetch baseline 的冷讀更分散更貴，targeted prefetch 相對更划算。`2e_K500/A` 甚至從 100 MB 的 `directional` 在 1gb 收成 `robust`（大 DB 讓效應更乾淨）。
+1. **冷啟動 first-query 的 prefetch 效益 size-robust**：18/18 個 (workload×strategy) cell 跨尺寸**方向一致、且 1gb 全部 `robust`**（CI 不跨 0）。`2f_slru` 在兩個尺寸下 first-query 各自收斂到一個穩定 floor（1gb 批 ~96–98 µs、orig 批 ~123–127 µs——兩批屬不同機器狀態、僅跨批比相對量，見 §6.4 與下方註）——first-query 只看 hot working set、**與 DB 大小無關**；小 hotset 的 **2d / 2e_K10 在 1gb 改善反而更大**（A 2d first-q −35%→−55%），因為同一批 hot key 散到 6M-row DB 的更多 page、no-prefetch baseline 的冷讀更分散更貴，targeted prefetch 相對更划算。`2e_K500/A` 甚至從 100 MB 的 `directional` 在 1gb 收成 `robust`（大 DB 讓效應更乾淨）。
 
 2. **部署 e2e 的 size 敏感性集中在窄域 workload C**：C 的 resident working set 隨 DB 變大而**膨脹**（483→**984** page，窄域 key 在大 DB 散得更開），deliver 成本翻倍，把幾個「靠少量 deliver 取勝」的策略**由贏轉輸**且跨 10 seed `robust`：**`2f_slru/C` warm e2e −9% → +139%**（100 MB 唯一能讓 cache-dump 在 e2e 取勝的格，到 1 GB 確定變大輸）、`2e_K500/C` −31% → +35%、`layers_92/C` −21% → +7%。對照之下，**access-pattern 的 2d / 2e_K10 兩尺寸 e2e 都穩贏**（C 2e_K10 −70% / −68%）。
 
@@ -1215,8 +1217,8 @@ warm-process 不含」這兩層 trade-off，在既有 prefetch literature 中很
 ![Workload Z：低 id hotspot 的 Zipfian 變體](figures/out/09_zlowkey_nsweep.png)
 
 *圖 9：把 hotspot 從 [8, 99997] 移到 [1, 1000]（低 id 區段）的 robustness
-check。N-sweep 形狀跟 Workload A 同形（差 ≤ 5pp）——「hotspot 落在哪個 key
-區段」不是 prefetch 效益的主要變因。*
+check。N-sweep 形狀跟 Workload A 同形（同在 N≈4–5 落底、之後 plateau；plateau 量級相近，
+Z 略淺、個別 N 差最多 ~10–12pp）——「hotspot 落在哪個 key 區段」不是 prefetch 效益的主要變因。*
 
 ### A.3 Interior:leaf 比例掃描（3a/3b ratio variants）
 
