@@ -1,4 +1,4 @@
-# SQLite Cold-Start Prefetch 的 Preprocessing Cost-Accounting：為何 first-query 改善 ≠ end-to-end 加速
+# Preprocessing Cost-Accounting for SQLite Cold-Start Prefetch: Why Faster First Queries Don't Mean Faster Cold Starts
 
 > literature / 完整實驗推導見配套文件：
 > - [overall_results.md](https://github.com/wongzinc/sqlite-research-project-sharing/blob/main/overall_results.md) — 全部實驗數據（strategy×workload×layout + N/K-sweep + RAM + churn + cadence）
