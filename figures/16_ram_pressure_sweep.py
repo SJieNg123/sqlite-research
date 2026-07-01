@@ -2,10 +2,12 @@
 
 Steps the cgroup memory cap BELOW the ~17.3 MB resident working set (A/B) and shows, per
 strategy, how much of the prefetched hotset stays resident to first-query (delivery_pct =
-mincore residual) and what that does to first-q. Story:
-  - 2e_K10 (112 KB hotset) and 2e_K500 (2 MB) stay 100% delivered and flat -> RAM-robust.
+mincore residual) and what that does to first-q. Story (all targeted strategies swept, so
+"small hotset -> robust" is measured, not deduced):
+  - layers_5/2d/2e_K10/layers_92/2e_K500 (20 KB .. 2 MB hotsets) stay 100% delivered and flat
+    -> RAM-robust by construction (hotset far below any viable cap, never evicted).
   - 2f_slru (17.7 MB dump = whole WS) cannot fit < ~16M: delivery collapses, first-q climbs
-    from its 94 us floor back toward baseline -> the cache-dump strategy breaks under pressure.
+    from its ~94 us floor back toward baseline -> the cache-dump strategy breaks under pressure.
 
 Data: results/ram_pressure/cap_<tag>/summary.csv (async arm + baseline), seed 1, layout orig.
 """
@@ -20,7 +22,7 @@ SWEEP = os.path.join(ROOT, "results/ram_pressure")
 WS_MB = 17.3                                  # A/B resident working set
 # cap tag -> (MB for ×WS label, x position). unlimited drawn at the left as the control.
 CAPS = [("unlimited", None), ("16M", 16), ("12M", 12), ("8M", 8), ("6M", 6)]
-STRATS = ["2e_K10", "2e_K500", "2f_slru"]
+STRATS = ["layers_5", "2d", "2e_K10", "layers_92", "2e_K500", "2f_slru"]
 WORKLOADS = ["A", "B"]
 WL_TITLE = {"A": "Workload A (Zipfian)", "B": "Workload B (uniform)"}
 
@@ -64,9 +66,9 @@ for col, wl in enumerate(WORKLOADS):
     ax_f.set_xticks(xpos); ax_f.set_xticklabels(xlabels, fontsize=8.5)
 
 fig.suptitle(f"Sub-working-set RAM pressure (cgroup cap, layout orig; working set ≈ {WS_MB:.0f} MB): "
-             "2e_K10/2e_K500 stay 100% delivered & flat (tiny hotset, never evicted); "
-             "2f_slru (17.7 MB dump) collapses as cap drops below WS.",
-             fontsize=9.5, y=0.99)
+             "all targeted strategies (layers_5/2d/2e_K10/layers_92/2e_K500, ≤2 MB hotset) stay "
+             "100% delivered & flat; only 2f_slru (17.7 MB dump) collapses as cap drops below WS.",
+             fontsize=9.0, y=0.99)
 fig.text(0.5, 0.005, "Cap stepped from ∞ down past the working set. 4M omitted: cold gate "
          "excludes all cells (below the measurable floor).", ha="center", fontsize=8, color="#6b7280")
 fig.tight_layout(rect=[0, 0.02, 1, 0.97])
