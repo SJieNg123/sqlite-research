@@ -1,6 +1,6 @@
 # 主控執行文檔：Type-aware Shadow-tagging VFS + Prefetch Warmer（**Level 1 only**）
 
-> 參考 [type_aware_physical_segregation/README.md](../type_aware_physical_segregation/README.md) 的 PART A，
+> 參考 [type_aware_physical_segregation/README.md](../../../legacy/type_aware_physical_segregation/README.md) 的 PART A，
 > 抽成一個**獨立、只做 Level 1** 的子專案。**Level 2（FEMU / NVMe passthrough / 物理隔離）明確不做**——
 > 見文末「§X 明確排除」。之後這個方向的所有程式與實驗，都開在本資料夾底下的子目錄。
 
@@ -191,4 +191,4 @@ pipeline/engine/prefetch_warmer/
 - namespace = 一 DB、LBA identity mapping、physical segregation。
 - temperature-aware 多 stream（stream 0/1/2）、fast tier、two-pass build。
 
-> 若之後要做 Level 2，另開資料夾或回到 [type_aware_physical_segregation](../type_aware_physical_segregation/)，不在此混入。
+> 若之後要做 Level 2，另開資料夾或回到 [type_aware_physical_segregation](../../../legacy/type_aware_physical_segregation/)（已歸檔至 legacy），不在此混入。
