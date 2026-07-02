@@ -1234,4 +1234,22 @@ Z 略淺、個別 N 差最多 ~10–12pp）——「hotspot 落在哪個 key 區
 不變但 3 個 sweet spot 被漏掉的分析，見 [overall_strategies.md](https://github.com/wongzinc/sqlite-research-project-sharing/blob/main/overall_strategies.md) 2c bullet 跟
 [overall_workloads.md](https://github.com/wongzinc/sqlite-research-project-sharing/blob/main/overall_workloads.md) 「已完成的覆蓋」表。
 
+## Table: Positioning of This Work Against Prior Art
+
+| **Work** | **Venue / Year** | **Problem Focus** | **Prefetch Targeting Basis** | **Cost-Accounting Granularity** | **Modifies DB Engine?** | **Deployment Model** | **Key Difference from This Work** |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Smith 1978** (OBL) | ACM TODS '78 | Sequential prefetching in DB systems | Sequential pattern detection (file offset) | N/A (foundational) | N/A (conceptual) | N/A | **Origin of sequential prefetching lineage**; no page-type awareness, no cold-start focus |
+| **Iyer & Druschel 2001** | SOSP '01 | Anticipatory disk scheduling (deceptive idleness) | OS-level access pattern, no DB structure visibility | N/A | No | Kernel-level | **OS-only approach**; 對 DB-internal structure 不可見，與我們用 page-type hint 取代 OS 盲推形成對照 |
+| **Effelsberg & Härder 1984** | ACM TODS '84 | DB buffer management principles (replacement / prefetching / ref-count) | N/A (design dimensions) | N/A (foundational) | N/A (conceptual) | N/A | **DB buffer management 奠基論文**；我們繼承其 prefetching dimension，但下放到 OS page cache + mmap |
+| **InnoDB buffer pool dump/load** | MySQL Manual (production) | Shutdown/startup buffer pool warming | Whole buffer pool dump (blind full reload) | **Process-level only** (dump/load as a phase) | **Yes** (engine-internal) | Standalone (restart) | 同屬「整份重載」pattern，但 **不拆解 open/deliver**；我們做到 OS-syscall 級粒度且不修改 engine |
+| **Yi+26 (Pre-Buffer)** | Data Sci. Eng. '26 | Buffer cold-start after **hotspot shift** (hit-rate recovery) | Jaccard similarity + workload-aware prefetching | Acknowledged but **not separated** from query latency | **Yes** (DBMS internal) | Background thread + Direct I/O | 他們解 **hotspot-shift recovery**（秒級）；我們解 **OS page cache empty**（μs 級 first-query）。成本會計的粒度（open/deliver 拆解）是我們獨有 |
+| **Chen+21 (ML Prefetcher)** | ICDE '21 | ML-based next-page prediction (DNN/CNN/RNN/LSTM) | Learned from **warm-start traces** | **Absent in eval** (only precision/recall, no latency impact) | **Yes** (MySQL) | Inline inference | 他們用 8–20M 參數模型，eval 只報 prediction accuracy，**未量測 prefetch I/O cost 對 latency 的衝擊**；我們顯式量化 syscall cost |
+| **Leaper (Yang+20)** | PVLDB '20 | Learned prefetcher for LSM-tree (X-Engine) | Hot key range prediction (access skew) | N/A | **Yes** (X-Engine) | Inline | 依賴 access skew；在 **uniform workload (B)** 無 hot set 可學 → 失效（與我們 B 的 ceiling 觀察同源） |
+| **Oh+15 (SQLite/PPL)** | PVLDB '15 | Mobile SQLite **write throughput** / write amplification | N/A (write path optimization) | N/A | **Deep fork** (B+tree/pager/journaling all modified) | Standalone | **完全正交**：write path vs read cold-start；**深度修改 engine** vs 我們完全不改；**custom PCM HW** vs commodity |
+| **Kang+13 (X-FTL)** | SIGMOD '13 | Mobile SQLite transactional write on flash | N/A (FTL-level) | N/A | **Yes** (FTL) | Kernel/FTL | **介入層在 FTL**，與我們的 application-side + OS page cache 正交 |
+| **Gaffney+22 (SQLite Eval)** | PVLDB '22 | Comprehensive SQLite evaluation (OLTP/OLAP) | N/A (eval methodology) | N/A | No (evaluation) | Warm buffer pool (`SELECT *` preheat) | **明確用 `SELECT *` 預熱排除 cold-start**；我們專注在他們系統性排除的空白 |
+| **Crotty+22** | CIDR '22 | Critique of **mmap-as-DBMS-substrate** (eviction, I/O error, scalability) | N/A | N/A | N/A (critique) | N/A | 他們批判的 **mmap-as-substrate 問題**（ARIES、eviction control）與我們 **mmap-as-hint-channel** 無關；其 §6 的 “maybe use mmap” 條件（read-only + fits memory）**explicitly 背書**我們的 use case |
+| **Leis+23 (vmcache/exmap)** | SIGMOD '23 | Virtual-memory assisted buffer management (high-throughput) | N/A (eviction control) | N/A | **Yes** (custom kernel module) | Kernel-level | 我們用同 family OS primitive，但操作 frequency 低 4 個量級（~92 calls vs >1M ops/s），**碰不到他們的 TLB shootdown bottleneck** |
+| **Our Work** | — | **SQLite OS-page-cache cold-start first-query latency** | **Dual-lever**: page-type-aware (interior) + access-frequency-aware (hot leaf) | **OS-syscall level**: `open(db)` + `deliver` per-page, two deployment models (standalone / warm-process) | **No** (application-side tool, no SQLite modification) | Warm-process (主張) + Standalone (對照) | **首個**在 SQLite cold-start 上做到 OS-syscall 級成本拆解 + 雙槓桿 targeting + 不修改 engine + 10-seed bootstrap 統計驗證 |
+
 ---
