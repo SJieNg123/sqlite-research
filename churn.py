@@ -14,7 +14,11 @@ import csv, shutil, statistics, subprocess, sys
 from pathlib import Path
 import run_experiment as R
 
-CHURN_SRC = R.ROOT / "workloads/workload_churn_write.txt"
+# the base churn stream was renamed to seeded copies (_1.._10) when the 10-seed
+# sweep was added; _1 is the original (seed 1), the one results/churn was built
+# from. Prefer the unseeded name if it ever exists again, else fall back to _1.
+_CHURN_UNSEEDED = R.ROOT / "workloads/workload_churn_write.txt"
+CHURN_SRC = _CHURN_UNSEEDED if _CHURN_UNSEEDED.exists() else R.ROOT / "workloads/workload_churn_write_1.txt"
 OPS_PER   = 5000
 NSWEEP_N  = [1, 2, 3, 5, 8, 13, 21, 34, 46, 64, 92]   # for fig 12 (+ baseline=0)
 
