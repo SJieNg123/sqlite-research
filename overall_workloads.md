@@ -223,7 +223,7 @@ INSERT/UPDATE/DELETE 的寫入壓力，讓 SQLite freelist 重新分配、interi
 checkpoint 用 Workload C 量 cold-start latency，看「prefetch 在被 churn 過的
 layout 上還剩多少效益」。
 
-> **規模標示（[CONTRADICTIONS.md](CONTRADICTIONS.md) #29）**：檔案規模 100,000 ops，
+> **規模標示（[CONTRADICTIONS.md](legacy/CONTRADICTIONS.md) #29）**：檔案規模 100,000 ops，
 > 但實際每 checkpoint 只用 5,000 ops、共 10 個 checkpoint = 50,000 ops（非單次跑滿）。
 
 ---
