@@ -297,7 +297,7 @@ journal mode / mmap / WAL 等writepath參數調校。
 2. **介入侵入性**：[Oh+15] / [Kang+13] 深度修改 SQLite engine 甚至 FTL；我們**完全不修改 SQLite internal**，作為 application-side tool 部署。
 3. **hardware hypothesis**：[Oh+15] 需要custom PCM hardware (UMS)；我們在 **commodity hardware**（Ryzen 9950X + NVMe SSD）上運作，無特殊hardware需求。
 
-此外，本研究的 type-aware layout rewriter (§4.1.1c) 也是該領域 novel。既有 SQLite mobile-optimization fork 無 page-type aware physical reorder 的 design。
+此外，本研究的 type-aware layout rewriter (§4.1 的 1c) 也是該領域 novel。既有 SQLite mobile-optimization fork 無 page-type aware physical reorder 的 design。
 
 **[Gaffney+22] SQLite: Past, Present, and Future** (PVLDB 15(12)) ——
 SQLite 創始團隊與 UW-Madison 合著的最新完整 SQLite evaluation，涵蓋 OLTP (TATP) /
@@ -997,7 +997,7 @@ workload A/B、**六策略全掃**（layers_5/2d/2e_K10/layers_92/2e_K500/2f_slr
 | **2e_K10**（112 KB） | 100 → 100 → 100 → 100 → 100% | 360 → ~360 µs（平） | **完全 robust** |
 | **layers_92**（368 KB） | 100 → 100 → 100 → 100 → 100% | 356 → ~360 µs（平） | **完全 robust** |
 | **2e_K500**（2.07 MB） | 100 → 100 → 100 → 100 → 100% | 182 → ~181 µs（平） | **完全 robust** |
-| **2f_slru**（17.7 MB＝整個 WS） | 100 → **77 → 54 → 26 → 20%** | 98 → **~490 µs（≈ baseline 502）** | **崩潰** |
+| **2f_slru**（17.7 MB＝整個 WS） | 100 → **77 → 54 → 32 → 19%** | 95 → **~490 µs（≈ baseline 502）** | **崩潰** |
 
 ![RAM pressure：delivery_pct 與 first-q vs cap](figures/out/16_ram_pressure_sweep.png)
 
