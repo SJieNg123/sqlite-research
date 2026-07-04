@@ -1,4 +1,4 @@
-# Preprocessing Cost-Accounting for SQLite Cold-Start Prefetch: Why Faster First Queries Don't Mean Faster Cold Starts
+# Preprocessing Cost-Accounting for SQLite Cold-Start Prefetch in Serverless and Edge Deployments: Why Faster First Queries Don't Mean Faster Cold Starts
 
 > literature / 完整實驗推導見配套文件：
 > - [overall_results.md](https://github.com/wongzinc/sqlite-research-project-sharing/blob/main/overall_results.md) — 全部實驗數據（strategy×workload×layout + N/K-sweep + RAM + churn + cadence）
@@ -9,23 +9,23 @@
 
 ## Abstract
 
-**摘要** —— SQLite 是部署最廣的 embedded database，其 **cold-start read path**（OS page cache 為空時的 first-query latency）在 serverless 函式喚醒、microservice 重啟、桌面 app 冷啟等 **commodity NVMe 部署**中直接決定使用者感知延遲；行動裝置 / IoT 雖是 SQLite 普及的 motivating context，但本研究的量測平台為 commodity x86 桌機 + NVMe、並未在 mobile storage stack 上評估（範圍界定見文末與 §6.4）。此 cold-start 衍生兩個尚未被同時解決的挑戰：**targeting**——OS 與應用層皆缺乏對 SQLite B+tree page-type 結構的 visibility，盲目 prefetch 浪費 I/O；與 **preprocessing cost-accounting**——既有 prefetch 多僅優化 first-query latency，未把 prefetch 自身的 preprocessing overhead 計入 end-to-end cold-start real cost，造成「first-query 改善」與「真實 cold-start 成本」間的系統性誤導。
+**摘要** —— SQLite 正被重新部署為 **serverless / edge database 的儲存引擎**——Cloudflare D1、Turso/libSQL 的 embedded replica、Fly.io LiteFS 都把一份本地 SQLite 檔放在 **commodity x86 + NVMe server** 上、緊貼(常被 keep-alive 保溫的)運算層。在這類部署中，cold-start 的主導形態是 **warm process, cold data**：runtime／連線 handle 被 keep-alive 重用，但閒置一段時間後 SQLite 檔的 **OS page cache 已被回收**。此時容器開機成本已被攤掉，**留在 critical path 上的就是 SQLite 的 data cold-start**——空 page cache 上第一筆 query 走 B+tree 的 first-query latency，直接決定使用者感知延遲（本研究在 edge/serverless 所用的**同一類 commodity x86 + NVMe 硬體**上量測，model 此 warm-process cold-data pattern，但**未在特定 FaaS / microVM runtime 內量測**；行動裝置 / IoT 為 SQLite 普及背景、非 evaluated platform，範圍界定見文末與 §6.4）。此 cold-start 衍生兩個尚未被同時解決的挑戰：**targeting**——OS 與應用層皆缺乏對 SQLite B+tree page-type 結構的 visibility，盲目 prefetch 浪費 I/O；與 **preprocessing cost-accounting**——既有 prefetch 多僅優化 first-query latency，未把 prefetch 自身的 preprocessing overhead 計入 end-to-end cold-start real cost，造成「first-query 改善」與「真實 cold-start 成本」間的系統性誤導。
 
-**方法。** 我們提出一套兩層 cold-start 框架：(1) page-type-aware physical layout reorder（binary 層重寫，將 interior page 集中至 file head）；(2) 基於 mincore 的 targeted madvise prefetch，以**兩個對等的 selection 槓桿**挑頁——**page-type-aware**（選 B+tree interior）與 **access-frequency-aware**（選 workload 最 hot 的 leaf）。整套設計不修改 SQLite internal，作為 application-side tool 部署。核心方法是把 prefetch 的 preprocessing **拆解到 OS-syscall 粒度**——冷 `open(db)`（~200 µs、per-layout 常數）與逐頁 `deliver`（隨 hotset 大小）——並以 **pread oracle vs async madvise hint** 兩種模式隔離「選對頁（selection）」與「載得及（delivery）」，再以 **standalone warmer**（另起 process、付冷 open）與 **warm-process / integrated**（app 已在跑、重用 handle、不付冷 open；本研究主張）兩個部署模型分別計入 critical-path e2e（本研究處理 empty OS page cache cold-start，區別於 Yi et al. [2026] 的 hotspot-shift buffer cold-start）。據我們所知，這是**首個在 SQLite OS-page-cache cold-start 上、把 prefetch preprocessing 拆解到 open / deliver 兩個 OS-syscall term、並以兩個部署模型對齊 critical path 的 cold-start evaluation methodology**——貢獻在於成本核算的**粒度與對齊**，而非「首次意識到 prefetch 有成本」（InnoDB buffer-pool dump/load、Yi+26 等已意識到，見 §2.3.2）。
+**方法。** 我們提出一套兩層 cold-start 框架：(1) page-type-aware physical layout reorder（binary 層重寫，將 interior page 集中至 file head）；(2) 基於 mincore 的 targeted madvise prefetch，以**兩個對等的 selection 槓桿**挑頁——**page-type-aware**（選 B+tree interior）與 **access-frequency-aware**（選 workload 最 hot 的 leaf）。整套設計不修改 SQLite internal，作為 application-side tool 部署。核心方法是把 prefetch 的 preprocessing **拆解到 OS-syscall 粒度**——冷 `open(db)`（~200 µs、per-layout 常數）與逐頁 `deliver`（隨 hotset 大小）——並以 **pread oracle vs async madvise hint** 兩種模式隔離「選對頁（selection）」與「載得及（delivery）」，再以 **standalone warmer**（另起 process、付冷 open；≈ cold 容器 / scale-from-zero）與 **warm-process / integrated**（app 已在跑、重用 handle、不付冷 open；≈ serverless keep-alive 容器 / edge 常駐 worker；本研究主張）兩個部署模型分別計入 critical-path e2e（本研究處理 empty OS page cache cold-start，區別於 Yi et al. [2026] 的 hotspot-shift buffer cold-start）。據我們所知，這是**首個在 SQLite OS-page-cache cold-start 上、把 prefetch preprocessing 拆解到 open / deliver 兩個 OS-syscall term、並以兩個部署模型對齊 critical path 的 cold-start evaluation methodology**——貢獻在於成本核算的**粒度與對齊**，而非「首次意識到 prefetch 有成本」（InnoDB buffer-pool dump/load、Yi+26 等已意識到，見 §2.3.2）。
 
 **核心發現（first-query 改善 ≠ end-to-end 加速）。** cache-dump 式策略（2f_slru，載整份 resident working set）first-query 最低（**−76 ~ −89%**，A/orig 529→127 µs、C/orig 1096→123 µs），但其 **~0.8–7 ms 的 deliver overhead** 反讓 end-to-end cold start **慢一個量級**——此 trade-off 在既有 prefetch literature 長期被忽略。相對地，targeted prefetch 以**極少 syscall** 取得 first-query **−22 ~ −81%**，而 e2e 勝負**取決於部署模型**：standalone 下 preprocessing 吃掉快 workload 的紅利，warm-process 下精準 prefetch 可把單一 workload e2e 降低達 73%（C 2e_K10，1096→291 µs）。為避免單一抽樣誤導，我們以 **10-seed workload sweep + bootstrap 95% CI** 校正 headline：warm-process e2e 下，**access-pattern targeted prefetch 跨 seed robust**——C 2e_K10 **−70% [−72, −69]**（10/10 seed）、A 2e_K10 **−36% [−50, −23]**、B 2d **−25% [−32, −16]**（95% CI 皆不跨 0）；但 **structural `layers_5` 在 A/B 落在雜訊內（tie / directional、CI 跨 0），不可恃**。一個三槓桿 ablation 進一步把 C 的 headline 歸因到 **access-frequency**（隨機選同型別、同張數的 leaf 僅 −2%，照頻率選 −40%），而 **page-type**（interior）則撐起無自然 hot leaf 的 uniform workload B——兩槓桿各司其職。
 
-**穩健性與範圍。** 結論在五條 robustness 軸下穩定：50k write churn（static t=0 hotset 不 decay）、sub-working-set RAM pressure、多 process cadence re-warm、上述 10-seed sweep、與 DB 放大 10×（102 MB→~1 GiB）的 size-scaling（targeted 的 first-query 效益 18/18 cell size-robust，而 cache-dump 的 deliver 陷阱隨 DB 變大惡化，窄域 workload C 由贏轉輸）。**範圍界定：本研究所有量測均在單台 commodity x86 桌機（Ryzen 9950X）+ NVMe SSD、單一 Linux kernel 上進行；行動裝置 / IoT 為 motivating context、非 evaluated platform，絕對數字與相對排序不應外推至 ARM/UFS/eMMC 等不同 storage stack，需另行驗證（詳見 §6.4）。** 完整數據見 §5 / [overall_results.md](https://github.com/wongzinc/sqlite-research-project-sharing/blob/main/overall_results.md)（全 cell `cold_pct`=0）。
+**穩健性與範圍。** 結論在五條 robustness 軸下穩定：50k write churn（static t=0 hotset 不 decay）、sub-working-set RAM pressure、多 process cadence re-warm、上述 10-seed sweep、與 DB 放大 10×（102 MB→~1 GiB）的 size-scaling（targeted 的 first-query 效益 18/18 cell size-robust，而 cache-dump 的 deliver 陷阱隨 DB 變大惡化，窄域 workload C 由贏轉輸）。**範圍界定：本研究所有量測均在單台 commodity x86 桌機（Ryzen 9950X）+ NVMe SSD、單一 Linux kernel 上進行——此為 edge / serverless 部署所用的同一類硬體，但本研究未在特定 FaaS / microVM runtime（Lambda、Firecracker、gVisor 等）內量測，而是 model 其 warm-process cold-data pattern；行動裝置 / IoT 為 SQLite 普及背景、非 evaluated platform，絕對數字與相對排序不應外推至 ARM/UFS/eMMC 等不同 storage stack，需另行驗證（詳見 §6.4）。** 完整數據見 §5 / [overall_results.md](https://github.com/wongzinc/sqlite-research-project-sharing/blob/main/overall_results.md)（全 cell `cold_pct`=0）。
 
-**Index Terms** —— SQLite, Cold-start latency, Prefetch, Page-type aware, Access-frequency aware
+**Index Terms** —— SQLite, Cold-start latency, Prefetch, Page-type aware, Access-frequency aware, Serverless, Edge database, Warm-process cold-data
 
 ---
 
 ## 1. Introduction
 
 SQLite 是當今部署最廣的 database engine。根據 SQLite 開發團隊與學界合著的最新
-evaluation [Gaffney+22]，全球**估計超過 1 兆個 SQLite database處於使用中**，幾乎所有智慧型手機、瀏覽器、汽車與電視都內嵌 SQLite。在這個規模下，每一次
-app startup、每一次裝置自休眠喚醒、每一次 background process 重新被排程，
+evaluation [Gaffney+22]，全球**估計超過 1 兆個 SQLite database處於使用中**，幾乎所有智慧型手機、瀏覽器、汽車與電視都內嵌 SQLite。近年更出現一波把 SQLite 抬進 **production 後端**的 **edge / serverless database** 浪潮——Cloudflare D1（SQLite-based serverless SQL，2024 GA）、Turso/libSQL 的 embedded replica、Fly.io LiteFS 都把一份**本地 SQLite 檔**放在 commodity x86 + NVMe server 上、緊貼運算層，以 local-disk 速度服務 read-heavy 查詢（§2.3.6）。在這個規模下，每一次
+app startup、每一次裝置自休眠喚醒、每一次 background process 重新被排程、每一次 **serverless 函式被 keep-alive 喚醒或 edge worker 重新服務請求**，
 使用者所感知的「第一筆查詢latency」（first-query latency）即由 SQLite
 cold-start 性能直接決定。然而，SQLite cold-start readpath的系統性優化在學術界少有著墨：現有 SQLite literature多聚焦於writepath（fsync、WAL、
 journal mode），而跨領域的 prefetch 工作或不感知 SQLite internal structure（OS-level
@@ -59,12 +59,12 @@ classification 僅對dominate cold-start cost 的 interior 集合下達
 OS page cache 已被回收。這正是 serverless 與 microservice 的常態——大型雲端商對真實
 production FaaS workload 的量測顯示，平台會在函式執行後**主動 keep-alive 容器一段時間以重用暖環境**、並以 pre-warming 窗口降低 cold start [Shahrad+20]；跨 AWS Lambda /
 Azure / GCF 的量測亦證實平台維持暖實例供重用 [Wang+18]，最新的 serverless sandbox
-設計甚至以 `sfork`「直接重用執行中 instance 的狀態」為加速主軸 [Du+20]。行動端的
+設計甚至以 `sfork`「直接重用執行中 instance 的狀態」為加速主軸 [Du+20]。**這對本研究的 latency 尺度至關重要**：正因為運算層被 keep-alive、容器／runtime 開機那 10–100 ms 已被攤掉，keep-alive 喚醒後**留在 critical path 上的就不再是容器 boot、而是資料層的 SQLite data cold-start**——當 edge-SQLite 系統（D1／Turso embedded replica／LiteFS，§2.3.6）把本地檔的 pages 交給 OS page cache，而閒置或鄰居 tenant 的記憶體壓力把它們 reclaim 後，下一筆 query 就要付這條 µs 級的 B+tree cold traversal。換言之，本研究鎖定的 µs 級 first-query latency，正是 keep-alive 部署下**唯一還沒被攤平**的那段 cold-start。行動端的
 app lifecycle 亦有對應的 *warm start*（process 仍在、但畫面與資料須重建）概念
 （Android 官方 app-startup 文件，見 §9.2）。換言之，「process 已在、資料已冷」並非本研究為求好看而挑選的特例，
-而是 serverless 喚醒、microservice 重啟、長駐 app worker 等主流場景的共同形態。本研究因此把 **warm-process / integrated**（prefetch 重用既有 handle、不另付冷 open）
+而是 serverless 喚醒、microservice 重啟、長駐 app worker 等主流場景的共同形態。本研究因此把 **warm-process / integrated**（prefetch 重用既有 handle、不另付冷 open；**對應 keep-alive／已在服務的暖容器**）
 視為主要部署模型，並**同時報告較悲觀的 standalone warmer**（另起 process、需付冷
-open）作為對照——在 standalone 下快 workload 的 prefetch 紅利會被冷 open 開銷抵銷，
+open；**對應 scale-from-zero 的冷容器**）作為對照——在 standalone 下快 workload 的 prefetch 紅利會被冷 open 開銷抵銷，
 在 warm-process 下則三個 workload 的 e2e 全面改善（兩模型的完整拆解見 §3.4 / §5.5）。
 
 ### 1.1 Research Questions（研究問題）
@@ -270,7 +270,7 @@ SQLite 作為 mobile / embedded DB 的事實標準，已有相當數量的學術
 在 mobile platform 上的效能 bottleneck 做優化。值得注意的是，**這條 lineage 幾乎
 全部聚焦於 writepath**（write amplification、fsync、journaling、autocommit
 overhead），與本研究的 cold-start read latency 在問題定義、優化機制與
-hardware hypothesis 上皆正交（**本研究並未在 mobile 平台量測；此處引用僅為確立 read-path 的研究 niche、非主張 mobile 適用性**）：
+hardware hypothesis 上皆正交（**本研究並未在 mobile 平台量測；此處引用僅為確立 read-path 的研究 niche、非主張 mobile 適用性——本研究實際的部署情境是 §2.3.6 的 edge / serverless（commodity x86 + NVMe），mobile SQLite 在此僅作為「既有 SQLite 優化幾乎都集中在 write-path」的對照**）：
 
 - **[Oh+15] SQLite/PPL** (PVLDB 8(12), VLDB '15) ——專為 mobile app 的
   autocommit write workload design，finding「single message 常觸發 ≥10 次 page
@@ -371,6 +371,18 @@ OS primitive，因此與「以 virtual memory 為基礎的 DB caching」這條 l
 DB 102 MB 遠小於主機 RAM (62 GiB)；實驗中亦透過把 cgroup `MemoryMax` 壓到 working set 以下(6–16 MB)驗證了 memory-受壓 scenario（§6.2.2）下小 hotset targeted prefetch 的 first-q 仍保持穩定。換言之，**Crotty+22 訂的 mmap-OK criteria 直接背書本研究的 use case**。此外，相較傳統 user-space buffer pool design，mmap path **避免了 OS page cache 與 application buffer 之間的資料複製**，memory footprint 更小，這也是 [Crotty+22] §3.4 提出的 mmap 優勢（"*mmap-based file I/O also results in lower total memory consumption, as the data is not unnecessarily duplicated in user space*"）。對 mobile / embedded SQLite 部署 scenario 而言，這個 memory 優勢非 trivial。因此本研究選擇 mmap-based prefetch hint 通道是 deliberate design choice，而非 mmap-as-substrate 妥協。
 
 進一步：既有 mincore-based tool（如 vmtouch）只做全 page-cache 整檔 preload，**沒有 page-type 區分**；本研究的 contribution 是把 `mincore()` snapshot 與 SQLite B+tree 的 **page-type classification** 結合，做出 2d/2e (interior + top-K leaves) 的 frugal prefetch，僅 loaddominate cold-start cost 的少數關鍵 page，避免整檔 preload 的 I/O 浪費。
+
+#### 2.3.6 Edge / serverless SQLite deployments
+
+近年 SQLite 從 embedded 場景**外擴成 production 後端**：一批 edge / serverless database 直接以 SQLite（或其 fork）為儲存引擎，把**一份本地 SQLite 檔放在 commodity server 的本地 NVMe、緊貼運算層**，以 local-disk 速度服務 read-heavy 查詢。這條 lineage 是本研究部署情境（warm process, cold data）的**直接載體**：
+
+- **Cloudflare D1** —— SQLite-based 的 serverless SQL database（2024 GA），建於 Durable Object 上、**single-writer single-location**，並以非同步 **read replica** 就近服務全球讀取。D1 把 DB binding co-locate 進 Worker runtime、宣稱 in-process 執行故「cold Worker 的第一筆 query 與後續同速」——但這句話講的是**運算層 co-location**（且 D1 的 persistence 是自研的 Storage Relay Service、非單純 mmap 檔），**並不涵蓋 OS page cache 被回收後、本地檔 pages 須重讀的 data cold-start**。
+- **Turso / libSQL** —— libSQL 是 SQLite 的 MIT-licensed fork；其招牌是 **embedded replica**：應用端持有一份**本地 SQLite 檔**、持續從 cloud primary 同步，warm read 快到 sub-µs，官方定位為「serverless 環境、multi-tenant SaaS 的自然選擇」，同為 **single-writer**。
+- **Fly.io LiteFS / Litestream** —— LiteFS 用 FUSE 攔截 SQLite 的 WAL commit、以 transaction-aware 的 LTX 格式做 **single-writer／multi-reader** live replication，讓「database 就跑在 app 旁邊的 edge」；其文件明言「OS 會自動把 pages cache 在記憶體、故 **warm** read 幾乎無 slowdown」——**cold（pages 被 reclaim）那一面正是本研究的空白**。姊妹工具 Litestream 則把 WAL 串流到 S3 做災難復原。
+
+**共同 shape**：三者皆 **single-writer + read-heavy + 本地檔跑在本地 NVMe + 緊貼（常 keep-alive 的）運算**——這與本研究的量測平台（commodity x86 + NVMe）與 read workload（A/B/C）**同構**，其 read-heavy 假設也正是本研究只量 read cold-start 的理由。三者對「warm read」的效能宣稱都**預設 pages 已 resident**；一旦運算被 keep-alive 保溫、但本地檔的 OS page cache 因閒置或鄰居 tenant 的 memory 壓力被 reclaim，第一筆 query 就落回本研究量化的 µs 級 B+tree cold traversal。
+
+**跟我們的差別**：D1 / Turso / LiteFS 是**部署平台**，各自解 replication / consistency / failover；**沒有一個**針對「OS page cache 為空時的 first-query latency」做 targeted prefetch，也**沒有**把 prefetch 的 preprocessing 成本計入 critical-path e2e。本研究補的正是這個空白——一套不修改 engine、application-side 的 cost-accounted prefetch，適用於任何「SQLite 讀本地檔、經 OS page cache」的 edge / serverless 部署（embedded replica、co-located 檔、或自架於 VM / 容器上的 SQLite）。
 
 ---
 
@@ -590,15 +602,15 @@ pure-madvise delivery 的真實下限,不因量測時機而偏悲觀。`fq_pread
 
 **本實驗模型納入的真實現象（assumptions）：**
 
-- **「warm process, cold data」cold-start**（§2.2）：app 仍在跑、SQLite connection 與 prepared statement 已建立，但 file-backed page 已被回收。對應 app 自背景被喚醒、裝置自休眠恢復的真實情境。
-- **Write churn 造成的 layout 漂移**（§6.2.1）：50k 寫入（10 輪 × 5k mutation），模擬 DB 隨使用持續成長、page split/append。
-- **RAM 壓力**（§6.2.2）：cgroup `MemoryMax` 沿 working set 以下逐級壓（16→6 MB，即 0.92→0.35×WS），模擬 memory 受限裝置下 page 被 reclaim 的競爭。
-- **多 process 共享 cache**（§6.2.3）：MAP_SHARED + cadence re-warm，模擬手機背景 service + 前景 App 共用同一份 page cache。
+- **「warm process, cold data」cold-start**（§2.2）：app 仍在跑、SQLite connection 與 prepared statement 已建立，但 file-backed page 已被回收。對應 **serverless 函式被 keep-alive 喚醒、edge worker 重新服務請求**，以及 app 自背景喚醒、裝置自休眠恢復等真實情境。
+- **Write churn 造成的 layout 漂移**（§6.2.1）：50k 寫入（10 輪 × 5k mutation），模擬**長駐 edge / serverless DB（如 embedded replica）隨寫入持續成長**、page split/append。
+- **RAM 壓力**（§6.2.2）：cgroup `MemoryMax` 沿 working set 以下逐級壓（16→6 MB，即 0.92→0.35×WS）。**cgroup `MemoryMax` 正是 serverless / 容器平台強制 function 記憶體上限的機制**，故此軸直接對應 FaaS memory cap（以及 memory 受限裝置）下 page 被 reclaim 的競爭。
+- **多 process 共享 cache**（§6.2.3）：MAP_SHARED + cadence re-warm，模擬**同節點多 function instance / multi-tenant 共用同一份 page cache**（以及手機背景 service + 前景 App 的共享）。
 
 **未納入（threats to external validity，屬 future work）：**
 
 - **SSD 內部行為**：本研究停在 OS page cache 層（Level 1）；FTL GC、write amplification、device-level 隔離需 FEMU 或實體多裝置（Level 2）才能控制，本機環境（無 kvm/root）未涵蓋。
-- **單機、單一 kernel/SSD（平台 scope = commodity x86 桌機 + NVMe）**：所有 cell 跑在同一台 Ryzen 9950X、同一 kernel（6.17）、`read_ahead_kb`=128 的 NVMe 上。**本研究的實證宣稱僅 scope 至此類 commodity desktop NVMe 平台**；mobile/IoT 是 SQLite 普及的部署背景（motivation），但 ARM/UFS/eMMC 的 storage stack（page size、I/O latency、FTL 行為、readahead 預設）與本平台不同，本研究**未在其上量測**，故絕對 µs 與相對排序不應外推至 mobile，需獨立複現。
+- **單機、單一 kernel/SSD（平台 scope = commodity x86 + NVMe，未進 FaaS runtime）**：所有 cell 跑在同一台 Ryzen 9950X、同一 kernel（6.17）、`read_ahead_kb`=128 的 NVMe 上——**此為 edge / serverless 部署所用的同一類 commodity 硬體**，但本研究**未在特定 FaaS / microVM runtime（Lambda、Firecracker、gVisor、容器）內量測**，而是 model 其 warm-process cold-data pattern（在真實 runtime 內量關鍵 cell 是 future work，§7）。mobile/IoT 則是 SQLite 普及背景（motivation）、非 evaluated platform：ARM/UFS/eMMC 的 storage stack（page size、I/O latency、FTL 行為、readahead 預設）與本平台不同，絕對 µs 與相對排序不應外推至 mobile，需獨立複現。
 - **固定 reference DB**：600k row / 102 MB 單一 schema；更大 DB 或多表 join 的行為未測。
 
 ### 3.7 Statistical methodology（統計嚴謹性）
@@ -1008,17 +1020,17 @@ cap 小好幾個量級、永遠不被 evict；**2f_slru（17.7 MB dump）的 del
 （紅虛線）並維持**——「整碗端走」式 cache-dump 沒有 graceful degradation，是 all-or-nothing；五條
 targeted 則完全平。B（uniform）同形。*
 
-**結論（呼應全文主軸）**：在記憶體受限裝置上，**「小而準」的 targeted prefetch（≤2 MB hotset）對
+**結論（呼應全文主軸）**：在記憶體受限的部署下（serverless function 的 cgroup memory cap、或 memory 受限裝置），**「小而準」的 targeted prefetch（≤2 MB hotset）對
 RAM pressure 是 robust by construction**——這裡把**全部五條 targeted 策略**（layers_5/2d/2e_K10/layers_92/2e_K500，
 非只抽樣兩三條）都掃過，每條在 A/B 都**實測** 100% delivery、first-q 全程平（實測、非演繹推論）；
 hotset 太小、reclaim 碰不到它，first-query 效益完整保留；
 而**「大而全」的 cache-dump（2f_slru，hotset＝整個 working set）一旦 RAM 低於 working set 就當場崩**——
-RAM 受限是 mobile/IoT 部署關注的情境,但**本量測是在桌機上以 cgroup `MemoryMax` 模擬施壓、非實機**(平台 scope 見 §6.4)。可用量測下限約 **6 MB（0.35×WS）**；4 MB 以下 cold gate 全排除、量不出。
+**cgroup `MemoryMax` 正是 serverless / 容器平台強制 function 記憶體上限的原生機制，故此軸對 serverless 部署尤其貼題**（對 mobile/IoT 亦相關）；惟本量測是在桌機上以 cgroup 施壓、非在真實 FaaS runtime 內（平台 scope 見 §6.4）。可用量測下限約 **6 MB（0.35×WS）**；4 MB 以下 cold gate 全排除、量不出。
 C（WS 僅 1.8 MB ≈ 量測下限）**無法以 cgroup 施壓 → 其 RAM-robustness 為演繹推論（hotset/WS 小於可量測下限、reclaim 碰不到）、非實測**；要對 file-tail workload 取得真正的 sub-WS datapoint，需構造放大-WS 的 C 變體（future work）。
 
 #### 6.2.3 Multi-process MAP_SHARED
 
-一個 process 做 prefetch，所有 shared 同一份 cache 的 process 都受惠。
+一個 process 做 prefetch，所有 shared 同一份 cache 的 process 都受惠——對應**同節點多 function instance / multi-tenant 共用同一份 page cache**（或 edge 節點上前景 worker + 背景 warmer 共享）的部署：單次 prefetch 成本被所有共用該 DB 的 instance 攤提。
 
 ![Multi-process prefetch cadence 對 first query latency 的影響](figures/out/08_cadence_comparison.png)
 
@@ -1070,6 +1082,8 @@ C（WS 僅 1.8 MB ≈ 量測下限）**無法以 cgroup 施壓 → 其 RAM-robus
 
 ### 6.3 Practical recommendations
 
+對映到 edge / serverless 部署：**warm-process 欄 = keep-alive 容器 / 常駐 edge worker（本研究主張）**、**standalone 欄 = scale-from-zero 冷容器**；下列 workload 類型對應常見的 edge-SQLite 存取樣態（Zipfian 熱點讀、uniform 隨機讀、file-tail 新資料 / churn）。
+
 | scenario | 建議做法 | First-q improvement | End-to-end（warm-process / standalone）|
 |---|---|---|---|
 | **慢 workload(查file tail/churn,baseline 高)** | access-pattern:interior + 最 hot 的 ~10 leaf(2e_K10) | **−81%**(C) | **warm e2e −73%(291µs)** / std −53%，全矩陣最佳 |
@@ -1104,12 +1118,13 @@ C（WS 僅 1.8 MB ≈ 量測下限）**無法以 cgroup 施壓 → 其 RAM-robus
 - **Workload coverage**：A/B/C 是合成的三種 access pattern;**workload-instantiation 敏感度已用 10-seed sweep 量化**(§6.2.4,access-pattern targeted prefetch 跨 seed robust、structural layers_5 在 A/B 落雜訊內)。但這 10 seed 仍是同三種「分佈家族」的不同抽樣;real world 行為可能更複雜（mixed read/write、time-of-day 變化、跨分佈家族),留待後續驗證。
 - **未測「真正 cold reboot」cold start**：受限於 sudo 權限與機器shared，沒做「每筆量都 reboot」的嚴格 cold start。harness `--sqlite-open-timing=after-cold`
   可以模擬部分（重 open SQLite handle）。
-- **Platform scope = commodity x86 桌機 + NVMe（mobile 未量測）**：所有實驗在同一台 Ryzen 9950X + NVMe、單一 kernel(6.17) 上跑。**本研究的實證結論 scope 限於此類 commodity desktop NVMe 平台。** 行動裝置/IoT 是 SQLite 普及與本問題的 motivation 背景,但 mobile 的 storage stack 在多個維度與本平台不同——UFS/eMMC 的 I/O latency 與 queue 行為、不同的 `read_ahead_kb` 預設、ARM page size、以及更受限的 RAM——這些都可能改變 selection–delivery 的 trade-off 點。本研究**未在 ARM/UFS/eMMC 上量測**,故絕對 µs 與策略間相對排序均不應外推至 mobile;一台 ARM/UFS SBC 上重跑 A/C × {baseline, 2e_K10} 的關鍵 cell 是直接的後續驗證(future work)。
+- **Platform scope = commodity x86 + NVMe（edge/serverless 硬體級；未進 FaaS runtime、mobile 未量測）**：所有實驗在同一台 Ryzen 9950X + NVMe、單一 kernel(6.17) 上跑。此為 **edge / serverless 部署所用的同一類 commodity 硬體**，故實證結論 scope 於此類平台；但有兩個未涵蓋的方向：(1) 本研究**未在特定 FaaS / microVM runtime（Lambda、Firecracker、gVisor、容器）內量測**——真實 runtime 的 cgroup 限制、I/O 隔離與 neighbor 干擾可能改變絕對 µs（在 FaaS-like cgroup / 容器環境重跑關鍵 cell 是 future work，§7）；(2) 行動裝置/IoT 是 SQLite 普及與本問題的 motivation 背景,但 mobile 的 storage stack 在多個維度與本平台不同——UFS/eMMC 的 I/O latency 與 queue 行為、不同的 `read_ahead_kb` 預設、ARM page size、以及更受限的 RAM——這些都可能改變 selection–delivery 的 trade-off 點。本研究**未在 ARM/UFS/eMMC 上量測**,故絕對 µs 與策略間相對排序均不應外推至 mobile;一台 ARM/UFS SBC 上重跑 A/C × {baseline, 2e_K10} 的關鍵 cell 是直接的後續驗證(future work)。
 
 ---
 
 ## 7. Future Work
 
+- **In-runtime serverless / edge validation**：本研究在 edge / serverless 的**同一類硬體**（x86 + NVMe）上 model warm-process cold-data pattern，但未進真實 runtime。直接的後續驗證是把 A/C × {baseline, 2e_K10} 關鍵 cell 放進 **FaaS-like 環境**重跑——本機無 kvm/root 故 Firecracker microVM 走不了，但**容器 + cgroup 記憶體上限**（對應 FaaS memory cap，§6.2.2 已用同機制施壓）可行，能給 serverless 宣稱一個真正落在受限 runtime 內的 datapoint；有 kvm 的機器上再補 Firecracker / gVisor 與 Lambda 端到端量測，並在 Turso embedded replica / LiteFS 之上驗證同一 cold-data 現象。
 - **Type-aware Physical Segregation (Level 2)**：把 type-aware layout 從
   filesystem 層下放到 NVMe SSD 層（用 NVMe Stream Directives 把 interior /
   leaf 分到不同 SSD line/namespace），讓 SSD GC / wear leveling 不會打亂
@@ -1177,6 +1192,9 @@ warm-process 不含」這兩層 trade-off，在既有 prefetch literature 中很
 | FEMU | https://github.com/MoatLab/FEMU | Future Work §7 提到的 SSD-level evaluation 平台 |
 | MySQL InnoDB buffer pool preload | https://dev.mysql.com/doc/refman/8.0/en/innodb-preload-buffer-pool.html | §2.3.2 對照——engine-internal「整份 buffer pool dump/load」的生產實作，與本研究 2f SLRU 同 pattern |
 | Android App startup time（warm start） | https://developer.android.com/topic/performance/vitals/launch-time | §1 motivation——行動端 app lifecycle 的 *warm start*（process 仍在、資料/畫面須重建）官方定義，佐證 warm-process 場景的普遍性 |
+| Cloudflare D1 | https://developers.cloudflare.com/d1/ | §1 + §2.3.6——SQLite-based serverless SQL database（2024 GA），edge/serverless SQLite redeployment 的代表；co-located、single-writer、async read replica |
+| Turso / libSQL | https://docs.turso.tech/libsql | §2.3.6——SQLite 的 MIT fork + **embedded replica**（本地 SQLite 檔同步自 cloud primary），warm-process cold-data 部署的直接載體 |
+| Fly.io LiteFS / Litestream | https://fly.io/docs/litefs/ | §2.3.6——FUSE-based transaction-aware SQLite replication（LTX 格式）；「database 跑在 app 旁邊的 edge」，warm read 靠 OS page cache、cold reclaim 即本研究 niche |
 
 **Papers：**
 

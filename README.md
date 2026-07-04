@@ -8,6 +8,8 @@ SQLite 冷啟動後第一筆 query 特別慢:OS page cache 是空的,走訪 B+tr
 能省多少 cold-start latency、**把 prefetch 自身的 preprocessing 成本也算進 end-to-end**,
 以及哪種「選頁策略 × DB layout × workload」組合最有效。
 
+這個問題在 **SQLite 被重新部署為 serverless / edge database** 時尤其關鍵——Cloudflare D1、Turso/libSQL 的 embedded replica、Fly.io LiteFS 都把本地 SQLite 檔跑在 commodity x86+NVMe、緊貼(常被 keep-alive 保溫的)運算。容器被保溫、開機成本攤掉後,**留在 critical path 上的就是這條資料層 cold-start**。本研究因此把 warm-process(重用 handle、≈ keep-alive 容器)當主要部署模型、standalone(冷容器)當對照。
+
 > 完整論文:**[REPORT.md](REPORT.md)** / [REPORT.pdf](REPORT.pdf)
 > 結果矩陣:[overall_results.md](overall_results.md)　策略目錄:[overall_strategies.md](overall_strategies.md)　策略怎麼測:[strategies_explained.md](strategies_explained.md)　workload 定義:[overall_workloads.md](overall_workloads.md)
 
@@ -22,7 +24,7 @@ baseline cold first-query @orig:A 529 / B 760 / C 1096 µs。
 - **結論在五條 robustness 軸下穩定**:50k write churn、sub-working-set RAM pressure、多 process cadence re-warm、10-seed sweep、DB 放大 10×(102 MB→~1 GiB)。RAM 壓力下小 hotset(≤2 MB)的 targeted 全程 100% delivery、first-q 不受影響,只有 `2f_slru`(整份 WS)在 cap 低於 working set 時崩潰。
 - **type-aware layout 非淨贏**:把 interior 搬到 file head 雖降 first-q,卻推高 baseline(A +31% / B +4%)又讓 hotset 變大,實測沒有任何一格贏過原始 layout——**預設用原始 layout(1a)+ access-pattern prefetch** 即可。
 - **多 process 免費放大**:`PRAGMA mmap_size` 開 `MAP_SHARED` 後,一個 process prefetch,所有共用同一 DB 的 process 都受惠。
-- **範圍界定**:所有量測在單台 commodity x86 桌機(Ryzen 9950X)+ NVMe SSD、單一 Linux kernel;行動裝置 / IoT 是 motivating context、非評估平台,絕對數字不外推到 ARM/UFS/eMMC。
+- **範圍界定**:所有量測在單台 commodity x86(Ryzen 9950X)+ NVMe SSD、單一 Linux kernel——**edge/serverless 部署的同一類硬體**,但未在特定 FaaS/microVM runtime 內量測(model 其 warm-process cold-data pattern);行動裝置 / IoT 是 motivating 背景、非評估平台,絕對數字不外推到 ARM/UFS/eMMC。
 
 完整數字與每個 workload 的最佳組合見 [overall_results.md](overall_results.md)。
 
