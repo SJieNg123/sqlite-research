@@ -429,7 +429,7 @@ file head前 400 KB，可被 sequential prefetch 一次涵蓋。*
 A / B / C 分別涵蓋三個正交的「hotspot分布」dimension（read skew、uniform、file tail
 locality）；D 不直接量 latency，是 §6.2.1 churn 實驗用於製造 layout 漂移
 的 write generator。每個 workload 的完整定義（key range、Zipf parameter α、
-ops 數）見 [overall_workloads.md](https://github.com/wongzinc/sqlite-research-project-sharing/blob/main/overall_workloads.md)。
+ops 數）見 [overall_workloads.md](https://github.com/wongzinc/sqlite-research-project-sharing/blob/main/overall_workloads.md)。**Zipfian workload（A 及 robustness 變體 Z，§A.2）採 Zipf α = 0.99**（rank $r$ 的取樣權重 $\propto 1/r^{0.99}$，即 YCSB 預設 zipfian constant；A 再 scramble 成隨機 permutation 使熱 key 散佈全 key space，Z 不 scramble、熱點落在低 id）。產生器 `workloads/gen_workload.py` 以 **direct power-law 取樣 + permutation scramble** 實作、並**校準自原始 committed workload 檔的分佈**（非 byte-identical 於 YCSB 的 `ScrambledZipfianGenerator`，但 α 數值一致、skew 已對齊；重建細節見 overall_workloads.md）。
 
 Workload A 與 B 的 op string 格式與分布參考自 [YCSB-cpp](https://github.com/ls4154/YCSB-cpp)
 （C++ port of YCSB）——A 對應 YCSB-C profile（read-only Zipfian over single
@@ -637,8 +637,12 @@ MAP_SHARED」是目前測過的全局 best 組合。
 
 ### 4.1 Layout strategies (1a / 1b / 1c)
 
+> **Scatter score（三 layout 的 clustering 量度，定義同計算程式 `pipeline/preparation/.../scatter.py` / `plot_pages.py`）**：取 interior pages 的平均頁號 $\bar{p}$（centroid），對「全部連續擠在 file head」與「uniform 散佈」兩個參考點正規化：
+> $$\text{scatter} = \frac{\bar{p} - (k+1)/2}{N/2 - (k+1)/2}$$
+> 其中 $\bar{p}$ = interior pages 的平均頁號、$k$ = interior 頁數（本 DB 92）、$N$ = 檔案總頁數。**0** = interior 全部連續擠在 file head（$\bar{p}=(k+1)/2$）、**≈1** = uniform 散佈（$\bar{p}=N/2$）、**>1** = centroid 落在檔案後半（如 1b VACUUM 的 1.13）。它量的是 interior pages **平均落在檔案多後面（centroid 位置）**，而非其離散／破碎程度——故「連續但擠在檔尾」的極端會 >1。
+
 - **1a 原始**：builder 跑出來的 DB，SQLite 怎麼配 page 就怎麼擺。
-  Interior 跟 leaf 完全 interleaved（scatter score 0.96）。
+  Interior 跟 leaf 完全 interleaved（scatter score 0.96，interior centroid 幾乎落在檔案正中）。
 - **1b VACUUM**：呼叫 SQLite built-in `VACUUM;`。會重新打包，但 source code 顯示
   它**按 insertion order** reorder、**不看 page type**。實驗證實：scatter 從
   0.96 變 1.13（更散）、file 小 ~3%、prefetch 效益**沒提升**。

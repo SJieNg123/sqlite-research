@@ -86,7 +86,13 @@
 | 1b vacuum | 跟 1a 類似 | **1.13**（更散） | VACUUM 沒幫忙，反而稍微更散 |
 | 1c type-aware | page 2 到 page 93（連續）| **0.0001** | 全部集中到檔頭、幾乎完美 clustering |
 
-> Scatter score 定義：interior pages 的相鄰 offset 差的中位數 / 「理想連續」的中位數。0 = 完美連續，1 = uniform 散佈。
+> **Scatter score 定義（以計算程式 `scatter.py` / `plot_pages.py` 為準）**：interior pages 的**平均頁號（centroid 位置）**經正規化：
+>
+> ```
+> scatter = (mean_pos - (k+1)/2) / (N/2 - (k+1)/2)
+> ```
+>
+> `mean_pos` = interior pages 的平均頁號、`k` = interior 頁數（此 DB 92）、`N` = 檔案總頁數。**0 = interior 全部連續擠在檔頭**（mean_pos =(k+1)/2）、**≈1 = uniform 散佈**（mean_pos = N/2）、**>1 = centroid 落在檔案後半**（如 1b vacuum = 1.13，故此分數不設 [0,1] 上界）。它量的是 interior pages **平均落在檔案多後面**，不是它們的離散／破碎程度。
 
 ---
 
@@ -114,10 +120,12 @@ readmodifywrite <id>
 **檔案：** [workloads/workload_a.txt](workloads/workload_a.txt)
 **規模：** 100,000 ops，全部 `read`
 **Key 範圍：** id ∈ [8, 99997]（只打 DB 前 1/6 的 id 區段）
-**分佈：** 強 Zipfian skew
+**分佈：** 強 Zipfian skew，**Zipf α = 0.99**（rank r 的取樣權重 ∝ 1/r^0.99，over 100,000 keys，再 scramble 成隨機 permutation 使熱 key 散佈全 key space）
 - 100,000 次查詢只觸及 **23,253 個 unique key**（76% 是 repeat query）
 - **Top 100 個熱 key 吃掉 42.3% 的流量**
 - 最熱的單一 key (`id=74406`) 被查 **7,752 次**（單 key 佔總流量 7.75%）
+
+> **產生器與 α 出處：** `workloads/gen_workload.py`（`A_ALPHA = 0.99`，即 YCSB 預設 zipfian constant）。此 generator 為**逆推重建、校準自原始 committed 檔的分佈**（原始 exact bytes/seed 未知）——上面的 unique/top-key 指紋即校準目標；10-seed sweep（見 [overall_results.md](overall_results.md)）即以此 α=0.99 重生成。實作為 **direct power-law `1/r^α` + permutation scramble**，非 YCSB 的 zeta-based `ScrambledZipfianGenerator`（α 數值一致、skew 已校準對齊）。**同一 generator 的 robustness 變體 Workload Z**（低 key hotspot，REPORT §A.2）亦為 **α = 0.99**，但 `rank = key` 不 scramble（熱點落在低 id）。
 
 **模擬什麼：** 真實 App 的「熱資料反覆被打」情境 — 使用者常開的聯絡人、最近瀏覽
 的相簿、首頁那幾筆 item。少數熱 key 把對應 leaf page 撐成熱頁，**leaf 自然會

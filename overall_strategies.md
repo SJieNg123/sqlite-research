@@ -36,6 +36,8 @@
 不做任何事，SQLite 怎麼分配就怎麼放。Interior pages 散佈於整個 file（**scatter
 score ≈ 0.96**，92 個 interior 散在 page 2..26,007 之間）。是所有實驗的基準線。
 
+> **Scatter score 公式（以計算程式 `scatter.py` / `plot_pages.py` 為準）**：`scatter = (mean_pos - (k+1)/2) / (N/2 - (k+1)/2)`，其中 `mean_pos` = interior pages 的平均頁號、`k` = interior 頁數（92）、`N` = 檔案總頁數。**0** = interior 全部連續擠在檔頭、**≈1** = uniform 散佈、**>1** = centroid 落在檔案後半（如 1b vacuum 的 1.13）。它量的是 interior pages 的**平均位置（centroid）**、不是離散程度。
+
 **狀態：** 永遠存在。
 **結論：** 沒有任何 prefetch 也能拿 baseline；`layers_5` 不需要做 layout 改動。統一 pipeline 下 layers_5 first-query 改善:A/orig **−22%**、B/orig **−43%**、C/orig 僅 −3%(C 要 N=92 才 −37%)。
 
