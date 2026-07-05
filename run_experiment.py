@@ -83,11 +83,19 @@ CLASSIFY = {
     "ta":     ROOT / "pipeline/preparation/layout_rewriter/runs/classify_after.csv",
     "1gb":    ROOT / "pipeline/preparation/layout_rewriter/runs/classify_1gb.csv",
 }
+def _base_workload(key):
+    """Default (seed-less) workload path. The unseeded base files were renamed to
+    seeded copies (workload_<k>_1..10.txt) in dfc7f25; _1 is the original (seed 1),
+    the stream results/main was built from. Prefer the unseeded name if it is ever
+    restored, else fall back to _1. (--seed N repoints these via apply_seed.)"""
+    base = ROOT / f"workloads/workload_{key}.txt"
+    return base if base.exists() else ROOT / f"workloads/workload_{key}_1.txt"
+
 WORKLOADS = {
-    "A": ROOT / "workloads/workload_a.txt",
-    "B": ROOT / "workloads/workload_b.txt",
-    "C": ROOT / "workloads/workload_c.txt",
-    "Z": ROOT / "workloads/workload_z.txt",  # low-key Zipfian (robustness)
+    "A": _base_workload("a"),
+    "B": _base_workload("b"),
+    "C": _base_workload("c"),
+    "Z": _base_workload("z"),  # low-key Zipfian (robustness)
 }
 SLRU_SUFFIX = {"orig": "", "vacuum": "_vacuum", "ta": "_ta", "1gb": "_1gb"}
 
