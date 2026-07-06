@@ -4,7 +4,7 @@ Story: layers_N first-query latency drops as N grows (more interior pages
 prefetched) and plateaus where the remaining cost is leaf faults. The plateau
 HEIGHT/SHAPE is workload-dependent. N=0 is the no-prefetch baseline.
 
-Data: results/nsweep/summary.csv — layers_N sweep on layout=orig,
+Data: results/nsweep_dense/summary.csv — layers_N sweep on layout=orig,
 async arm, first-query median (warmup dropped). N=0 = baseline cell.
 NOTE: the churned-DB N-sweep (old fig had a 2nd panel) needs churn-checkpoint
 infra not in the batch — see overall_results.md (kept as legacy).
@@ -14,11 +14,14 @@ from collections import defaultdict
 from plot_utils import ROOT, WORKLOAD_COLORS, save
 import matplotlib.pyplot as plt
 
-SUMMARY = ROOT / "results/nsweep/summary.csv"
+SUMMARY = ROOT / "results/nsweep_dense/summary.csv"
 
-# workload -> {N: fq_median(async)}
+# workload -> {N: fq_median(async)}.  nsweep_dense holds all 3 layouts
+# (orig/vacuum/ta); this figure is the orig-layout plateau only.
 data = defaultdict(dict)
 for r in csv.DictReader(open(SUMMARY)):
+    if r["db"] != "orig":
+        continue
     w = r["workload"]
     if r["strategy"] == "baseline" and r["arm"] == "baseline":
         data[w][0] = float(r["fq_median"])

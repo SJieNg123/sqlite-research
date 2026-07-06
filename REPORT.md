@@ -767,7 +767,7 @@ first-query improvement上限(orig,vs baseline):
 
 *（clean DB、layout orig、async first-query；A/B 在 N=5 落底、C 需 N=92。3-layout 版見 Figure 11、churned-DB 版見 Figure 12。）*
 
-*圖 4：N（prefetch 多少個 interior page）對 first query 的影響。**A 在 N=5 就到 plateau**，**此 plateau 描述的是「跑完整段 workload 的 avg latency / steady-state」**：first-q 時 leaves 跟 interior 同樣是 cold（cold-start protocol DONTNEED 全清），layers_5 在 first-q 只移除 interior fault，仍付一次 leaf fault；**跑開後** hot keys 對應的 leaves 自然 warm-up、interior 才成為唯一反覆需要且 shared 的 bottleneck，所以 prefetch 專攻 interior 就夠。**B/C 要到 N≈92 才壓住** first-q 是因為它們每筆 query 都打不同 cold leaf、沒有自然 hot leaves 可依賴。Churn 不改變此 plateau 的形狀。*
+*圖 4：N（prefetch 多少個 interior page）對 first query 的影響。**A/B 在 N=5 就到 plateau**（B 甚至 N=4 即落底，−47%），**此 plateau 描述的是「跑完整段 workload 的 avg latency / steady-state」**：first-q 時 leaves 跟 interior 同樣是 cold（cold-start protocol DONTNEED 全清），layers_5 在 first-q 只移除 interior fault，仍付一次 leaf fault；**跑開後** hot keys 對應的 leaves 自然 warm-up、interior 才成為唯一反覆需要且 shared 的 bottleneck，所以 prefetch 專攻 interior 就夠。**唯 C 要到 N=92 才壓住** first-q：C 的 hot interior page 落在 file 中段，而 layers_N 按 file offset 升序取前 N 個，小 N 會選到錯的 early-offset page（N=5 才 −5%），要取滿 92 個才蓋到中段的 hot interior（−41%）。Churn 不改變此 plateau 的形狀。*
 
 ### 5.4 Access-pattern frugality on Workload C
 
