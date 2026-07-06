@@ -25,7 +25,7 @@ def load_interior(p):
                 out.append(int(r["file_offset"]) / (1024*1024))
     return out
 
-fig, axes = plt.subplots(3, 1, figsize=(11, 5.2), sharex=True)
+fig, axes = plt.subplots(3, 1, figsize=(11, 5.6), sharex=True)
 for ax, (name, path, color) in zip(axes, LAYOUTS):
     pos = load_interior(path)
     ax.eventplot(pos, lineoffsets=0, linelengths=0.8, linewidths=0.8, colors=color)
@@ -35,11 +35,10 @@ for ax, (name, path, color) in zip(axes, LAYOUTS):
 
     n = len(pos)
     span = max(pos) - min(pos) if pos else 0
-    ax.text(0.99, 0.5,
-            f"{name} · {n} interior pages\nspan = {span:.1f} MB "
-            f"({span/DB_SIZE_MB*100:.0f}% of file)",
-            transform=ax.transAxes, ha="right", va="center",
-            fontsize=10, color=color, fontweight="bold")
+    ax.set_title(
+        f"{name} · {n} interior pages · "
+        f"span = {span:.1f} MB ({span/DB_SIZE_MB*100:.0f}% of file)",
+        loc="left", fontsize=10, color=color, fontweight="bold", pad=4)
     ax.grid(False)
 
 axes[-1].set_xlabel("file offset (MB) · DB size = 103 MB")
