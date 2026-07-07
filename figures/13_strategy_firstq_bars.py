@@ -17,7 +17,7 @@ LABELS = [STRAT_LABELS[s] for s in STRATEGIES]
 COLORS = [STRATEGY_COLORS.get(s, "#3b82f6") for s in STRATEGIES]
 WORKLOADS = ['A', 'B', 'C']
 WL_TITLE = {'A': 'Workload A (Zipfian)', 'B': 'Workload B (uniform)',
-            'C': 'Workload C (churn-heavy)'}
+            'C': 'Workload C (file-tail)'}
 
 fig, axes = plt.subplots(1, 3, figsize=(13, 4.6), sharey=False)
 x = np.arange(len(STRATEGIES))

@@ -22,16 +22,6 @@ WORKLOADS = ['A', 'B', 'C']
 WL_TITLE = {'A': 'Workload A (Zipfian)', 'B': 'Workload B (uniform)',
             'C': 'Workload C (churn-heavy)'}
 
-# Cross-seed (10-seed) warm-e2e verdict per (workload, strategy), layout=orig, from
-# results/stats/uncertainty.csv (metric e2e_warm_us, arm async). A single-workload bar can
-# show a green "win" that the 10-seed CI says is actually inside the noise band (CI crosses 0).
-# Those are the cells whose warm-process flip-to-win is NOT robust -- we mark them so the
-# headline width does not read wider than the evidence (review item: "標翻盤是否落在 noise 內").
-NOISE_VERDICT = {            # cells whose warm-process win is within noise (CI crosses 0)
-    ('A', 'layers_5'): 'tie',          # -5% [-16, +4]  6/10
-    ('B', 'layers_5'): 'directional',  # -1% [-12, +7]  8/10
-}
-
 fig, axes = plt.subplots(1, 3, figsize=(13.5, 5.4), sharey=False)
 x = np.arange(len(STRATEGIES))
 
@@ -51,19 +41,13 @@ for ax, wl in zip(axes, WORKLOADS):
            linewidth=0.5, hatch='///', label='deliver (prefetch syscalls)')
     ax.bar(x, opens, bottom=warm, color='#d1d5db', alpha=0.95, edgecolor='black',
            linewidth=0.5, hatch='xx', label='cold open(db) — saved if integrated')
-    ax.axhline(baseline, color='#dc2626', ls='--', lw=1.4, alpha=0.85, zorder=4,
-               label=f'baseline ({baseline:.0f} µs)')
 
     for xi, wv, sv, s in zip(x, warm, standalone, STRATEGIES):
         wi = (wv - baseline) / baseline * 100          # warm-process e2e vs baseline (headline)
         wsign = '+' if wi >= 0 else ''
-        noise = NOISE_VERDICT.get((wl, s))             # within-noise warm-process flip?
-        if noise:                                      # grey + dagger: 10-seed CI crosses 0
-            label, col, fw = f'{wsign}{wi:.0f}%‡', '#6b7280', 'normal'
-        else:
-            label, col, fw = f'{wsign}{wi:.0f}%', ('#15803d' if wi < 0 else '#dc2626'), 'bold'
-        ax.text(xi, sv * 1.06, label, ha='center', va='bottom',
-                fontsize=8.5, fontweight=fw, color=col)
+        col = '#15803d' if wi < 0 else '#dc2626'
+        ax.text(xi, sv * 1.06, f'{wsign}{wi:.0f}%', ha='center', va='bottom',
+                fontsize=8.5, fontweight='bold', color=col)
 
     ax.set_xticks(x)
     ax.set_xticklabels([STRAT_LABELS[s] for s in STRATEGIES], fontsize=9, rotation=25, ha='right')
@@ -80,9 +64,5 @@ fig.suptitle('End-to-end cold start, two models (layout orig): '
              'warm-process e2e = first-q+deliver (bar minus grey) · standalone = full bar. '
              'Grey = cold open(db) saved by integrating prefetch.',
              fontsize=10, y=1.0)
-fig.text(0.5, -0.02,
-         '‡ = warm-process win is inside the noise band: 10-seed cross-seed CI crosses 0 '
-         '(A/B layers_5 — see §6.2.4). Unmarked % are cross-seed robust.',
-         ha='center', fontsize=8, color='#6b7280')
 fig.tight_layout()
 save(fig, '14_strategy_endtoend_stacked')
