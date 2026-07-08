@@ -82,9 +82,7 @@ def main():
 
     handles, labels = axes[0][0].get_legend_handles_labels()
     fig.legend(handles, labels, loc="lower center", ncol=4, bbox_to_anchor=(0.5, -0.01))
-    fig.suptitle("Three-lever ablation: leaf_rand≈baseline but leaf_freq wins → "
-                 "the lever is access-frequency, not page-type", fontsize=12)
-    fig.tight_layout(rect=(0, 0.04, 1, 0.97))
+    fig.tight_layout(rect=(0, 0.04, 1, 1))
     save(fig, "17_lever_ablation")
 
 

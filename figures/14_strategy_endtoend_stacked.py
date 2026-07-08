@@ -20,7 +20,7 @@ DATA = load_summary("async")
 STRATEGIES = STRAT_ORDER
 WORKLOADS = ['A', 'B', 'C']
 WL_TITLE = {'A': 'Workload A (Zipfian)', 'B': 'Workload B (uniform)',
-            'C': 'Workload C (churn-heavy)'}
+            'C': 'Workload C (file-tail)'}
 
 fig, axes = plt.subplots(1, 3, figsize=(13.5, 5.4), sharey=False)
 x = np.arange(len(STRATEGIES))
@@ -43,6 +43,8 @@ for ax, wl in zip(axes, WORKLOADS):
            linewidth=0.5, hatch='xx', label='cold open(db) — saved if integrated')
 
     for xi, wv, sv, s in zip(x, warm, standalone, STRATEGIES):
+        if s == "baseline":
+            continue                                   # baseline is the reference; skip +0% label
         wi = (wv - baseline) / baseline * 100          # warm-process e2e vs baseline (headline)
         wsign = '+' if wi >= 0 else ''
         col = '#15803d' if wi < 0 else '#dc2626'
@@ -56,13 +58,7 @@ for ax, wl in zip(axes, WORKLOADS):
     ax.set_ylim(80, max(standalone) * 4.0)
     ax.grid(axis='y', alpha=0.25, which='both')
     ax.set_axisbelow(True)
-    if wl == 'A':
-        ax.legend(loc='upper left', fontsize=7.2, framealpha=0.92)
 
 axes[0].set_ylabel('end-to-end cold start (µs, log scale)', fontsize=10)
-fig.suptitle('End-to-end cold start, two models (layout orig): '
-             'warm-process e2e = first-q+deliver (bar minus grey) · standalone = full bar. '
-             'Grey = cold open(db) saved by integrating prefetch.',
-             fontsize=10, y=1.0)
 fig.tight_layout()
 save(fig, '14_strategy_endtoend_stacked')

@@ -38,7 +38,5 @@ for ax, wl in zip(axes, WORKLOADS):
     ax.set_axisbelow(True)
 
 axes[0].set_ylabel('first-query latency (µs, log scale)', fontsize=10)
-fig.suptitle('First-query latency by strategy — async arm, layout=orig (preprocessing NOT included)',
-             fontsize=12, y=1.0)
 fig.tight_layout()
 save(fig, '13_strategy_firstq_bars')

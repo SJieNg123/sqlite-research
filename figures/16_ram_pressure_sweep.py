@@ -62,14 +62,10 @@ for col, wl in enumerate(WORKLOADS):
     if col == 0:
         ax_d.set_ylabel("hotset delivery_pct\n(mincore residual @ first-q)", fontsize=9.5)
         ax_f.set_ylabel("first-query latency (µs, log)", fontsize=9.5)
-    ax_d.legend(fontsize=8, loc="lower right", framealpha=0.9)
     ax_f.set_xticks(xpos); ax_f.set_xticklabels(xlabels, fontsize=8.5)
 
-fig.suptitle(f"Sub-working-set RAM pressure (cgroup cap, layout orig; working set ≈ {WS_MB:.0f} MB): "
-             "all targeted strategies (layers_5/2d/2e_K10/layers_92/2e_K500, ≤2 MB hotset) stay "
-             "100% delivered & flat; only 2f_slru (17.7 MB dump) collapses as cap drops below WS.",
-             fontsize=9.0, y=0.99)
-fig.text(0.5, 0.005, "Cap stepped from ∞ down past the working set. 4M omitted: cold gate "
-         "excludes all cells (below the measurable floor).", ha="center", fontsize=8, color="#6b7280")
-fig.tight_layout(rect=[0, 0.02, 1, 0.97])
+handles, labels = axes[1][0].get_legend_handles_labels()
+fig.legend(handles, labels, loc="lower center", ncol=7, fontsize=12,
+           bbox_to_anchor=(0.5, -0.02), frameon=False)
+fig.tight_layout(rect=[0, 0.07, 1, 1])
 save(fig, "16_ram_pressure_sweep")

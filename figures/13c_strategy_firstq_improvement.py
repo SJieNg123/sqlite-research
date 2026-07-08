@@ -53,6 +53,5 @@ ax.grid(axis='y', alpha=0.3)
 ax.set_axisbelow(True)
 ax.legend(loc='center left', bbox_to_anchor=(1.01, 0.5), fontsize=9,
           title='strategy', title_fontsize=9)
-ax.set_title('First-query improvement by strategy (async, layout=orig)', fontsize=11)
 fig.tight_layout()
 save(fig, '13c_strategy_firstq_improvement')

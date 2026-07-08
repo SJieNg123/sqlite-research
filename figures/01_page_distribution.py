@@ -25,7 +25,7 @@ def load_interior(p):
                 out.append(int(r["file_offset"]) / (1024*1024))
     return out
 
-fig, axes = plt.subplots(3, 1, figsize=(11, 5.6), sharex=True)
+fig, axes = plt.subplots(3, 1, figsize=(7, 4.8), sharex=True)
 for ax, (name, path, color) in zip(axes, LAYOUTS):
     pos = load_interior(path)
     ax.eventplot(pos, lineoffsets=0, linelengths=0.8, linewidths=0.8, colors=color)
@@ -42,7 +42,5 @@ for ax, (name, path, color) in zip(axes, LAYOUTS):
     ax.grid(False)
 
 axes[-1].set_xlabel("file offset (MB) · DB size = 103 MB")
-fig.suptitle("Interior-page placement across 3 layouts · 600k-row DB",
-             fontsize=12, y=0.995)
 fig.tight_layout()
 save(fig, "01_page_distribution")
