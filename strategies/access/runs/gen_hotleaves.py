@@ -59,11 +59,15 @@ def page_for_key(k):
     return pages[i]
 
 # ---- 2) Count key frequency in workload ----
+# Count the target key of every point-read AND the start key of every range scan
+# (YCSB E is scan-dominated; counting only 'read' lines would leave keycnt empty
+# and divide-by-zero below). A scan's start key maps to the leaf it begins on --
+# a reasonable hot-leaf proxy without expanding the whole [start,start+len) range.
 keycnt = Counter()
 with open(WL) as f:
     for line in f:
         parts = line.split()
-        if len(parts) >= 2 and parts[0] == 'read':
+        if len(parts) >= 2 and parts[0] in ('read', 'scan'):
             try: keycnt[int(parts[1])] += 1
             except ValueError: pass
 print(f"workload has {len(keycnt)} unique keys, {sum(keycnt.values())} ops", file=sys.stderr)
@@ -75,8 +79,10 @@ for k, c in keycnt.items():
     if pn is not None:
         leafcnt[pn] += c
 top_leaves = set(pn for pn, _ in leafcnt.most_common(TOPK))
-print(f"top-{TOPK} hot leaves cover {sum(leafcnt[pn] for pn in top_leaves)}/{sum(leafcnt.values())} = "
-      f"{100*sum(leafcnt[pn] for pn in top_leaves)/sum(leafcnt.values()):.1f}% of ops", file=sys.stderr)
+_total = sum(leafcnt.values())
+_cov = sum(leafcnt[pn] for pn in top_leaves)
+print(f"top-{TOPK} hot leaves cover {_cov}/{_total} = "
+      f"{(100*_cov/_total if _total else 0):.1f}% of ops", file=sys.stderr)
 
 # ---- 4) Read baseline hotpages for resident interior set ----
 ptype = {}

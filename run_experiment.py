@@ -7,6 +7,7 @@ cold-start measurement engine. Subcommands:
 
   run      (default) strategy x workload x db matrix; the bare form implies `run`
   churn    churn-checkpoint experiment (DB mutated between measurements)   [churn.py]
+  aging    YCSB D/E self-aging experiment (write workload ages its own DB) [churn.py]
   cadence  background-warmer cadence experiment (multiprocess)             [cadence.py]
 
 For every (workload x db x strategy) cell `run` measures BOTH arms on the SAME hotset:
@@ -101,6 +102,10 @@ WORKLOADS = {
     "YD": _base_workload("yd"),  # read-latest: 95% read (latest) + 5% insert
     "YE": _base_workload("ye"),  # short-ranges: 95% scan (zipf) + 5% insert
 }
+# Write-containing workloads: their insert stream ages the DB, so they run through
+# the `aging` subcommand (churn.py), never the read-only `run`/`churn` measurement
+# path (which forces --readonly and would die on the first insert).
+WRITE_WORKLOADS = {"YD", "YE"}
 SLRU_SUFFIX = {"orig": "", "vacuum": "_vacuum", "ta": "_ta", "1gb": "_1gb"}
 
 # --seed N: run the whole matrix against the seed-N workload variants
@@ -928,17 +933,18 @@ def main():
     ap = argparse.ArgumentParser(
         prog="run_experiment.py",
         description="Unified cold-start experiment runner (single entry point). "
-                    "Subcommands: run (default) / churn / cadence.")
+                    "Subcommands: run (default) / churn / aging / cadence.")
     sub = ap.add_subparsers(dest="cmd")
     add_run_parser(sub)
     # churn/cadence live in their own modules (they import this one) -> lazy import here
     # to register their subparsers without a circular import at load time.
     import churn, cadence
     churn.add_parser(sub)
+    churn.add_aging_parser(sub)
     cadence.add_parser(sub)
 
     argv = sys.argv[1:]
-    known = {"run", "churn", "cadence"}
+    known = {"run", "churn", "aging", "cadence"}
     if not argv or (argv[0] not in known and argv[0] not in ("-h", "--help")):
         argv = ["run"] + argv          # `run` is the default subcommand
     args = ap.parse_args(argv)
