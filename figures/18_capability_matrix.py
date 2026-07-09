@@ -94,18 +94,16 @@ def main():
             ax.text(x + col_w / 2, y + row_h / 2, st["mark"], ha="center",
                     va="center", fontsize=17, color=st["ink"], zorder=2)
 
-    # --- highlight the "Ours" row with an outline spanning the whole grid ---
-    ax.add_patch(FancyBboxPatch((0.02, 0.03), lab_w + nc * col_w - 0.04, row_h - 0.06,
+    # --- highlight the "Ours" row with an outline over its capability cells ---
+    # (starts after the label column, so the "Our work" text cell stays unframed)
+    ax.add_patch(FancyBboxPatch((lab_w + 0.02, 0.03), nc * col_w - 0.04, row_h - 0.06,
                                 boxstyle="round,pad=0.0,rounding_size=0.06",
                                 facecolor="none", edgecolor="#4f46e5",
                                 linewidth=2.0, zorder=3))
 
     # --- highlight the cost-accounting COLUMN as the key gap (vertical frame) ---
-    # Spans only the prior-work rows (the actual gap); the "Our work" cell at the
-    # bottom fills that gap, so it is left outside this frame.
     gap_x = lab_w + 1 * col_w
-    ax.add_patch(FancyBboxPatch((gap_x + 0.02, row_h + 0.03), col_w - 0.04,
-                                (nr - 1) * row_h - 0.06,
+    ax.add_patch(FancyBboxPatch((gap_x + 0.02, 0.03), col_w - 0.04, nr * row_h - 0.06,
                                 boxstyle="round,pad=0.0,rounding_size=0.06",
                                 facecolor="none", edgecolor="#4f46e5",
                                 linewidth=2.0, zorder=3))
