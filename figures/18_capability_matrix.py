@@ -108,7 +108,7 @@ def main():
                                 linewidth=2.0, zorder=3))
     ax.text(gap_x + col_w / 2, header_y + 1.9,
             "the gap this paper fills",
-            ha="center", va="center", fontsize=11, style="italic", color="#4f46e5")
+            ha="center", va="center", fontsize=17, style="italic", color="#4f46e5")
 
     # --- legend strip ---
     ly = -0.55
