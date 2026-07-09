@@ -101,8 +101,11 @@ def main():
                                 linewidth=2.0, zorder=3))
 
     # --- highlight the cost-accounting COLUMN as the key gap (vertical frame) ---
+    # Spans only the prior-work rows (the actual gap); the "Our work" cell at the
+    # bottom fills that gap, so it is left outside this frame.
     gap_x = lab_w + 1 * col_w
-    ax.add_patch(FancyBboxPatch((gap_x + 0.02, 0.03), col_w - 0.04, nr * row_h - 0.06,
+    ax.add_patch(FancyBboxPatch((gap_x + 0.02, row_h + 0.03), col_w - 0.04,
+                                (nr - 1) * row_h - 0.06,
                                 boxstyle="round,pad=0.0,rounding_size=0.06",
                                 facecolor="none", edgecolor="#4f46e5",
                                 linewidth=2.0, zorder=3))
