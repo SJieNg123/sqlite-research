@@ -31,7 +31,7 @@ _HARNESS_ARGS = _Args()
 def add_parser(sub):
     ap = sub.add_parser("churn", help="churn-checkpoint experiment (DB mutated between measurements)",
                         description="Static t=0 hotset re-measured across churn checkpoints.")
-    ap.add_argument("--workload", default="A,B,C", help="workload key(s): comma-list of A,B,C,Z")
+    ap.add_argument("--workload", default="A,B,C", help="workload key(s): comma-list of A,B,C,Z,YD,YE")
     ap.add_argument("--db", default="orig,vacuum,ta", help="db key(s): comma-list of orig,vacuum,ta")
     ap.add_argument("--checkpoints", type=int, default=10, help="churn checkpoints (x OPS_PER mutations each)")
     ap.add_argument("--reps", type=int, default=3, help="measurement reps per checkpoint (median)")

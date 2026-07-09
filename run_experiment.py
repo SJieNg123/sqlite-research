@@ -95,7 +95,11 @@ WORKLOADS = {
     "A": _base_workload("a"),
     "B": _base_workload("b"),
     "C": _base_workload("c"),
-    "Z": _base_workload("z"),  # low-key Zipfian (robustness)
+    "Z": _base_workload("z"),   # low-key Zipfian (robustness)
+    # YCSB core D/E: write-containing (insert stream ages the DB). Run via the
+    # churn/aging path, NOT the read-only `run` matrix (it forces --readonly).
+    "YD": _base_workload("yd"),  # read-latest: 95% read (latest) + 5% insert
+    "YE": _base_workload("ye"),  # short-ranges: 95% scan (zipf) + 5% insert
 }
 SLRU_SUFFIX = {"orig": "", "vacuum": "_vacuum", "ta": "_ta", "1gb": "_1gb"}
 
@@ -705,7 +709,8 @@ def resolve_strategy_checked(name):
 def add_run_parser(sub):
     ap = sub.add_parser("run", help="strategy x workload x db matrix (default)",
                         description="Two-arm cold-start matrix runner.")
-    ap.add_argument("--workload", default="A,B,C", help="workload key(s): comma-list of A,B,C,Z")
+    ap.add_argument("--workload", default="A,B,C",
+                    help="workload key(s): comma-list of A,B,C,Z (YD,YE are write/aging workloads -- use `churn`)")
     ap.add_argument("--db", default="orig,vacuum,ta", help="db key(s): comma-list of orig,vacuum,ta")
     ap.add_argument("--strategy", default=",".join(s["name"] for s in STRATEGIES),
                     help="strategy key(s): baseline auto-runs; layers_<N>, 2d, 2e_K<K>, 2f_slru")

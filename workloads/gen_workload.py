@@ -8,7 +8,7 @@ re-running the matrix under many seeds measures workload sensitivity.
 
 Usage:
     gen_workload.py <type> <seed> <out>
-    <type> in {A, B, C, Z, CHURN}
+    <type> in {A, B, C, Z, CHURN, YD, YE}
 
 Calibration targets (from the original files, 100k ops each):
     A     Zipf alpha=0.99 over 100000 keys, SCRAMBLED (rank->permuted key)
@@ -21,6 +21,17 @@ Calibration targets (from the original files, 100k ops each):
           rmw,insert,update,scan,read]; inserts sequential from 600001;
           rmw/update/read/scan keys uniform-without-replacement over [1,600000];
           scan count = 128
+
+YCSB core workloads (write-containing; the insert stream ages the DB -- run these
+through the churn/aging path, not the read-only `run` matrix). Both force op[0] to
+be a `read` so a read-only TTFQ probe derived from them passes --require-read-first:
+    YD    read-latest: 95% read + 5% insert, requestdistribution=latest.
+          dataset [1..600000] (the DB row count), inserts append 600001.. (grow
+          cur_max); each read draws a Zipf(alpha=0.99) rank over the CURRENT item
+          count and maps rank 0 -> newest key (cur_max) -> hot set rides the tail.
+    YE    short-ranges: 95% scan + 5% insert, requestdistribution=zipfian.
+          scan start = scrambled Zipf(alpha=0.99) over [1..600000] (scattered hot
+          starts, like A); scan length uniform [1,100]; inserts append 600001..
 """
 import sys, bisect, random, collections
 
@@ -36,6 +47,27 @@ CHURN_INSERT_START = 600001
 CHURN_SCAN_COUNT = 128
 CHURN_BLOCK = ["readmodifywrite", "insert", "update", "update", "read",
                "readmodifywrite", "insert", "update", "scan", "read"]
+# ---- YCSB D/E (read-latest / short-ranges) ----
+# The experiment DB (items) holds a DENSE id space 1..600000. Inserts must start
+# PAST the current max id (like CHURN's 600001) or the harness upsert
+# `INSERT ... ON CONFLICT(id) DO UPDATE` just rewrites existing rows and the DB
+# never grows -- which would defeat the whole point of route-1 aging.
+YCSB_RECORDCOUNT = 600000       # initial dataset size = the DB's actual row count
+YCSB_INSERT_START = 600001      # appended inserts start past max id (grow the DB)
+YCSB_INSERT_FRAC = 0.05         # insertproportion (D and E)
+YCSB_ALPHA = 0.99              # request-distribution skew (matches A/Z)
+YE_MAXSCAN = 100               # maxscanlength (scanlengthdistribution=uniform)
+
+
+def _zipf_prefix(nkeys, alpha):
+    """Cumulative weights prefix[r] = sum_{i<=r} 1/(i+1)^alpha, for Zipf sampling
+    over ranks 0..nkeys-1 via bisect. Sampling can be bounded to a sub-window
+    [0,cap) by using prefix[cap-1] as the running total (see YD's growing keyspace)."""
+    prefix, s = [], 0.0
+    for k in range(nkeys):
+        s += 1.0 / ((k + 1) ** alpha)
+        prefix.append(s)
+    return prefix
 
 
 def zipf_keys(rng, nkeys, alpha, nops, scramble):
@@ -94,7 +126,43 @@ def gen(wtype, seed):
                     lines.append(f"{op} {pool[pi]}")
                     pi += 1
         return lines
-    raise SystemExit(f"unknown type {wtype!r} (want A/B/C/Z/CHURN)")
+    if wtype == "YD":
+        # read-latest: reads ride the tail of a growing keyspace. Precompute the
+        # Zipf prefix once over the largest possible item count (recordcount + at
+        # most N_OPS inserts); each read samples a rank over the CURRENT window
+        # [0,cur_max) and maps rank 0 -> newest key. op[0] is forced to a read.
+        prefix = _zipf_prefix(YCSB_RECORDCOUNT + N_OPS, YCSB_ALPHA)
+        cur_max = YCSB_RECORDCOUNT
+        nxt = YCSB_INSERT_START
+        lines = []
+        for i in range(N_OPS):
+            if i > 0 and rng.random() < YCSB_INSERT_FRAC:
+                lines.append(f"insert {nxt}")
+                nxt += 1
+                cur_max += 1
+            else:
+                u = rng.random() * prefix[cur_max - 1]
+                rank0 = bisect.bisect_left(prefix, u, 0, cur_max)   # 0..cur_max-1
+                key = cur_max - rank0                               # rank0=0 -> newest
+                lines.append(f"read {key}")
+        return lines
+    if wtype == "YE":
+        # short-ranges: scattered Zipf scan starts over the initial keyspace
+        # (like A), scan length uniform [1,YE_MAXSCAN]; 5% inserts grow the DB.
+        # op[0] is forced to a read (of a scan start) for the read-only probe.
+        starts = zipf_keys(rng, YCSB_RECORDCOUNT, YCSB_ALPHA, N_OPS, scramble=True)
+        nxt = YCSB_INSERT_START
+        si = 0
+        lines = []
+        for i in range(N_OPS):
+            if i == 0:
+                lines.append(f"read {starts[si]}"); si += 1
+            elif rng.random() < YCSB_INSERT_FRAC:
+                lines.append(f"insert {nxt}"); nxt += 1
+            else:
+                lines.append(f"scan {starts[si]} {rng.randint(1, YE_MAXSCAN)}"); si += 1
+        return lines
+    raise SystemExit(f"unknown type {wtype!r} (want A/B/C/Z/CHURN/YD/YE)")
 
 
 def main():
@@ -104,19 +172,17 @@ def main():
     lines = gen(wtype, seed)
     with open(out, "w") as f:
         f.write("\n".join(lines) + "\n")
-    # summary for calibration
-    rkeys = [int(l.split()[1]) for l in lines if l.startswith("read ")]
-    if rkeys:
-        c = collections.Counter(rkeys)
+    # summary for calibration (op-mix always; key stats over read+scan targets)
+    oc = collections.Counter(l.split()[0] for l in lines)
+    print(f"{wtype} seed={seed} -> {out}: {len(lines)} ops, op-mix={dict(oc)}")
+    tgt = [int(l.split()[1]) for l in lines if l.split()[0] in ("read", "scan")]
+    if tgt:
+        c = collections.Counter(tgt)
         top = c.most_common(20)
-        print(f"{wtype} seed={seed} -> {out}: {len(lines)} ops, "
-              f"reads={len(rkeys)} unique={len(c)} "
-              f"range=[{min(rkeys)},{max(rkeys)}] "
-              f"top1={top[0][1]/len(rkeys)*100:.2f}% "
-              f"top10={sum(x[1] for x in top[:10])/len(rkeys)*100:.2f}%")
-    else:
-        oc = collections.Counter(l.split()[0] for l in lines)
-        print(f"{wtype} seed={seed} -> {out}: {len(lines)} ops, op-mix={dict(oc)}")
+        print(f"    read/scan targets={len(tgt)} unique={len(c)} "
+              f"range=[{min(tgt)},{max(tgt)}] "
+              f"top1={top[0][1]/len(tgt)*100:.2f}% "
+              f"top10={sum(x[1] for x in top[:10])/len(tgt)*100:.2f}%")
 
 
 if __name__ == "__main__":
