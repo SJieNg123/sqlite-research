@@ -28,7 +28,7 @@ ROWS = [
     "OS readahead\n[Smith'78, Iyer'01]",
     "libprefetch\n[VanDeBogart'09]",
     "Learned prefetch\n[Chen'21, Yi'26]",
-    "sqlite_web_vfs .dbi\n[SQLite Web VFS]",
+    "sqlite_web_vfs\n[SQLite Web VFS]",
     "Our work",
 ]
 
