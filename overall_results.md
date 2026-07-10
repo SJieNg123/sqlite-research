@@ -345,6 +345,36 @@
 3. **narrow C**：`2e_K10` −72%[−74,−71] **robustly 勝** matched `2f_top14` −57%[−68,−45]（CI 分離）→ page-type 用「保證載入 interior skeleton」在窄 workload 提供 robustness（純頻率 top-14 只挑到 2 個 interior）。
 4. **結論**：`2e_K10` **從未被 tuned dump 打敗**（A/B 平、C 勝）→ §5.5 非稻草人勝；機制歸因＝「**小 footprint + frequency ranking**」為主、page-type 在 narrow workload 加 robustness。圖見 [figures/out/18_competitive_baseline.png](figures/out/18_competitive_baseline.png)。
 
+## Prior-art baselines v2（在同一 harness 重現 libprefetch / learned 核心）
+
+> 資料 `results/baselines_v2`（canonical v2 批，A/B/C × orig，n=10；機器狀態見 [overall_strategies.md](overall_strategies.md) 錨點註記，絕對 µs 批內比）。方法見 repo `DESIGN_lp.md` / `DESIGN_learned.md`。**重現核心、剝除編排、非跑本尊。**
+
+### libprefetch delivery-order（`lp_sorted` / `lp_shuf`）— Δdeliver（pread）
+
+hotset 內容≡`2f_slru`（checksum 同），只差 warmer pread **遞送順序**。主度量 Δdeliver（fq 為 control、兩 arm 相等）。
+
+| workload | deliver sorted µs | deliver shuf µs | **ratio** |
+|---|---:|---:|---:|
+| A | 17,953 | 280,281 | **15.6×** |
+| B | 18,176 | 274,965 | **15.1×** |
+| C | 2,775 | 29,175 | **10.5×** |
+
+**NVMe 上 offset 排序遞送快 10–16×，效應全在 deliver、fq 不變**（診斷：兩 arm 讀相同裝置位元組 ~18MB → 順序 vs 隨機 IOPS，readahead=隱式 coalesce）。async(fadvise) 無此效應 → 專屬同步 pread（libprefetch 模型）。
+
+### learned_markov（Chen-inspired 一階 Markov，LOSO held-out）— async fq / e2e_warm
+
+held-out LOSO（測 seed1、訓練 2..10）；hotset 取 finite-horizon expected-visit scores top-N；footprint 對齊 `2f_topN`。
+
+| workload | learned_markov_14 | 2f_top14 | 2e_K10 |
+|---|---:|---:|---:|
+| A | 391 / 474 | 391 / 473 | 356 / 458 |
+| B | 414 / 496 | 415 / 497 | 414 / 519 |
+| C | 186 / 267 | 185 / 268 | 186 / 268 |
+
+- **learned_markov 三 workload async fq/e2e 都 ≈ 2f_topN**（逐格幾乎相同）→ 此 transition baseline 冷啟動可用輸出落在頻率排名範圍。
+- **Jaccard**（hotset 相似度、離線分析、非性能）：`J(learned_markov, frequency)=1.0`（此 3 層固定深度 tree 的觀測性質、非普遍宣稱）；`J(learned_markov, 2f_topN)` A/B N14 0.47/0.56、**C 1.0**。
+- **Workload E 未支援**（scan 非 3-page episode，`gen_pageseq` fail-loud）。
+
 ## RAM-pressure（cgroup MemoryMax=20M / unlimited 比值,async first-q）
 
 > 來源 [`results/ram20m/`](results/ram20m/summary.csv)(20M cgroup)÷ **同期(06-22)unconfined** baseline。比值近 1.0 → 壓力幾乎不影響。
@@ -423,6 +453,34 @@
 | baseline | 592 | 563 | 616 | 564 | 565 | 587 | 611 | 586 | 543 | 528 | 544 |
 | 2e_K10_static | 86 | 89 | 83 | 81 | 265 | 86 | 82 | 88 | 86 | 84 | 82 |
 | layers_92_static | 252 | 245 | 278 | 274 | 303 | 309 | 268 | 592 | 265 | 264 | 266 |
+
+> 上面 C（churn，**平穩**熱點 [590000,609999] 固定）下 `2e_K10_static` **不 decay**（~82–89 全程）——這是「static t=0 hotset 不 decay」的原始結論。下面 YCSB D 是它的**第一個反例**。
+
+## YCSB D/E self-aging（read-latest 熱點非平穩 → static hotset decay）
+
+> 資料 `results/aging_v2/aging_ci.csv`（10 checkpoints × **10 reps × 10 seeds**，mean ± 95% CI，first-q µs）。方法：workload 自身 insert 流 age 可寫副本、**per-checkpoint probe**（隨 insert frontier 移動）對**凍結 t=0 hotset** 量。與上面 churn **互補**：churn 證平穩不衰、aging 證非平穩衰。
+
+### YD（read-latest，**非平穩**）
+
+| static t=0 hotset | ck0 | ck5 | ck10 | 收益 ck0→ck10 |
+|---|---:|---:|---:|---|
+| baseline | 538±16 | 557 | 570±24 | — |
+| **2e_K10_static**（access-freq）| **267±110** | 313 | **382±78** | **−50% → −33%（衰減 ~half）**|
+| layers_92_static（structural）| 252±9 | 265 | 270±12 | robust（+7%）|
+
+- **頻率派 `2e_K10_static` 衰減**（−50%→−33%，erodes ~half、非歸零）；ck0 CI 大（初始匹配跨 seed 不穩）。
+- **結構派 `layers_92_static` robust 且從 ck1 起反超 2e**（~250–278 vs ~310–420）→ **read-latest aging 下結構 > 頻率**。機制：頻率綁「哪些 key 熱」（非平穩失效），結構綁「樹形」（漂移緩慢）。
+
+### YE（zipfian，**平穩**）
+
+| static t=0 hotset | ck0 | ck10 |
+|---|---:|---:|
+| baseline | 550±16 | 601±43 |
+| 2e_K10_static | 260±3（−53%）| 273±39（−55%）**不衰** |
+| layers_92_static | 260±3 | 292±20（微升）|
+
+- YE 平穩 → `2e_K10_static` **不衰、全程仍優於 layers_92**（同 C churn）。**decay 由 hotspot 平穩性決定，非 aging 本身。**
+- **維度並存**：`layers_*` 在 cross-seed first-q *level* 不可恃（見 §三槓桿 / 10-seed CI），卻在 aging *robustness* 軸最耐久——不同軸、不矛盾。
 
 ## Multi-process cadence（背景 warmer 重暖 + 全機 drop probe,first-q µs）
 

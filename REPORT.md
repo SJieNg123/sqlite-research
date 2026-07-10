@@ -223,7 +223,7 @@ prefetcher）本質是**預測並預載 hot key range**，效益建立在 worklo
 access skew；當 access 趨近 uniform、無可預測的 hot set 時，這類 hotspot-based
 learned prefetch 即失去著力點——這與本研究在 **Workload B（uniform random）** 上
 「interior-only 卡在 −43%、再加 top-K hot leaf 也無額外效益」（§5.3）的觀察**同源**：
-uniform 下沒有自然 hot leaf 可學、可預載。另一條相關 lineage 是 **cache admission**
+uniform 下沒有自然 hot leaf 可學、可預載。**我們在同一 harness 重現了這兩條 lineage 的核心作為 baseline**（重現核心、剝除編排、非跑本尊）：libprefetch 的 offset-sort delivery、與一條 Chen-inspired 的一階 Markov transition baseline——結果與定位見 §6.2.6（前者 Δdeliver 10–16×、只在 deliver 項；後者 held-out 下 ≈ 頻率排名）。另一條相關 lineage 是 **cache admission**
 （如 **CacheLib [Berg+20]** 的 cache-on-second-access）：它與本研究的 frugal prefetch
 互補——前者決定「什麼該被收進 cache」、後者決定「什麼該被提前載入」，皆以避免盲目佔用
 cache／浪費 I/O 為目標。
@@ -425,10 +425,12 @@ file head前 400 KB，可被 sequential prefetch 一次涵蓋。*
 | **B** | Uniform random point read（uniform 隨機讀）| 隨機抽樣、爬蟲 |
 | **C** | High-key uniform read（只查最新加入的 file tail 資料）| 剛收到的訊息、剛拍的照片 |
 | **D** | Write-heavy churn generator | 模擬 DB 被持續 write（§6.2.1 churn 實驗）|
+| **YCSB D**（`YD`）| Read-latest：95% read（latest 分布）+ 5% insert，**移動熱點** | user timeline / 最新事件 |
+| **YCSB E**（`YE`）| Short-ranges：95% scan（zipfian）+ 5% insert，平穩熱點 | 訊息佇列尾端連續讀 |
 
 A / B / C 分別涵蓋三個正交的「hotspot分布」dimension（read skew、uniform、file tail
 locality）；D 不直接量 latency，是 §6.2.1 churn 實驗用於製造 layout 漂移
-的 write generator。每個 workload 的完整定義（key range、Zipf parameter α、
+的 write generator。**YCSB core D/E（registry key `YD`/`YE`，與上面的 churn-generator「D」不同物）為寫入型 self-aging workload**（insert 讓 DB 隨時間長大），走 `run_experiment.py aging` 子命令量 static hotset 隨 aging 的演化（§6.2.7）；YD 的 read-latest **移動熱點**是壓測 static hotset 平穩性假設的關鍵軸。每個 workload 的完整定義（key range、Zipf parameter α、
 ops 數）見 [overall_workloads.md](https://github.com/wongzinc/sqlite-research-project-sharing/blob/main/overall_workloads.md)。**Zipfian workload（A 及 robustness 變體 Z，§A.2）採 Zipf α = 0.99**（rank $r$ 的取樣權重 $\propto 1/r^{0.99}$，即 YCSB 預設 zipfian constant；A 再 scramble 成隨機 permutation 使熱 key 散佈全 key space，Z 不 scramble、熱點落在低 id）。產生器 `workloads/gen_workload.py` 以 **direct power-law 取樣 + permutation scramble** 實作、並**校準自原始 committed workload 檔的分佈**（非 byte-identical 於 YCSB 的 `ScrambledZipfianGenerator`，但 α 數值一致、skew 已對齊；重建細節見 overall_workloads.md）。
 
 Workload A 與 B 的 op string 格式與分布參考自 [YCSB-cpp](https://github.com/ls4154/YCSB-cpp)
@@ -980,6 +982,8 @@ shared、跨 10 個 workload seed（§6.2.4）、以及 DB 放大 10× 到 ~1 Gi
 DB 被持續 write（**50k mutation = 10 輪 × 5k**，在 11 個 checkpoint ck0–ck10 上量測，ck0 = t=0 baseline）後，**static t=0 hotset
 完全沒 decay**:實驗量到 C 上 2e_K10_static 跨 checkpoint maintain ~82–86 µs(vs baseline ~580 µs)，ck0→ck10 無上升趨勢；三 layout(orig/vacuum/ta)皆然。
 
+> **適用邊界（重要）**:此「不 decay」成立**是因為 A/B/C 的熱點是平穩的**——churn 的 insert 把新資料放檔尾，但被量測的 read 熱點（C 固定在 [590000,609999]）不動,frozen hotset 永遠匹配。**熱點若非平穩則會 decay**:§6.2.7 的 YCSB D（read-latest,熱點跟著 insert frontier 移動）是此結論的**第一個反例**,把結論精確化為「**decay 由 hotspot 平穩性決定,頻率派衰、結構派耐**」。
+
 > **註（單點尖峰）**:C 的 ck4 在 orig/vacuum 出現單次 265 / 291 µs 尖峰(ta 無)，前後 ck3/ck5 立即回到 ~82–86 µs——係該 checkpoint 的一次性量測擾動、非 decay(decay 會單調上升)；其餘 10/11 checkpoint 全落在 ~80–89 µs。
 
 ![50k churn（10 輪 × 5k，11 個 checkpoint ck0–ck10）下 A/B/C 的 first query 演化](figures/out/07_churn_evolution.png)
@@ -1084,6 +1088,26 @@ C（WS 僅 1.8 MB ≈ 量測下限）**無法以 cgroup 施壓 → 其 RAM-robus
 翻成 **+139%**(1gb)、`2e_K500/C` −31%→+35%、`layers_92/C` −21%→+7%（由贏轉輸）；A/B 的 `2f` 兩尺寸都是
 +700~930% 大輸（頂部箭頭標值）。對照之下 access-pattern 的 `2d`/`2e_K10` 兩尺寸 e2e 皆穩贏。*
 
+#### 6.2.6 Prior-art baseline arms（在同一 harness 重現 libprefetch / learned 核心）
+
+為了把本研究的定位釘在既有做法之上，我們在**同一 harness** 重現兩條 prior-art lineage 的**核心**（重現核心、剝除編排、非跑對方系統本尊；資料 `results/baselines_v2`，方法見 `DESIGN_lp.md` / `DESIGN_learned.md`）：
+
+- **libprefetch（VanDeBogart+09）的 delivery-order 核心**（`lp_sorted`/`lp_shuf`）：hotset 內容≡`2f_slru`、只差 warmer pread **遞送順序**。主度量 Δdeliver（fq 為 control、兩 arm 相等）：**NVMe 上 offset 排序遞送快 10–16×**（A 15.6× / B 15.1× / C 10.5×），效應**全在 deliver、fq 不變**。診斷（rusage File system inputs）顯示兩 arm 讀**相同裝置位元組（~18 MB ≈ working set）** → 15× 純為順序（kernel readahead 合併成少數大 I/O）vs 隨機 4 KB IOPS——**readahead 即隱式 coalesce**。async(fadvise) 無此效應 → 懲罰專屬同步 pread（正是 libprefetch 模型）。這把「libprefetch 的 seek 收益在 NVMe 上消失」精確化為「**改由 readahead + 隨機讀懲罰承載,但同樣只在 deliver 項、不進 first-query**」。
+
+- **learned-prefetcher lineage（Chen+21 formulation 啟發）的輕量 transition baseline**（`learned_markov`，**非重現** neural model）：一階 Markov page-transition、從 START 做 finite-horizon expected-visit、held-out **LOSO**（測 seed1/訓練 2..10）。實測 **async fq/e2e 三 workload 都 ≈ `2f_topN`**（A 391/474 vs 391/473；C 186/267 vs 185/268）→ 此 transition baseline 冷啟動的可用輸出落在**頻率排名**範圍。`J(learned_markov, frequency)=1.0` 是**此 3 層固定深度 B+tree 的觀測性質**（每頁單一深度 → expected-visit = 正規化 visit frequency），**非**「learned 必等於 frequency」的普遍宣稱。Workload E（range scan）未支援（非 3-page episode）。
+
+#### 6.2.7 YCSB D/E self-aging：hotspot 平穩性決定 decay（§6.2.1 的第一個反例）
+
+§6.2.1 證明平穩熱點下 static hotset 不 decay。**YCSB D（read-latest,熱點跟著 insert frontier 移動 = 非平穩）** 提供第一個反例。用 self-aging 路徑（workload 自身 insert 流 age 可寫副本、**per-checkpoint probe** 反映當下 frontier、對凍結 t=0 hotset 量 first-query；10 ckpt × **10 reps × 10 seeds**，`results/aging_v2`，mean±95%CI）：
+
+| static t=0 hotset | YD（read-latest,非平穩）| YE（zipfian,平穩）|
+|---|---|---|
+| **2e_K10_static**（access-freq）| **−50%(ck0) → −33%(ck10)** 衰減 | −53% → −55% **不衰** |
+| layers_92_static（structural）| **robust（252→270），從 ck1 起反超 2e** | 微升（260→292）|
+
+- **頻率派衰、結構派耐並反超**:YD 上 access-frequency `2e_K10_static` 收益從 −50% 衰到 −33%（erodes ~half、非歸零）,而 structural `layers_92_static` 幾乎不衰,且**從 ck1 起反超頻率派**（~250–278 vs ~310–420）。機制:頻率 hotset 綁定「哪些 key 熱」（非平穩下失效）,結構 skeleton 綁定「樹長什麼樣」（漂移緩慢）。**YE（zipfian 平穩）則 `2e_K10` 不衰、全程仍優**——證明 decay 是**非平穩性**的性質、非 aging 本身。
+- **維度並存（勿當矛盾）**:`layers_*` 在 cross-seed first-query *level* 上不可恃（§6.2.4 tie/directional）,卻在 aging *robustness* 軸上最耐久——兩個不同軸的結論並存。此結果把 §6.2.1 精確化為「**static t=0 hotset 是否 decay 由 hotspot 平穩性決定;read-latest / append-heavy workload 下頻率派衰、結構 skeleton 耐**」,並直接導出 §6.3 的 read-latest guidance。
+
 ### 6.3 Practical recommendations
 
 對映到 edge / serverless 部署：**warm-process 欄 = keep-alive 容器 / 常駐 edge worker（本研究主張）**、**standalone 欄 = scale-from-zero 冷容器**；下列 workload 類型對應常見的 edge-SQLite 存取樣態（Zipfian 熱點讀、uniform 隨機讀、file-tail 新資料 / churn）。
@@ -1093,6 +1117,7 @@ C（WS 僅 1.8 MB ≈ 量測下限）**無法以 cgroup 施壓 → 其 RAM-robus
 | **慢 workload(查file tail/churn,baseline 高)** | access-pattern:interior + 最 hot 的 ~10 leaf(2e_K10) | **−81%**(C) | **warm e2e −73%(291µs)** / std −53%，全矩陣最佳 |
 | uniform 隨機讀(uniform) | structural layers_5 / 2d | −42~43%(B) | **warm e2e −29~34%** / std ≈ 打平 |
 | **快 workload(熱門集中,baseline 已快)** | **access-pattern 2d / 2e_K10**(robust);避免單用 structural layers_5 | −22~26%(A) | **warm e2e:targeted 跨 seed −25~36%(robust);layers_5 −5% 落在雜訊內(tie)**。standalone 下 +27~29% 反而較慢 |
+| **read-latest / append-heavy(熱點跟寫入 frontier 移動,如 event/log store)** | **structural skeleton(layers_92 / 2d) 或週期性 hotset refresh**;避免單靠凍結的 access-frequency hotset | — | frozen 頻率 hotset 隨 aging **衰 ~half**、結構 skeleton 耐衰並反超(§6.2.7) |
 | Batch / 平均 latency 場景 | 重載前次 cache(2f SLRU) | −76~89%(first-q) | **e2e 多半不具優勢**(deliver ~0.8–7ms);僅適合 batch、或 C 類小 working set(warm e2e −19%) |
 | 多 process shared DB | shared cache + background warmer，cadence ≤ query 間隔 | cost固定、效益乘 process 數 | cadence=1s maintain first-q ~26µs |
 
