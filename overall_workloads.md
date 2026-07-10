@@ -99,17 +99,21 @@ op-mix（seed 1 實測）：`scan` **94,975** + `insert` **5,024** + `read` 1。
 - **模擬：** 短範圍掃描為主（訊息佇列尾端連續讀）+ 5% 插入 aging。
 
 ### aging 量測（自 self-aging 路徑）
-YD/YE 含寫入、不能走唯讀 `run`，走 **`run_experiment.py aging`**（`WRITE_WORKLOADS={YD,YE}`）：workload 自身 insert 流灌**可寫副本**做 aging、唯讀 probe（濾掉 insert）量 TTFQ 跨 checkpoint。實作 commit `d110e3d` + `3889f09`。
+YD/YE 含寫入、不能走唯讀 `run`，走 **`run_experiment.py aging`**（`WRITE_WORKLOADS={YD,YE}`）：workload 自身 insert 流灌**可寫副本**做 aging。**關鍵方法學**：每 checkpoint 用**反映當下 hotspot 的 probe**（= 該 chunk 的 reads，隨 insert frontier 移動），對**凍結在 t=0 的 hotset** 量 TTFQ。這樣才測得到「frozen hotset 被移走的 hotspot 拋離」的 decay——**單一全 trace 固定 probe 測不到**（其 first query 永不移動）。實作 commit `d110e3d` + `3889f09`（per-checkpoint probe 修正見 churn.py `_probe_from_lines`）。
 
 **實測 aging 演化（orig，10 checkpoints × 3 reps，`results/aging/aging_evolution.csv`；first_query_us）：**
 
-| static t=0 hotset | YD ck0 → ck10 | YE ck0 → ck10 |
+| static t=0 hotset | YD（read-latest，非平穩）| YE（zipfian，平穩）|
 |---|---|---|
-| baseline（no prefetch）| 541 → 557 | 540 → 531 |
-| **2e_K10_static** | **101 → 98（Δ−3）** | 265 → 291（Δ+25）|
-| layers_92_static | 232 → 262（Δ+31）| 260 → 273（Δ+13）|
+| baseline（no prefetch）| ~570 → 634（平，噪音 407–664）| ~585 → 651（平）|
+| **2e_K10_static（access-freq）** | **102 → 455**（ck0 匹配 → 衰減；ck1–10 均值 ~347，振盪 130–463）| 279 → 333（穩定，+54）|
+| layers_92_static（structural）| 265 → 275（幾乎不衰，區間 264–347）| 261 → 318（穩定，+57）|
 
-- **static t=0 prefetch hotset 對 YD/YE aging 相當穩健**：10 個 checkpoint（YD ~4.9k inserts）內，2e_K10_static 在 YD 幾乎不衰退（101→98 µs）、在 YE 僅微升（+25 µs）。因 DB 只長大 ~1% 列、interior 骨架跨 aging 不變。
-- **未跑：** 跨 seed aging（10-seed sweep 素材已備）、更多 checkpoint 深度。
+- **decay 由 hotspot 平穩性決定**（釘出「static t=0 hotset 不 decay」結論的適用邊界）：
+  - **YD（read-latest，非平穩）**：熱點跟著 insert frontier 移動 → **access-frequency 派 `2e_K10_static` 從 ck0 的 102 µs 衰減到 ck1–10 均值 ~347 µs（趨近 baseline ~590）**，凍結的 top-K hot leaf 被移走的 latest window 拋離。**非單調**：部分 checkpoint 回落到 ~130–160 µs（probe 窗口偶爾重新落回 frozen hotset 覆蓋範圍），反映 latest 分布的隨機重疊。
+  - **structural `layers_92_static` 耐衰得多（265→275，區間 264–347）**：interior 骨架移動慢（新 leaf 掛在既有 interior 下），故結構派比頻率派抗非平穩 aging。
+  - **YE（zipfian，平穩）**：scan/read 熱點不隨 insert 移動 → static hotset **僅微升不衰**（2e 279→333、l92 261→318），同 C 的平穩情形。
+- **對照 C/A/B**：key range 固定、churn 下熱頁不動，故 `2e_K10_static` 不 decay（見 §6.2.1）；**YD 是此結論的第一個反例**——衰不衰取決於 hotspot 是否平穩，且**頻率派衰、結構派耐衰**。
+- **未跑：** 跨 seed aging（10-seed 素材已備）、更深 checkpoint。
 
-> **資料出處：** 分布數字由 `workloads/workload_{yd,ye}_1.txt` 直接統計；aging 演化由 `results/aging/aging_evolution.csv`。絕對 µs 為批內自洽（演化比較），非跨批。
+> **資料出處：** 分布數字由 `workloads/workload_{yd,ye}_1.txt` 統計；aging 演化由 `results/aging/aging_evolution.csv`（per-checkpoint probe）。絕對 µs 批內自洽（演化比較），非跨批。

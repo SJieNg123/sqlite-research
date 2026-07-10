@@ -166,19 +166,24 @@ def add_aging_parser(sub):
     ap.set_defaults(func=cmd_aging)
 
 
-def _read_only_probe(wl_path, dest):
-    """Derive a --readonly-safe TTFQ probe from a write-containing workload: keep
-    only read/scan ops (both are SELECTs), drop inserts. The generator forces
-    op[0] to be a read, so the probe passes --require-read-first. Returns op count."""
-    n = 0
-    with open(wl_path) as fin, open(dest, "w") as fout:
-        for line in fin:
-            if not line.strip():
-                continue
-            if line.split(None, 1)[0] in ("read", "scan"):
-                fout.write(line if line.endswith("\n") else line + "\n")
-                n += 1
-    return n
+def _probe_from_lines(lines, dest):
+    """Build a --readonly-safe TTFQ probe from a slice of a write-containing workload:
+    keep only read/scan ops (SELECTs), drop inserts; ensure op[0] is a read (prepend a
+    read of the first scan's start key if the first kept op is a scan) so the probe
+    passes --require-read-first. Returns op count.
+
+    Used PER-CHECKPOINT: probe_k is derived from chunk k, so its first query reflects the
+    hotspot AT checkpoint k. For read-latest (YD) that window follows the insert frontier
+    (non-stationary -> a frozen t=0 hotset decays); for zipfian (YE) it is stationary
+    (-> no decay). This is what makes the aging experiment able to observe decay at all;
+    a single whole-trace probe cannot (its first query never moves)."""
+    kept = [l for l in lines if l.strip() and l.split(None, 1)[0] in ("read", "scan")]
+    out = []
+    if kept and kept[0].split()[0] == "scan":
+        out.append(f"read {kept[0].split()[1]}\n")   # force op[0] = read
+    out += [l if l.endswith("\n") else l + "\n" for l in kept]
+    Path(dest).write_text("".join(out))
+    return len(out)
 
 
 def _build_t0_hotsets(workdb, w, layout, classify, probe, workdir):
@@ -247,18 +252,27 @@ def cmd_aging(args):
             workdb = workdir / f"aging_{w}_{layout}.db"
             shutil.copy2(db0, workdb)
             recdir = workdir / f"rec_{w}_{layout}"; recdir.mkdir(exist_ok=True)
-            probe = workdir / f"probe_{w}_{layout}.txt"
-            nprobe = _read_only_probe(wl, probe)
             chunks = make_chunks(workdir / f"chunks_{w}_{layout}", n_ckpt, src=wl)
-            hot_2e, hot_l92 = _build_t0_hotsets(workdb, w, layout, classify, probe, workdir)
-            sys.stderr.write(f"[aging] {w}/{layout}: probe={nprobe} read/scan ops, "
-                             f"{len(chunks)} chunks x {OPS_PER} ops, t=0 hotsets built\n")
+            # PER-CHECKPOINT probes: probe_ck reflects the hotspot AT checkpoint ck (chunk ck's
+            # reads). The t=0 hotset is built from the INITIAL window (probe_0) and FROZEN. A
+            # moving hotspot (YD read-latest) then decays the frozen hotset; a stationary one
+            # (YE zipfian) does not -> decay iff the hotspot is non-stationary.
+            probes = []
+            for ck in range(n_ckpt + 1):
+                src = chunks[min(ck, n_ckpt - 1)]
+                p = workdir / f"probe_{w}_{layout}_ck{ck}.txt"
+                _probe_from_lines(open(src).read().splitlines(), p)
+                probes.append(p)
+            hot_2e, hot_l92 = _build_t0_hotsets(workdb, w, layout, classify, probes[0], workdir)
+            sys.stderr.write(f"[aging] {w}/{layout}: {len(probes)} per-checkpoint probes, "
+                             f"{len(chunks)} chunks x {OPS_PER} ops, t=0 hotset frozen from probe_0\n")
 
             for ck in range(n_ckpt + 1):
-                base = _med_fq(lambda: R.run_baseline(workdb, probe, recdir, _HARNESS_ARGS,
+                pk = probes[ck]
+                base = _med_fq(lambda pk=pk: R.run_baseline(workdb, pk, recdir, _HARNESS_ARGS,
                                                       verify_hotset=hot_2e), reps)
-                s2e  = _med_fq(lambda: R.run_one(workdb, probe, hot_2e,  "fadvise", recdir, _HARNESS_ARGS), reps)
-                sl92 = _med_fq(lambda: R.run_one(workdb, probe, hot_l92, "fadvise", recdir, _HARNESS_ARGS), reps)
+                s2e  = _med_fq(lambda pk=pk: R.run_one(workdb, pk, hot_2e,  "fadvise", recdir, _HARNESS_ARGS), reps)
+                sl92 = _med_fq(lambda pk=pk: R.run_one(workdb, pk, hot_l92, "fadvise", recdir, _HARNESS_ARGS), reps)
                 for strat, v in [("baseline", base), ("2e_K10_static", s2e), ("layers_92_static", sl92)]:
                     if v is not None:
                         evo_rows.append((w, layout, ck, strat, f"{v:.2f}"))
