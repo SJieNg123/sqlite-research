@@ -9,7 +9,7 @@
 > **Preprocessing 計入 e2e（兩個部署模型）**:preprocessing 拆成 **open(db)(冷開 DB ~200µs,per-layout 常數)**
 > 與 **deliver(逐頁 madvise/pread,隨 hotset)**。`e2e_warm` = deliver+fq(warm-process/integrated,
 > 重用既有 handle、不付冷 open;≈ static `effective_first_query`,**本研究主張**);`e2e_std` = open+deliver+fq
-> (standalone warmer)。**2f_slru first-query 最低(−76~89%)但 deliver ~0.8–7ms 使 e2e 多半輸**;
+> (standalone warmer)。**2f_slru first-query 最低(−79~91%)但 deliver ~0.8–7ms 使 e2e 多半輸**;
 > targeted prefetch(layers_5 / 2d / 2e_K10)deliver 小,**warm-process e2e 三 workload 皆改善**(尤其 C × 2e_K10 −73%)。
 > 視覺化:[figures 13/14](figures/out/13_strategy_firstq_bars.png)。
 > 完整執行覆蓋見 [IMPLEMENTATION_PIPELINES.md §3.8](IMPLEMENTATION_PIPELINES.md)。
@@ -101,7 +101,7 @@
 | ta | 2e_K500 | 608 | 21% | 38 | 1633 | 1403 | 548 |
 | ta | 2f_slru | 106 | 86% | 100 | 7596 | 7359 | 111 |
 
-### Workload C (Churn-heavy)
+### Workload C (High-key / tail-region uniform point reads)
 
 | layout | strategy | fq_async | impr% | deliv% | e2e_std | e2e_warm | oracle(pread) |
 |---|---|--:|--:|--:|--:|--:|--:|
@@ -177,15 +177,15 @@
 
 | workload×layout | fq | open | deliver | e2e_std | e2e_warm | e2e_warm vs base |
 |---|--:|--:|--:|--:|--:|--:|
-| A/orig | 127 | 193 | 7007 | 7327 | 7134 | 13.5× |
-| A/vacuum | 126 | 222 | 5336 | 5684 | 5463 | 7.6× |
-| A/ta | 128 | 222 | 7017 | 7367 | 7146 | 10.3× |
-| B/orig | 128 | 222 | 7033 | 7388 | 7161 | 9.4× |
-| B/vacuum | 126 | 223 | 5384 | 5731 | 5510 | 5.3× |
-| B/ta | 127 | 222 | 7022 | 7370 | 7149 | 9.1× |
-| C/orig | 123 | 222 | 761 | 1114 | 892 | 0.8× |
-| C/vacuum | 124 | 222 | 585 | 934 | 712 | 0.7× |
-| C/ta | 122 | 222 | 808 | 1153 | 930 | 1.1× |
+| A/orig | 108 | 230 | 7217 | 7552 | 7324 | 14.0× |
+| A/vacuum | 103 | 190 | 5573 | 5875 | 5677 | 8.0× |
+| A/ta | 109 | 230 | 7260 | 7595 | 7365 | 11.2× |
+| B/orig | 107 | 234 | 7221 | 7561 | 7328 | 9.8× |
+| B/vacuum | 104 | 233 | 5584 | 5921 | 5688 | 5.6× |
+| B/ta | 106 | 236 | 7252 | 7596 | 7359 | 9.6× |
+| C/orig | 102 | 234 | 857 | 1196 | 962 | 0.9× |
+| C/vacuum | 103 | 229 | 682 | 1014 | 784 | 0.8× |
+| C/ta | 102 | 229 | 898 | 1229 | 1000 | 1.2× |
 
 ## layers_N sweep（clean,async first-q µs;N=0=baseline）
 
@@ -303,7 +303,7 @@
 | C | 2e_K10 | 合併 | 58 | −80% [−81,−79] robust | −65% [−67,−64] robust |
 
 **讀法總結:**
-1. **C(churn-heavy)**:`leaf_rand` −2%(對照,無效)vs `leaf_freq` −40%——同 page-type、同 10 張,38 點全是 **access-frequency 訊號**。headline −81% = interior(2d −43%)＋熱 leaf(−40%)疊加。**這是「page-type-aware」命名對不上 headline 的直接證據。**
+1. **C(tail-region uniform reads)**:`leaf_rand` −2%(對照,無效)vs `leaf_freq` −40%——同 page-type、同 10 張,38 點全是 **access-frequency 訊號**。headline −81% = interior(2d −43%)＋熱 leaf(−40%)疊加。**這是「page-type-aware」命名對不上 headline 的直接證據。**
 2. **B(uniform)**:無熱 leaf → `leaf_freq ≈ leaf_rand ≈ 0`,改善全由 **2d(interior, page-type, −36%)** 提供;2e_K10 ≈ 2d。
 3. **A(zipfian)**:居中——leaf_freq_K10 −13%(robust、真有頻率訊號)但主力仍是 2d(−37%);**K=500 的 leaf-only 在 orig 反而 +21%(載 500 散落 leaf 的 deliver 成本壓過紅利)**,且所有 K500 的 `e2e_warm` 皆轉正(+39~114%,deliver ~0.8 ms 吃掉一切)——**access-frequency 的價值在於「小而準」(K=10),不在「多」**。
 4. **layout 槓桿(orig→ta)**:只改 deliver 成本、不改 selection 故事;ta collocate interior 卻使 2d/2e 的 interior 集合變大(C 4→48 頁),warm e2e 反略遜(C 2e_K10 orig −73% vs ta −65%),呼應 §6.1「type-aware layout 非淨贏」。
@@ -359,11 +359,11 @@ hotset 內容≡`2f_slru`（checksum 同），只差 warmer pread **遞送順序
 | B | 18,176 | 274,965 | **15.1×** |
 | C | 2,775 | 29,175 | **10.5×** |
 
-**NVMe 上 offset 排序遞送快 10–16×，效應全在 deliver、fq 不變**（診斷：兩 arm 讀相同裝置位元組 ~18MB → 順序 vs 隨機 IOPS，readahead=隱式 coalesce）。async(fadvise) 無此效應 → 專屬同步 pread（libprefetch 模型）。
+**NVMe 上 offset 排序遞送快 10–16×，效應全在 deliver、fq 不變**（診斷：兩 arm 讀相同裝置位元組 ~18MB,排除資料量差異;結果**與 sequential readahead + 隱式 coalescing 一致**,惟未取 block trace,不宣稱證明 coalescing 機制本身）。async(fadvise) 無此效應 → 專屬同步 pread（libprefetch 模型）。
 
-### learned_markov（Chen-inspired 一階 Markov，LOSO held-out）— async fq / e2e_warm
+### learned_markov（Chen-inspired 一階 Markov，held-out）— async fq / e2e_warm
 
-held-out LOSO（測 seed1、訓練 2..10）；hotset 取 finite-horizon expected-visit scores top-N；footprint 對齊 `2f_topN`。
+**latency 只在單一 held-out fold**（test seed 1、train seeds 2..10）量測；**first-query coverage 另做跨 10 test seed 的 offline LOSO**（`results/loso/coverage.csv`，完整 10-fold latency 未跑）。hotset 取 finite-horizon expected-visit scores top-N；footprint 對齊 `2f_topN`。
 
 | workload | learned_markov_14 | 2f_top14 | 2e_K10 |
 |---|---:|---:|---:|
@@ -372,8 +372,8 @@ held-out LOSO（測 seed1、訓練 2..10）；hotset 取 finite-horizon expected
 | C | 186 / 267 | 185 / 268 | 186 / 268 |
 
 - **learned_markov 三 workload async fq/e2e 都 ≈ 2f_topN**（逐格幾乎相同）→ 此 transition baseline 冷啟動可用輸出落在頻率排名範圍。
-- **C 的 caveat（已驗證）**：C leaf score 平（每 key 恰 5 次），learned/2f_topN 在統一 tie-break 下選出**相同 hotset** → fq 必然相等（186≈185）；186 遠低於 interior-only 地板意味被測 first op 恰落在此任意選擇裡——**tie-break 運氣、非 selection 能力**。**LOSO 離線 coverage（`results/loso/coverage.csv`）確認 C first-op 覆蓋跨 10 seed 呈雙峰 6/10**（covered→~186、not→~660，seed1 恰 covered）；A/B first-op 0/10 覆蓋但 interior 撐住。**勿讀成「learned 在 C 有效」。**
-- **Jaccard**（hotset 相似度、離線分析、非性能）：`J(learned_markov, frequency)=1.0`（此 3 層固定深度 tree 的觀測性質、非普遍宣稱）；`J(learned_markov, 2f_topN)` A/B N14 0.47/0.56、**C 1.0**。
+- **C 的 caveat（key-range artifact）**：C 的 key range [590000,609999] **超出初始 DB 最大 key 600000 → 半數(9,999/20,000 unique)為 not-found 高 key**（每 seed ~50% miss）。miss 查詢全沿右緣落到**最右葉**、該葉吸收 ~50k miss 流量成為壓倒性單一 hot leaf；hit 查詢散在頻率相近的真葉。offline coverage 的雙峰因此拆解為 **miss first-op 5/5 覆蓋、hit first-op 1/5 覆蓋**（合計 **6/10**，`results/loso/coverage.csv`）。C leaf score 平（每真 key 恰 5 次），learned/2f_topN 統一 tie-break 選同 hotset → fq 必等（186≈185）。**coverage 只能預測、非量到 latency regime**（seed 1 hit+覆蓋實測 186；not-covered 的 ~660 interior 地板是**推導預測**，10-fold latency 未跑）。held-out precision：**C=100%、A/B=43%**。A/B first-op 0/10 覆蓋但 interior 撐住。**勿讀成「learned 在 C 有效」。**
+- **Jaccard**（hotset 相似度、離線分析、非性能）：區分兩個 frequency 對象——**同一訓練資料** `J(learned_markov, frequency_train)=1.0`（traces 2–10 塌縮到 marginal frequency；此 3 層固定深度 tree 的觀測性質、非普遍宣稱）；**held-out 量測種子** `J(learned_markov, 2f_topN_test)` A/B N14 0.47/0.56、**C 1.0**（out-of-sample ranking 位移，C 因 leaf score 全平仍 =1.0）。兩者不矛盾。
 - **Workload E 未支援**（scan 非 3-page episode，`gen_pageseq` fail-loud）。
 
 ## RAM-pressure（cgroup MemoryMax=20M / unlimited 比值,async first-q）

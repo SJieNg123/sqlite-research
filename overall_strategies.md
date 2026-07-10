@@ -126,11 +126,11 @@
 | B | 18,176 µs | 274,965 µs | **15.1×** |
 | C | 2,775 µs | 29,175 µs | **10.5×** |
 
-- **NVMe 上 offset 排序遞送快 10–16×**，效應**全在 deliver、fq 不變**（載完 cache 相同）。診斷（rusage File system inputs）：sorted 與 shuf 讀**相同裝置位元組（~18 MB ≈ 工作集）** → 15× 純為順序（readahead 合併成大 I/O）vs 隨機 4KB IOPS，**readahead 即隱式 coalesce**。async(fadvise) 無此效應（僅發 hint）→ 專屬同步 pread 路徑。
+- **NVMe 上 offset 排序遞送快 10–16×**，效應**全在 deliver、fq 不變**（載完 cache 相同）。診斷（rusage File system inputs）：sorted 與 shuf 讀**相同裝置位元組（~18 MB ≈ 工作集）**,排除資料量差異 → 結果**與 sequential readahead + 隱式 request coalescing 一致**（offset 排序快 10–16×）;惟**未取 block trace / request-count**,不宣稱已證明 request 數量/大小或 coalescing 機制本身。async(fadvise) 無此效應（僅發 hint）→ 專屬同步 pread 路徑。
 
 #### learned-style — `learned_markov`（Chen-inspired transition baseline）+ `frequency`
 
-**Chen 等（ICDE 2021）formulation 啟發**的輕量 baseline（**非重現**）：保留「歷史 trace 學 page 轉移、預測下一批頁 + held-out」，把不可得 neural model 換成透明**一階 Markov**；未重現 Decision Module/背景執行緒/neural 架構；只用 page-access context。實作 `strategies/learned/`：每 query 獨立 episode `START→root→interior→leaf→END`（僅 op 內 transition）、`P(q|p)=count/Σ`、從 START 做 **finite-horizon expected-visit**（horizon=max深度+1，非 stationary）；hotset 取 `_scores.csv` top-N。**held-out LOSO**（測 master=seed1、訓練 seeds 2..10，硬 assert `test∉train`）。`frequency_N` 為**獨立 code path** 分析臂（取 `_marginal.csv`）。footprint 對齊 `2f_topN`。commit `a98e673`（8 validation gate 全過）。
+**Chen 等（ICDE 2021）formulation 啟發**的輕量 baseline（**非重現**）：保留「歷史 trace 學 page 轉移、預測下一批頁 + held-out」，把不可得 neural model 換成透明**一階 Markov**；未重現 Decision Module/背景執行緒/neural 架構；只用 page-access context。實作 `strategies/learned/`：每 query 獨立 episode `START→root→interior→leaf→END`（僅 op 內 transition）、`P(q|p)=count/Σ`、從 START 做 **finite-horizon expected-visit**（horizon=max深度+1，非 stationary）；hotset 取 `_scores.csv` top-N。**held-out**：latency 只在**單一 fold**（test seed 1、train seeds 2..10，硬 assert `test∉train`）量測；**first-query coverage 另做跨 10 test seed 的 offline LOSO**（`results/loso/coverage.csv`）——完整 10-fold latency sweep 未跑。`frequency_train` 為**獨立 code path** 分析臂（取 `_marginal.csv`，對象是同一批訓練 traces）。footprint 對齊 `2f_topN`。commit `a98e673`（8 validation gate 全過）。
 
 **async fq / e2e_warm（orig）：**
 
@@ -140,11 +140,11 @@
 | B | 414 / 496 | 415 / 497 | 414 / 519 |
 | C | 186 / 267 | 185 / 268 | 186 / 268 |
 
-**Jaccard（hotset 相似度，離線分析、非性能指標）：** `J(learned_markov, frequency)=1.000`（全 workload/N）；`J(learned_markov, 2f_topN)` A/B N14 0.47/0.56、N28 0.22、**C=1.00**。
+**Jaccard（hotset 相似度，離線分析、非性能指標）：** 需區分兩個 frequency 對象——`frequency_train`（learned 的同一批訓練 traces 2–10）vs `2f_topN_test`（held-out 量測種子 seed 1）。**同一訓練資料上** `J(learned_markov, frequency_train)=1.000`（全 workload/N，塌縮到 marginal frequency）；**對 held-out 種子** `J(learned_markov, 2f_topN_test)` A/B N14 0.47/0.56、N28 0.22、**C=1.00**（out-of-sample 頻率排名會變，A/B 明顯位移；C 因 leaf score 全平而仍 =1.0）。兩者不矛盾。
 
 - **learned_markov 三 workload 的 async fq/e2e 都 ≈ 2f_topN（逐格幾乎相同）** — 此 transition baseline 在冷啟動 regime 的可用輸出，落在 `2f_topN` 已覆蓋的頻率排名範圍。
-- **learned_markov 與 frequency 選同一組頁（J=1.0）**：當前 3 層固定深度 tree 的**觀測性質**（每頁單一深度 → expected-visit score = 正規化 visit frequency），由兩條獨立 code path 算出 — **非**普遍宣稱、不外推其他模型。
-- **C 的 caveat（已驗證，J(lm,2f_top)=1.0）**：C leaf score 平（每 key 恰 5 次），兩 arm 在統一 tie-break 下選出**相同 hotset** → fq 必然相等（186≈185）；**LOSO 離線 coverage（`results/loso/coverage.csv`）確認 C first-op 覆蓋跨 10 seed 呈雙峰 6/10**（covered→~186、not→~660）——**tie-break 運氣、非 selection 能力**；A/B first-op 0/10 覆蓋但 interior 撐住。**勿讀成「learned 在 C 有效」。**
+- **learned_markov 與 frequency_train 選同一組頁（J=1.0，同一訓練資料）**：當前 3 層固定深度 tree 的**觀測性質**（每頁單一深度 → expected-visit score = 正規化 visit frequency），由兩條獨立 code path 算出 — **非**普遍宣稱、不外推其他模型。對 held-out 量測種子（`2f_topN_test`）則 J 掉到 0.47/0.56（A/B），即 out-of-sample ranking 會位移。
+- **C 的 caveat（key-range artifact，勿讀成「learned 在 C 有效」）**：C 的 key range [590000,609999] **超出初始 DB 最大 key 600000 → 半數(9,999/20,000)為 not-found 高 key**，全部沿右緣落到**最右葉**，該葉吸收 ~50k miss 流量成為壓倒性單一 hot leaf。offline coverage 的雙峰因此拆解為 **miss first-op 5/5 覆蓋、hit first-op 1/5 覆蓋**（合計跨 10 test seed **6/10**，`results/loso/coverage.csv`）。C leaf score 平（每真 key 恰 5 次），兩 arm 統一 tie-break 選同 hotset → fq 必等（186≈185）。**coverage 只能預測、非量到 latency regime**：seed 1(hit、覆蓋)實測 186，not-covered 的 ~660(interior 地板)是**推導預測**（10-fold latency 未跑）。held-out precision：C=100%、A/B=43%。A/B first-op 0/10 覆蓋但 interior 撐住。**勿讀成「learned 在 C 有效」。**
 - **Workload E 未支援**：range scan 非 3-page episode，`gen_pageseq` 對 scan fail-loud（需真正 range 頁序列重建）。
 
 ---

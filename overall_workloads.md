@@ -17,7 +17,7 @@ repo 現階段使用的 workload、每個模擬什麼情境、以及分布指紋
 | **Interior pages** | **92（368 KB，0.35%）** = 51 table interior + 41 index interior |
 | Leaf pages | 26,239（~102.5 MB，99.65%）|
 
-**核心洞見：** interior 只占 0.35%，但**每筆 query 都得 root→leaf 沿路經過 interior**，cold start 時這 92 頁**每個觸發一次 4 KB random I/O**（NVMe ~50–100 µs）。leaf 雖占 99.65%，但熱 key 反覆查會自然 warm。→ **project 目標：prefetch 這 92 個 interior（只 368 KB）避開 cold-start random I/O。**
+**核心洞見：** interior 只占 0.35%，但**每筆 query 都得 root→leaf 沿路經過 interior**，cold start 時這 92 頁**每個觸發一次 4 KB random I/O**（NVMe ~50–100 µs）。interior 只有 368 KB 卻是每條 query path 的必經骨架,是最划算的 prefetch 目標;至於 leaf(占 99.65%),我們只在有頻率訊號時載最 hot 的少數,而非全部。→ **project 目標：prefetch 這 92 個 interior（只 368 KB）+ 少量 hot leaf,避開 cold-start random I/O。**（注:**每個 cold-start trial 前均 drop page cache,首查時 interior 與 leaf 皆 cold**;上述「反覆查會 warm」指的是穩態、非本研究量測的 first-query。）
 
 **三 layout 的 interior 散佈（scatter score = interior 平均頁號的正規化位置；0=全擠檔頭、≈1=uniform 散佈）：**
 
@@ -42,20 +42,22 @@ repo 現階段使用的 workload、每個模擬什麼情境、以及分布指紋
 **規模：** 100,000 ops 全 `read`。**Key：** id ∈ [8, 99997]（DB 前 1/6 區段）。**分佈：** Zipf α=0.99、scramble（熱 key 散佈全 key space）。
 - unique **23,253**（76% repeat）；top-100 熱 key 吃 **42.3%** 流量；最熱單 key 被查 **7,752 次（7.75%）**。
 
-**模擬：** 熱資料反覆被打（常開聯絡人、首頁 item）。熱 key 把 leaf 撐熱、**唯一還 cold 的是 interior** → prefetch 的最佳舞台，放大 interior prefetch 效益。（robustness 變體 **Workload Z**：α=0.99 但 `rank=key` 不 scramble、熱點落在低 id，REPORT §A.2。）
+**模擬：** 熱資料反覆被打（常開聯絡人、首頁 item）。**Zipfian skew 把 first-query 機率集中在少數 leaf**,使一個小的 frequency-derived hotset 較可能覆蓋首查 → prefetch 的最佳舞台,放大 targeted prefetch 效益。**（量測時所有頁——interior 與 leaf——在首查前皆 cold;skew 影響的是「小 hotset 能否覆蓋首查」,不是「leaf 是否已 warm」。）** robustness 變體 **Workload Z**：α=0.99 但 `rank=key` 不 scramble、熱點落在低 id，REPORT §A.2。
 
 ## Workload B — Uniform Random Point Read
 
 **規模：** 100,000 ops 全 `read`。**Key：** id ∈ [1, 99999]。**分佈：** 均勻。
 - unique **63,138**（多數是新查詢）；最熱 key 也只 7–8 次。
 
-**模擬：** 無熱點的 OLTP/批次掃描（逐筆檢查、隨機 sampling）。**每筆都打到沒看過的 leaf** → leaf fault 不可避免、攤薄 prefetch 效益（量 prefetch 的**下界**）。
+**模擬：** 無熱點的 OLTP/批次掃描（逐筆檢查、隨機 sampling）。**uniform 讀把 first-query 機率攤到大量 leaf** → 小 leaf hotset 的**期望覆蓋率低**、leaf fault 不可避免、攤薄 targeted prefetch 效益（量 prefetch 的**下界**;所有頁在首查前皆 cold）。
 
 ## Workload C — High-key Uniform Read
 
-**規模：** 100,000 ops 全 `read`。**Key：** id ∈ [590000, 609999]（**DB 末段 20k**）。**分佈：** 均勻（每 id 平均 5 次）。
+**規模：** 100,000 ops 全 `read`。**Key：** id ∈ [590000, 609999]（20,000 unique，每 id 平均 5 次）。**分佈：** 均勻。
 
-**模擬：** 「新加入資料馬上被讀」（剛收訊息、剛 push commit）。重點是 id 落在**檔尾 region**。因 leaves 高度集中檔尾，C 也是 2f SLRU 最小 hot set（~1.7 MB）的對照點，且 2e_K10 在 C 上 first-q −83% / e2e_warm −75% 是全矩陣最佳。
+> **⚠️ key-range audit（重要）：** 初始 DB 最大 key 僅 **600000**，而 C 的 range 上界是 **609999** → **恰半數（9,999 / 20,000 unique key）超出初始資料範圍**。在 clean DB 上（未經 aging）每個 seed 的 op 流因此約 **50% hit（≤600000，真存在）+ 50% miss（>600000，not-found 高 key）**（seed 1..10 實測皆 50,005 hit / 49,995 miss）。所以 C **不是**「新加入資料馬上被讀」——在 clean DB 上半數是 **not-found 高 key lookup**。**hit 與 miss 走相同的 B+tree 右緣 interior 路徑**：miss 查詢一律下降到**最右葉**（600000 所在葉）再回報不存在，故該最右葉吸收全部 ~50k miss 流量、成為**壓倒性單一 hot leaf**；hit 查詢（真 key ∈ [590000,600000]）散落在頻率相近的多個真葉。seed 1 的 first op 是 `read 590000`（**hit**）；跨 10 seed 的 first-op hit/miss 為 5 hit / 5 miss（見 §learned C caveat 與 `results/loso/coverage.csv`）。這正是 C 上 learned first-op coverage 呈 6/10（miss first-op 5/5 覆蓋、hit 1/5）的機制根源。
+
+**模擬：** high-key / 檔尾 region 均勻點讀，其中半數為超出資料範圍的 not-found lookup。因 leaves 高度集中檔尾、且最右葉被 miss 流量灌成單一超熱 leaf，C 是 2f SLRU 最小 hot set（~1.7 MB）的對照點，且 2e_K10 在 C 上 first-q −83% / e2e_warm −75% 是全矩陣最佳（但須注意此優勢部分來自上述 key-range artifact）。
 
 ## Workload D — Mixed Write-heavy Churn Generator
 
@@ -101,7 +103,7 @@ op-mix（seed 1 實測）：`scan` **94,975** + `insert` **5,024** + `read` 1。
 ### aging 量測（自 self-aging 路徑）
 YD/YE 含寫入、不能走唯讀 `run`，走 **`run_experiment.py aging`**（`WRITE_WORKLOADS={YD,YE}`）：workload 自身 insert 流灌**可寫副本**做 aging。**關鍵方法學**：每 checkpoint 用**反映當下 hotspot 的 probe**（= 該 chunk 的 reads，隨 insert frontier 移動），對**凍結在 t=0 的 hotset** 量 TTFQ。這樣才測得到「frozen hotset 被移走的 hotspot 拋離」的 decay——**單一全 trace 固定 probe 測不到**（其 first query 永不移動）。實作 commit `d110e3d` + `3889f09`（per-checkpoint probe 修正見 churn.py `_probe_from_lines`）。
 
-**實測 aging 演化（orig，10 checkpoints × **10 reps × 10 seeds**，`results/aging_v2/aging_ci.csv`；first_query_us，mean ± 95% CI）：**
+**實測 aging 演化（orig，**11 個 measurement checkpoint ck0–ck10**（= **10 個 aging increment** × 5,000 ops）× **10 reps × 10 seeds**，`results/aging_v2/aging_ci.csv`；first_query_us，mean ± 95% CI）：**
 
 | static t=0 hotset | YD（read-latest，非平穩）| YE（zipfian，平穩）|
 |---|---|---|
@@ -115,6 +117,6 @@ YD/YE 含寫入、不能走唯讀 `run`，走 **`run_experiment.py aging`**（`W
   - **YE（zipfian，平穩）**：熱點不隨 insert 移動 → `2e_K10_static` **不衰（−53%→−55%）、全程仍優於 layers_92**，同 C 的平穩情形。
 - **對照 C/A/B**：key range 固定、churn 下熱頁不動，`2e_K10_static` 不 decay（見 §6.2.1）；**YD 是此結論的第一個反例**——衰不衰取決於 hotspot 平穩性，且**頻率派衰、結構派耐衰並反超**。
 - **維度並存（勿當矛盾）**：`layers_*` 在 cross-seed first-query *level* 上「不可恃」（§7.3 tie/directional），卻在 aging *robustness* 軸上最耐久——兩個不同軸的結論並存。
-- **未跑：** 跨 seed aging（10-seed 素材已備）、更深 checkpoint。
+- **已完成：** 跨 seed aging — **10 seeds × 10 reps × 11 checkpoint**（`results/aging_v2/aging_ci.csv`）。**未跑：** 更深 checkpoint / 更長 aging horizon、YCSB E 的 scan-based learned baseline。
 
-> **資料出處：** 分布數字由 `workloads/workload_{yd,ye}_1.txt` 統計；aging 演化由 `results/aging/aging_evolution.csv`（per-checkpoint probe）。絕對 µs 批內自洽（演化比較），非跨批。
+> **資料出處：** 分布數字由 `workloads/workload_{yd,ye}_1.txt` 統計；aging 演化由 `results/aging_v2/aging_ci.csv`（10 seeds × 10 reps，per-checkpoint probe，cross-seed 95% CI）。絕對 µs 批內自洽（演化比較），非跨批。
