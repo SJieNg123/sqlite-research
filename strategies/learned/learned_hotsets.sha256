@@ -1,0 +1,8 @@
+# learned ml_static hotsets -- regenerable (gitignored *_seed2.csv); hashes frozen for verification
+# train_seed=2  measure=master(seed1)  gen=gen_pageseq.py+train_markov.py  N={14,28}  (deterministic regen verified)
+45b7317141c0465ee10e6f8327374d4c9bb39f3195f28d5e86ebaa6622a9b2f8  learned_A_orig_N14_seed2.csv
+3b4defb516db0513fbda05494464684912b393799b4ddb93913a31623753ff55  learned_A_orig_N28_seed2.csv
+f2da80d24f4d21d83217f750dc67dcbab95ab1cc86b165a74acac8eca843679f  learned_B_orig_N14_seed2.csv
+da1c5b70aea8b7ee18825ff554be18de26e4bb5c85f0101b896c7b6754e62e47  learned_B_orig_N28_seed2.csv
+8b1ee633c8e8407675d307fb0728c6377222937e84a2c26ec7fab5aef76ac7ba  learned_C_orig_N14_seed2.csv
+bd19fbb8a7990603616283c3933a716b8ec38168de86d2cc981f424aeb0ec334  learned_C_orig_N28_seed2.csv

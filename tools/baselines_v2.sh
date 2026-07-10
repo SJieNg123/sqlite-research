@@ -7,7 +7,14 @@
 #   learned-style:     learned_14, learned_28  (ml_static = Markov marginal top-N,
 #                        trained on seed 2, measured on the master = seed 1; a CONTENT
 #                        question, so async + pread both run)
-# References (same batch, paired comparison): 2f_top14, 2f_top28, 2e_K10, baseline.
+# References (same batch, paired comparison): 2f_top14, 2f_top28, 2e_K10, baseline, and
+# 2f_slru ASYNC-ONLY (its pread == lp_sorted byte-identical, already in (1); its async fq is
+# the Sec 4.4 machine-stability anchor ~126-130 us -> drift calibration vs results/main).
+#
+# Cell count = 6 (lp pread) + 30 (learned+refs x {pread,async}) + 3 (baseline) + 3 (2f_slru
+# async) = 42. Warmup is UNIFORM across every cell: the harness always runs rep 1 as a
+# discarded warmup (dropped in aggregate), for all arms -> paired comparison is protocol-
+# isomorphic by construction.
 #
 # Measure on the MASTER stream (no --seed): learned trains on seed 2 -> no leakage
 # (train 2 != measure 1). Output: results/baselines_v2/ (kept out of results/competitive,
@@ -49,6 +56,14 @@ python3 run_experiment.py run \
   --workload "$WORKLOADS" --db "$DB" \
   --strategy learned_14,learned_28,2f_top14,2f_top28,2e_K10 \
   --pread-reps "$PREAD_REPS" --async-reps "$ASYNC_REPS" \
+  --outdir "$OUT" >>"$LOG" 2>&1
+
+# (3) 2f_slru full-dump reference -- ASYNC ONLY (pread == lp_sorted byte-identical, in (1);
+# async fq = Sec 4.4 machine-stability anchor). pread-reps 0 -> one discarded pread warmup only.
+echo "--- 2f_slru (async only) ---" | tee -a "$LOG"
+python3 run_experiment.py run \
+  --workload "$WORKLOADS" --db "$DB" --strategy 2f_slru --no-baseline \
+  --pread-reps 0 --async-reps "$ASYNC_REPS" \
   --outdir "$OUT" >>"$LOG" 2>&1
 
 echo "=== done $(date -u +%FT%TZ)  raw=$OUT/raw.csv summary=$OUT/summary.csv ===" | tee -a "$LOG"

@@ -143,10 +143,13 @@ at t=0**."
   comparison), 100 optional. **Do not sweep large N** — learned's problem is not footprint.
 - **Overlap metric = Jaccard, reported vs BOTH `2f_topN` and `2e_K10`** (they answer different
   questions, see Phase 3).
-- **Batch modes:** `lp_*` stays **pread-only** (mechanism). `learned_N` is a *content* question →
-  the deployment-relevant mode is **async**, so in `baselines_v2` `learned_N` + its references
-  (`2f_topN`, `2e_K10`, baseline) run **async + pread** (pread as the oracle reference). Trim pread
-  if the cell count exceeds budget.
+- **Batch modes:** `lp_*` stays **pread-only** (mechanism). `learned_N` + references (`2f_topN`,
+  `2e_K10`, baseline) run **async + pread**. `2f_slru` is added **async-only** (its pread ==
+  `lp_sorted` byte-identical, already measured; its async fq is the §4.4 machine anchor ~126–130 µs
+  → drift calibration vs results/main). **Final cell count = 6 (lp pread) + 30 (learned+refs ×
+  {pread,async}) + 3 (baseline) + 3 (2f_slru async) = 42.** Warmup is UNIFORM (harness rep 1 =
+  discarded warmup for every arm) → paired comparison is protocol-isomorphic. reps = 10/10 (§4.4
+  n=10 discipline). Measure = master (seed 1); learned trained on seed 2 (no leakage).
 
 ## ml_online — downgraded to analytical argument (archived per the downgrade clause)
 The secondary `ml_online` arm (query-time: on each fault to page p, look up the table and
