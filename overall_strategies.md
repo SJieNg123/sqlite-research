@@ -2,7 +2,7 @@
 
 > 本檔講「每個策略是什麼 + 目前最新結果」。想知道「怎麼測出來的」（共用 benchmark_harness、cold-start 機制、結構派 vs 歷史派前置、每策略確切 post-cold-script），見 [strategies_explained.md](strategies_explained.md)。權威全表見 [overall_results.md](overall_results.md)。
 
-> **數字基準（本檔統一）：** 延遲策略均來自**同一批 `results/unified_v2`**（A/B/C × orig/vacuum/ta，async 10 / pread 10，全機 drop-caches、`cold_pct`=0）＋ prior-art baselines `results/baselines_v2`（背靠背同機器狀態）。**此批機器狀態比 `results/main` 快 ~1.2×**（2f_slru async 錨點：batch 108/107/102 µs vs main 126/126/124，ratio 1.16–1.22）→ **絕對 µs 只能批內配對比較**。`first-q` = async fq_median；`e2e_warm` = deliver + fq（warm-process 部署）。
+> **數字基準（本檔統一，canonical v2）：** 延遲策略均來自**同一批 `results/unified_v2`**（A/B/C × orig/vacuum/ta，async 10 / pread 10，全機 drop-caches、`cold_pct`=0）＋ prior-art baselines `results/baselines_v2`（背靠背同機器狀態、共享 2f_slru 錨點）。**這是新的絕對值來源，不需跨批換算。** 與舊 `results/main` 的差異是**加法性的 CPU 路徑漂移（非標量乘法）**：慢路徑 baseline 幾乎不變（A 523 vs 529，−1%），只有快的 CPU-bound 路徑受影響（2f_slru async 108 vs 127，−18 µs / −15%）。**絕對 µs 不可跨批比較**；錨點讀數記錄於 `results/unified_v2`。`first-q` = async fq_median；`e2e_warm` = deliver + fq（warm-process）。
 
 三類正交策略，可自由組合：
 

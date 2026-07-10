@@ -110,7 +110,7 @@ YD/YE 含寫入、不能走唯讀 `run`，走 **`run_experiment.py aging`**（`W
 | layers_92_static（structural）| 265 → 275（幾乎不衰，區間 264–347）| 261 → 318（穩定，+57）|
 
 - **decay 由 hotspot 平穩性決定**（釘出「static t=0 hotset 不 decay」結論的適用邊界）：
-  - **YD（read-latest，非平穩）**：熱點跟著 insert frontier 移動 → **access-frequency 派 `2e_K10_static` 從 ck0 的 102 µs 衰減到 ck1–10 均值 ~347 µs（趨近 baseline ~590）**，凍結的 top-K hot leaf 被移走的 latest window 拋離。**非單調**：部分 checkpoint 回落到 ~130–160 µs（probe 窗口偶爾重新落回 frozen hotset 覆蓋範圍），反映 latest 分布的隨機重疊。
+  - **YD（read-latest，非平穩）**：熱點跟著 insert frontier 移動 → **access-frequency 派 `2e_K10_static` 收益從 ck0 的 −82%（102 vs baseline 571）衰到 ck1–10 均值 −41%（~348 vs ~586）**——**erodes by roughly half、非歸零（仍優於 baseline）**，但個別 checkpoint 收益完全消失（ck4：+6%）。凍結的 top-K hot leaf 被移走的 latest window 拋離。**非單調**：部分 checkpoint 回落 ~130 µs（probe 窗口偶爾重疊 frozen hotset），反映 latest 分布的隨機重合。（cross-seed CI 見 `results/aging_v2/aging_ci.csv`，跑完精修。）
   - **structural `layers_92_static` 耐衰得多（265→275，區間 264–347）**：interior 骨架移動慢（新 leaf 掛在既有 interior 下），故結構派比頻率派抗非平穩 aging。
   - **YE（zipfian，平穩）**：scan/read 熱點不隨 insert 移動 → static hotset **僅微升不衰**（2e 279→333、l92 261→318），同 C 的平穩情形。
 - **對照 C/A/B**：key range 固定、churn 下熱頁不動，故 `2e_K10_static` 不 decay（見 §6.2.1）；**YD 是此結論的第一個反例**——衰不衰取決於 hotspot 是否平穩，且**頻率派衰、結構派耐衰**。
