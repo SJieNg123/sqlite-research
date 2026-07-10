@@ -155,6 +155,29 @@ async (fadvise) arm shows *no* order effect (all ~7 ms) — the penalty is speci
 + random-read) outcomes support the paper's cost-accounting thesis; the NVMe magnitude is a strong,
 non-obvious result.
 
+### Diagnostic rep — what "sorted" actually does (diskstats / rusage inputs)
+Measured with `/usr/bin/time -v` "File system inputs" (512 B blocks the process read from device),
+cold-dropped before each run, A/orig:
+
+| arm | device reads (blocks / MB) | deliver_us |
+|---|---|---|
+| lp_sorted | 35,976 blk / **18.4 MB** | 18,310 |
+| lp_shuf   | 36,296 blk / **18.6 MB** | 272,172 |
+| working set (theory) | 35,328 blk / 18.09 MB | — |
+
+**Verdict: `sorted` STREAMS the same ~17 MB working set — it is NOT readahead scanning a larger
+span.** Both arms move the same device bytes (<1% apart, ≈ the working set); the working set's
+offset span is 18.4 MB with 4,416 pages nearly densely filling the file's first 18 MB. The 15×
+is therefore **sequential (readahead-coalesced into few large I/Os) vs random 4 KB IOPS on the same
+data**, not an over-read. (This is the evidence behind the Phase 1b "readahead = implicit coalesce"
+rationale above.)
+
+### Smoke/diagnostic machine identity (record with the numbers)
+`meow1`; AMD Ryzen 9 9950X (16C); kernel 6.17.0-19-generic; DB on `/dev/nvme0n1` = **KINGSTON
+KC3000 (SKC3000D2048G) NVMe SSD**, `rotational=0`, `read_ahead_kb=128` (matches the harness's pinned
+`ra_kb=128`); DB file 107.9 MB, working set 18.09 MB (A/orig). Absolute µs are machine-state
+specific — cross-arm *within this batch* is the valid comparison.
+
 ## REPORT.md arm-definition stub (ready to paste; three-piece, InnoDB/Pre-Buffer 格式)
 
 > **libprefetch-style delivery arm（`lp_sorted` / `lp_shuf`）。** 我們在同一基底（SQLite + OS
@@ -172,8 +195,20 @@ non-obvious result.
 >   control（兩 arm 恆等於噪音內）。實測（A/orig）：**NVMe 上 Δdeliver ≈ 254 ms ≈ 15×**（sorted
 >   17.6 ms vs shuffled 271 ms），`fq` 皆 ~99 µs、`majflt`=0——效應**全部落在遞送、無一在查詢**。此
 >   NVMe 收益源非 seek（NVMe 無 seek），而是**順序存取觸發 kernel sequential-readahead ＋ 隨機
->   4 KB pread 遠慢於串流順序讀**；async(fadvise) arm 無此效應（遞送僅發 hint），故此懲罰專屬
->   **同步 pread** 路徑，即 libprefetch 的模型。
+>   4 KB pread 遠慢於串流順序讀**；診斷實測兩 arm 讀取的裝置位元組相同（~18 MB ≈ 工作集），故
+>   sorted 是「串流工作集」而非「掃更大 span 過度讀取」。
+>
+> **Caveats（與數字並列時必附）**：
+> 1. **機器身份**：`meow1` / AMD Ryzen 9 9950X / kernel 6.17.0-19 / DB 在 **KINGSTON KC3000 NVMe**
+>    (`/dev/nvme0n1`, rotational=0, `read_ahead_kb=128`)。絕對 µs 屬機器狀態；有效比較是**本 batch
+>    內跨 arm**。
+> 2. **`lp_*` 的 `deliver_us` 量的是同步 pread 的實際資料傳輸時長**；而 **async(fadvise) arm 的
+>    `deliver_us` 量的是 hint 發射時長**——`posix_fadvise(WILLNEED)` 立即返回、真正的讀取在其後由
+>    kernel 於**被測路徑之外**完成，故 async 的遞送順序**天生無效應**（非「無差異」，而是它根本沒在計
+>    傳輸）。這是 async 恆 ~7 ms 的原因。
+> 3. **與 §7.2 已發表的 0.6–7 ms 並列時務必標明 mode**：那些是 **async 發射時長**；本處 `lp_sorted`/
+>    `lp_shuf` 的 17.6 ms / 271 ms 是 **pread 同步載入時長**（含實際傳輸）。兩者是**不同量**，不可直接
+>    相比——並列時各自標 `(fadvise-issue)` / `(pread-sync-load)`。
 
 ---
 
@@ -185,11 +220,15 @@ non-obvious result.
   second mechanism independent of ordering (batching vs ordering); folding it into the same arm
   would make `Δ` unattributable. It must carry its own arm (`lp_coalesce`) + its own acceptance.
 
-### Deferred — Phase 1b coalesce (archival rationale)
-- If Phase 1 measures **Δ ≈ 0** (lp_shuf vs lp_sorted), the coalescing upper bound is *indirectly*
-  bounded too: when NVMe is insensitive even to page **order**, the remaining room for batched
-  merges comes mainly from **syscall count**, not the I/O access pattern — a separate question.
-- If Phase 1 measures **Δ significantly ≠ 0**, open Phase 1b; the correct implementation site is a
-  `WARM_COALESCE` env in `warmer.c` (merge offset-adjacent pages into one large `pread` after the
-  offset sort), as its own arm `lp_coalesce` with its own acceptance (verify merged `(offset,
-  length)` pairs, `majflt`, `delivery_pct=100`).
+### Deferred — Phase 1b coalesce (archival rationale, updated post-diagnostic)
+- **Kernel readahead already IS the implicit coalesce, and it is the source of the 15×.** The
+  diskstats/rusage diagnostic (see below) shows `lp_sorted` and `lp_shuf` move the **same ~18 MB**
+  of device bytes; the 15× comes purely from the sorted case's sequential preads being
+  **readahead-coalesced into a few large device transfers**, vs the shuffled case's 4,416 random
+  4 KB IOPS. An explicit `WARM_COALESCE` (merge offset-adjacent pages into one large `pread`) would
+  therefore mostly **replicate what readahead already delivers for the sorted arm** — it is not a
+  new optimization, only a way to *decompose* how much of the 15× is coalescing vs raw
+  sequential-vs-random. **We do not open it** as an optimization arm.
+- If a **mechanism-decomposition** study is later wanted, the correct site is a `WARM_COALESCE` env
+  in `warmer.c` as its own arm `lp_coalesce` (verify merged `(offset,length)` pairs, `majflt`,
+  `delivery_pct=100`), reported only as an attribution breakdown, not a performance claim.
