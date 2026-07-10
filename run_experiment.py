@@ -180,6 +180,15 @@ def resolve_strategy(name):
     m = re.fullmatch(r"2f_top(\d+)", name)
     if m:
         return {"name": name, "kind": "freqdump", "n": int(m.group(1))}
+    # libprefetch-style delivery-order arms (baselines_v2). CONTENT == 2f_slru; the arms
+    # differ ONLY in warmer pread ORDER. Not in the default STRATEGIES matrix -- selected
+    # explicitly (e.g. --strategy lp_sorted,lp_shuf). Primary metric is deliver_us, not fq.
+    if name == "lp_sorted":                              # offset-ascending (libprefetch C-LOOK)
+        return {"name": name, "kind": "lp", "order": "offset"}
+    if name == "lp_shuf":                                # locality-destroying control
+        return {"name": name, "kind": "lp", "order": "shuffle", "seed": LP_SHUF_SEED}
+    if name == "lp_desc":                                # optional: direction-insensitivity check
+        return {"name": name, "kind": "lp", "order": "offset-desc"}
     raise ValueError(f"unknown strategy: {name}")
 
 # --------------------------------------------------------------------------- parsing
@@ -293,12 +302,40 @@ def select_pages(strat, w, layout, classify):
     if kind == "slru":                # 2f: whole resident working set
         src = SLRU_RUNS / f"hotpages_{w.lower()}{SLRU_SUFFIX[layout]}{_seed_suffix()}.csv"
         return _resident_pages(_require_hotset(src))
+    if kind == "lp":                  # libprefetch-style: CONTENT == 2f_slru resident set;
+        # the strategy's delivery order (strat["order"]) is applied later, in build_hotset,
+        # NOT here -- selection and delivery are kept strictly separate.
+        src = SLRU_RUNS / f"hotpages_{w.lower()}{SLRU_SUFFIX[layout]}{_seed_suffix()}.csv"
+        return _resident_pages(_require_hotset(src))
     raise ValueError(f"unknown strategy kind: {kind}")
 
 
-def build_hotset(pages, classify, dest):
-    """Write warmer-format hotset (page_number,file_offset) sorted by offset."""
-    rows = sorted((classify[pn][1], pn) for pn in pages if pn in classify)
+LP_SHUF_SEED = 424242    # deterministic shuffle seed for the lp_shuf delivery-order control
+
+def build_hotset(pages, classify, dest, order="offset", seed=None):
+    """Write warmer-format hotset (page_number,file_offset).
+
+    `order` controls ONLY the LINE ORDER, which is exactly the warmer's pread
+    delivery order (warmer.c reads the CSV line-by-line). It never changes WHICH
+    pages are written -- selection and delivery are strictly separated (paper
+    Sec 4.2), so hotset CONTENT and its checksum are order-invariant.
+      offset       (default) ascending file offset -- the historical behavior,
+                   byte-for-byte identical to before (every non-lp caller uses this)
+      offset-desc  descending (direction-insensitivity control)
+      shuffle      deterministic seeded permutation that destroys offset locality
+                   (the lp_shuf control; seed logged to stderr for reproducibility)
+    """
+    rows = [(classify[pn][1], pn) for pn in pages if pn in classify]
+    if order == "offset":
+        rows.sort()
+    elif order == "offset-desc":
+        rows.sort(reverse=True)
+    elif order == "shuffle":
+        rows.sort()                              # canonicalize first so the shuffle is
+        random.Random(seed).shuffle(rows)        # reproducible regardless of set iteration
+        sys.stderr.write(f"  lp_shuf: shuffled {len(rows)} rows seed={seed} -> {Path(dest).name}\n")
+    else:
+        raise ValueError(f"unknown hotset delivery order: {order!r}")
     with open(dest, "w", newline="") as f:
         f.write("page_number,file_offset\n")
         for off, pn in rows:
@@ -808,7 +845,10 @@ def cmd_run(args):
             hotsets[(w, ly, s["name"])] = (None, len(pages))
             continue
         dest = workdir / f"hotset_{w}_{ly}_{s['name']}.csv"
-        npg = build_hotset(pages, classify, dest)
+        if s["kind"] == "lp":            # libprefetch-style arms carry a delivery order
+            npg = build_hotset(pages, classify, dest, order=s["order"], seed=s.get("seed"))
+        else:                            # every other kind: unchanged (offset-sorted, bit-identical)
+            npg = build_hotset(pages, classify, dest)
         if npg == 0:
             sys.stderr.write(f"  WARN empty hotset for {w}/{ly}/{s['name']} "
                              f"-> verify_cold_pct won't emit, cold gate skipped\n")
