@@ -161,6 +161,8 @@ def add_aging_parser(sub):
     ap.add_argument("--db", default="orig", help="db key(s): comma-list of orig,vacuum,ta")
     ap.add_argument("--checkpoints", type=int, default=10, help="aging checkpoints (x OPS_PER ops each)")
     ap.add_argument("--reps", type=int, default=3, help="measurement reps per checkpoint (median)")
+    ap.add_argument("--seed", type=int, default=1, help="workload seed: age with workload_<w>_<seed>.txt "
+                    "(default 1 = master); loop 1..10 for the paper's cross-seed CI")
     ap.add_argument("--outdir", default=str(R.ROOT / "results/aging"))
     ap.add_argument("--dry-run", action="store_true", help="print the plan, run nothing")
     ap.set_defaults(func=cmd_aging)
@@ -248,7 +250,10 @@ def cmd_aging(args):
         db0 = R.resolve_pointer(R.DBS[layout])
         classify = R.load_classify(layout)
         for w in workloads:
-            wl = R.resolve_pointer(R.WORKLOADS[w])
+            seed = getattr(args, "seed", 1) or 1
+            wl = R.ROOT / f"workloads/workload_{w.lower()}_{seed}.txt"
+            if not wl.exists():
+                sys.exit(f"aging: missing {wl} (--seed {seed})")
             workdb = workdir / f"aging_{w}_{layout}.db"
             shutil.copy2(db0, workdb)
             recdir = workdir / f"rec_{w}_{layout}"; recdir.mkdir(exist_ok=True)
