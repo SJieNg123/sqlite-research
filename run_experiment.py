@@ -70,6 +70,8 @@ RESIDENCY_CHECKER = ROOT / "pipeline/engine/residency_checker/residency_checker"
 GEN_HOTLEAVES     = ROOT / "strategies/access/runs/gen_hotleaves.py"
 SLRU_RUNS         = ROOT / "strategies/slru/runs"      # canonical base residency (2f/2d source)
 ACCESS_RUNS       = ROOT / "strategies/access/runs"    # hot2e curated files (2e source)
+LEARNED_TRAIN_SEED = 2    # learned_N (ml_static) hotsets are trained on this seed; the measured
+                          # workload MUST differ (seed 1 / master) -- hard leakage check below.
 FREEZE_PATH       = ROOT / "results/main/hotset_freeze.sha256"
 
 DBS = {
@@ -180,6 +182,11 @@ def resolve_strategy(name):
     m = re.fullmatch(r"2f_top(\d+)", name)
     if m:
         return {"name": name, "kind": "freqdump", "n": int(m.group(1))}
+    # learned-style arm (ml_static): marginal top-N of a Markov table trained on a different seed.
+    # Not in the default STRATEGIES matrix; selected explicitly (e.g. --strategy learned_14).
+    m = re.fullmatch(r"learned_(\d+)", name)
+    if m:
+        return {"name": name, "kind": "learned", "n": int(m.group(1))}
     # libprefetch-style delivery-order arms (baselines_v2). CONTENT == 2f_slru; the arms
     # differ ONLY in warmer pread ORDER. Not in the default STRATEGIES matrix -- selected
     # explicitly (e.g. --strategy lp_sorted,lp_shuf). Primary metric is deliver_us, not fq.
@@ -301,6 +308,15 @@ def select_pages(strat, w, layout, classify):
         return _resident_pages(_require_hotset(src))
     if kind == "slru":                # 2f: whole resident working set
         src = SLRU_RUNS / f"hotpages_{w.lower()}{SLRU_SUFFIX[layout]}{_seed_suffix()}.csv"
+        return _resident_pages(_require_hotset(src))
+    if kind == "learned":             # ml_static: marginal top-N of a Markov table trained on a
+        # DIFFERENT seed's page stream (train=LEARNED_TRAIN_SEED). At t=0 there is no conditioning
+        # context, so the model collapses to the marginal -> hotset = marginal top-N (see
+        # strategies/learned/). Hard leakage guard: never measure the seed we trained on.
+        if SEED is not None and SEED == LEARNED_TRAIN_SEED:
+            sys.exit(f"learned: LEAKAGE -- measure seed {SEED} == train seed {LEARNED_TRAIN_SEED}; "
+                     f"train and measure seeds must differ")
+        src = ACCESS_RUNS / f"learned_{w}_{layout}_N{strat['n']}_seed{LEARNED_TRAIN_SEED}.csv"
         return _resident_pages(_require_hotset(src))
     if kind == "lp":                  # libprefetch-style: CONTENT == 2f_slru resident set;
         # the strategy's delivery order (strat["order"]) is applied later, in build_hotset,

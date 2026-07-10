@@ -1,38 +1,54 @@
 #!/bin/bash
 # baselines_v2 — reimplemented prior-art baseline arms on a common substrate.
 #
-# ⚠️ CONFIG ONLY. Phase 3 (validation) does NOT execute this. It is the batch
-# definition for the future run once all v2 baseline arms (libprefetch-style now;
-# learned-style later) are in place. Run it explicitly during an announced window.
+# ⚠️ CONFIG ONLY until the cell list is signed off. Two arm families:
+#   libprefetch-style: lp_sorted, lp_shuf   (delivery-ORDER mechanism; pread-only,
+#                        because libprefetch is synchronous — async is meaningless)
+#   learned-style:     learned_14, learned_28  (ml_static = Markov marginal top-N,
+#                        trained on seed 2, measured on the master = seed 1; a CONTENT
+#                        question, so async + pread both run)
+# References (same batch, paired comparison): 2f_top14, 2f_top28, 2e_K10, baseline.
 #
-# Cells (this batch): {lp_sorted, lp_shuf} + reference arms {2f_slru, 2e_K10, baseline}
-#   x workloads {A,B,C} x layout {orig} x arm {pread}.
-# libprefetch is a SYNCHRONOUS system -> async arm is meaningless for it, so async
-# is disabled (--async-reps 0; one discarded warmup remains, no async summary row).
-#
-# Primary metric: deliver_us (batch load time). fq is a control (equal within noise
-# across lp_sorted/lp_shuf/2f_slru confirms full delivery). lp_sorted MUST match
-# 2f_slru (content+order byte-identical) -> built-in faithfulness cross-check.
-#
-# Output: results/baselines_v2/  (kept out of results/competitive/, which holds
-# published-number provenance).
+# Measure on the MASTER stream (no --seed): learned trains on seed 2 -> no leakage
+# (train 2 != measure 1). Output: results/baselines_v2/ (kept out of results/competitive,
+# which holds published-number provenance).
 set -uo pipefail
 cd /home/u03/sqlite-research-project-sharing || exit 1
 
 OUT=results/baselines_v2
-STRATS="lp_sorted,lp_shuf,2f_slru,2e_K10"   # baseline auto-runs (no --no-baseline)
 WORKLOADS="A,B,C"
 DB="orig"
-PREAD_REPS="${PREAD_REPS:-10}"              # match results/main pread reps for comparability
+PREAD_REPS="${PREAD_REPS:-10}"
+ASYNC_REPS="${ASYNC_REPS:-10}"
 LOG="$OUT/batch.log"
-
 mkdir -p "$OUT"
 echo "=== baselines_v2 batch $(date -u +%FT%TZ) ===" | tee -a "$LOG"
-echo "strategies=$STRATS workloads=$WORKLOADS db=$DB pread_reps=$PREAD_REPS (async disabled)" | tee -a "$LOG"
 
+# (0) prep: (re)generate the learned ml_static hotsets (they carry _seed2 -> gitignored
+# as regenerable). Trains on seed 2; measured on the master (=seed 1) below -> no leakage.
+DB=$(python3 -c "import run_experiment as R; print(R.resolve_pointer(R.DBS['orig']))")
+CL=$(python3 -c "import run_experiment as R; print(R.resolve_pointer(R.CLASSIFY['orig']))")
+echo "--- prep: learned hotsets (train seed 2) ---" | tee -a "$LOG"
+for w in a b c; do
+  W=$(echo "$w" | tr a-z A-Z)
+  python3 strategies/learned/gen_pageseq.py "$DB" "$CL" "workloads/workload_${w}_2.txt" "$OUT/seq_${w}.csv" >>"$LOG" 2>&1
+  python3 strategies/learned/train_markov.py "$OUT/seq_${w}.csv" "$OUT/mk_${w}" \
+    --w "$W" --layout orig --train-seed 2 --hotset-n 14,28 >>"$LOG" 2>&1
+done
+
+# (1) libprefetch-style arms — pread-only (synchronous mechanism), no baseline here
+echo "--- lp arms (pread-only) ---" | tee -a "$LOG"
 python3 run_experiment.py run \
-  --workload "$WORKLOADS" --db "$DB" --strategy "$STRATS" \
+  --workload "$WORKLOADS" --db "$DB" --strategy lp_sorted,lp_shuf --no-baseline \
   --pread-reps "$PREAD_REPS" --async-reps 0 \
+  --outdir "$OUT" >>"$LOG" 2>&1
+
+# (2) learned-style + reference arms — async + pread (baseline auto-runs)
+echo "--- learned + references (async + pread) ---" | tee -a "$LOG"
+python3 run_experiment.py run \
+  --workload "$WORKLOADS" --db "$DB" \
+  --strategy learned_14,learned_28,2f_top14,2f_top28,2e_K10 \
+  --pread-reps "$PREAD_REPS" --async-reps "$ASYNC_REPS" \
   --outdir "$OUT" >>"$LOG" 2>&1
 
 echo "=== done $(date -u +%FT%TZ)  raw=$OUT/raw.csv summary=$OUT/summary.csv ===" | tee -a "$LOG"
