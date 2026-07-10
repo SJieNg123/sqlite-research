@@ -1,19 +1,36 @@
 #!/usr/bin/env python3
-"""Reconstruct the ordered page-access stream (root->interior->leaf per query) for a
-workload, OFFLINE from (db + dbstat) -- no harness instrumentation needed.
+"""Reconstruct a per-query EPISODIC page-access sequence for a workload, OFFLINE from
+(db + dbstat) -- no harness instrumentation.
 
-A read-only point query descends the B-tree deterministically root->interior->leaf.
-We map key->leaf via first_rowid ranges (same machinery as gen_hotleaves.py) and
-leaf->ancestor pages via the dbstat `path` column (path prefixes = ancestor chain).
+Each query is an independent episode delimited by synthetic START/END tokens:
 
-Output CSV: op_no,page_number,page_type  (one row per page touched, traversal order;
-op_no groups each query's root->interior->leaf triple).
+    START -> root -> interior(s) -> leaf -> END          (point lookup)
 
-Usage: gen_pageseq.py <db> <classify.csv> <workload.txt> <out_seq.csv>
-  (classify is accepted for interface symmetry with the other generators; page types
-   here come from dbstat directly.)
+Transitions are built ONLY within one op_no (one query); we never join
+`leaf_of_query_i -> root_of_query_{i+1}`. The special tokens use negative synthetic
+IDs (START=-1, END=-2) so they never collide with real SQLite page numbers, and they
+are excluded from any hotset downstream.
+
+Output CSV columns:  op_no,step,page_number,page_type
+  step 0        = START (page -1)
+  step 1..k     = real pages, root -> ... -> leaf (types root/interior/leaf)
+  step k+1      = END   (page -2)
+
+Supported ops: point `read` (-> episode). `scan` (workload E, range query) is NOT a
+3-page episode and is NOT supported here -> the tool FAILS LOUDLY. Write ops
+(insert/update/readmodifywrite) are training-irrelevant for read-page prediction and
+are rejected unless --reads-only is given (then they are counted and skipped, never
+silently reinterpreted).
+
+Usage:
+  gen_pageseq.py <db> <classify.csv> <workload.txt> <out_seq.csv> [--reads-only]
+  (classify accepted for interface symmetry; page types come from dbstat.)
 """
-import sys, sqlite3, csv, bisect
+import sys, sqlite3, csv, bisect, argparse
+
+START_ID, END_ID = -1, -2
+SUPPORTED = {"read"}                       # point lookups only
+WRITE_OPS = {"insert", "update", "readmodifywrite"}
 
 
 def _varint(buf, off):
@@ -27,7 +44,7 @@ def _varint(buf, off):
 
 
 def _first_rowid(pb):
-    if pb[0] != 0x0D:                 # 0x0D = table-btree leaf
+    if pb[0] != 0x0D:
         return None
     n = (pb[3] << 8) | pb[4]
     if n == 0:
@@ -39,7 +56,6 @@ def _first_rowid(pb):
 
 
 def _ancestor_paths(leafpath):
-    """'/001/0dd/' -> ['/', '/001/', '/001/0dd/'] (root .. leaf)."""
     segs = [s for s in leafpath.split('/') if s != '']
     chain, cur = ['/'], ''
     for s in segs:
@@ -48,14 +64,18 @@ def _ancestor_paths(leafpath):
     return chain
 
 
-def reconstruct(db_path, workload_path):
-    """Yield (op_no, page_number, page_type) for each page touched, in traversal order."""
+def _norm_type(t):
+    # dbstat pagetype is 'internal'/'leaf'; label root separately downstream.
+    return 'interior' if t != 'leaf' else 'leaf'
+
+
+def build_index(db_path):
     db = sqlite3.connect(str(db_path))
     db.execute("CREATE VIRTUAL TABLE temp.s USING dbstat(main)")
     rows = list(db.execute("SELECT path,pageno,pagetype FROM temp.s WHERE name='items'"))
+    root = db.execute("SELECT rootpage FROM sqlite_master WHERE name='items'").fetchone()[0]
     path2pg = {p: pg for p, pg, t in rows}
     pg2type = {pg: t for p, pg, t in rows}
-
     leaf_first = []
     for p, pg, t in rows:
         if t != 'leaf':
@@ -65,6 +85,13 @@ def reconstruct(db_path, workload_path):
         if fr is not None:
             leaf_first.append((fr, pg, p))
     leaf_first.sort()
+    return root, path2pg, pg2type, leaf_first
+
+
+def episodes(db_path, workload_path, reads_only=False):
+    """Yield lists of (step, page_number, page_type) per query episode (incl START/END).
+    Raises ValueError on an unsupported op (scan / writes unless reads_only)."""
+    root, path2pg, pg2type, leaf_first = build_index(db_path)
     firsts = [x[0] for x in leaf_first]
 
     def chain_for_key(k):
@@ -75,37 +102,70 @@ def reconstruct(db_path, workload_path):
         return [path2pg.get(a) for a in _ancestor_paths(lp)]
 
     op_no = 0
+    skipped_writes = 0
     with open(workload_path) as f:
-        for line in f:
+        for lineno, line in enumerate(f, 1):
             parts = line.split()
-            if len(parts) < 2 or parts[0] not in ('read', 'scan'):
+            if not parts:
+                continue
+            op = parts[0]
+            if op == "scan":
+                raise ValueError(
+                    f"unsupported op 'scan' at line {lineno}: workload E (range scan) needs "
+                    f"true range-query page-sequence reconstruction, not a 3-page episode. "
+                    f"learned_markov x E is N/A until that is implemented.")
+            if op in WRITE_OPS:
+                if reads_only:
+                    skipped_writes += 1
+                    continue
+                raise ValueError(
+                    f"unsupported op '{op}' at line {lineno}: this is a write. Read-page "
+                    f"prediction ignores writes -- pass --reads-only to train on the read "
+                    f"subset of a mixed workload (e.g. YCSB D).")
+            if op not in SUPPORTED:
+                raise ValueError(f"unsupported op '{op}' at line {lineno}")
+            if len(parts) < 2:
                 continue
             try:
                 k = int(parts[1])
             except ValueError:
                 continue
             chain = chain_for_key(k)
-            if not chain:
+            if chain is None:
                 continue
-            for pg in chain:
-                if pg is not None:
-                    yield op_no, pg, pg2type.get(pg, '?')
+            real = [(pg, ('root' if pg == root else _norm_type(pg2type.get(pg, '?'))))
+                    for pg in chain if pg is not None]
+            # --- hard validation: a point episode must contain root and a leaf, ordered ---
+            if not real or real[0][0] != root:
+                raise ValueError(f"episode {op_no} (key {k}) does not start at root {root}: {real}")
+            if real[-1][1] != 'leaf':
+                raise ValueError(f"episode {op_no} (key {k}) does not end at a leaf: {real}")
+            ep = [(0, START_ID, 'START')]
+            for step, (pg, t) in enumerate(real, 1):
+                ep.append((step, pg, t))
+            ep.append((len(real) + 1, END_ID, 'END'))
+            yield op_no, ep
             op_no += 1
+    if skipped_writes:
+        sys.stderr.write(f"  reads-only: skipped {skipped_writes} write ops\n")
 
 
 def main():
-    if len(sys.argv) != 5:
-        print(__doc__)
-        sys.exit(1)
-    db, _classify, wl, out = sys.argv[1:]
-    n = 0
-    with open(out, 'w', newline='') as f:
+    ap = argparse.ArgumentParser()
+    ap.add_argument('db'); ap.add_argument('classify'); ap.add_argument('workload')
+    ap.add_argument('out'); ap.add_argument('--reads-only', action='store_true')
+    a = ap.parse_args()
+    n_ep = n_rows = 0
+    with open(a.out, 'w', newline='') as f:
         w = csv.writer(f)
-        w.writerow(['op_no', 'page_number', 'page_type'])
-        for op_no, pg, t in reconstruct(db, wl):
-            w.writerow([op_no, pg, t])
-            n += 1
-    print(f"wrote {out}: {n} page accesses", file=sys.stderr)
+        w.writerow(['op_no', 'step', 'page_number', 'page_type'])
+        for op_no, ep in episodes(a.db, a.workload, a.reads_only):
+            for step, pg, t in ep:
+                w.writerow([op_no, step, pg, t])
+                n_rows += 1
+            n_ep += 1
+    sys.stderr.write(f"wrote {a.out}: {n_ep} episodes, {n_rows} rows "
+                     f"(incl START/END tokens {START_ID}/{END_ID})\n")
 
 
 if __name__ == '__main__':

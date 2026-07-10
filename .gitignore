@@ -210,3 +210,10 @@ results/competitive/*.log
 #     per-cap work/ scratch (~1.8 GB total, regenerable via tools/ram_pressure.sh) ---
 results/ram_pressure/*/work/
 results/ram_pressure/*/regen_work/
+
+# learned baseline: regenerable hotsets + model artifacts (provenance in *_metadata.json,
+# reproducible via strategies/learned/train_markov.py; determinism gate-verified)
+strategies/access/runs/learned_markov_*.csv
+strategies/access/runs/frequency_*.csv
+strategies/access/runs/*_test*.meta.json
+strategies/learned/artifacts/
