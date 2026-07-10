@@ -1095,15 +1095,17 @@ C（WS 僅 1.8 MB ≈ 量測下限）**無法以 cgroup 施壓 → 其 RAM-robus
 - **libprefetch（VanDeBogart+09）的 delivery-order 核心**（`lp_sorted`/`lp_shuf`）：hotset 內容≡`2f_slru`、只差 warmer pread **遞送順序**。主度量 Δdeliver（fq 為 control、兩 arm 相等）：**NVMe 上 offset 排序遞送快 10–16×**（A 15.6× / B 15.1× / C 10.5×），效應**全在 deliver、fq 不變**。診斷（rusage File system inputs）顯示兩 arm 讀**相同裝置位元組（~18 MB ≈ working set）** → 15× 純為順序（kernel readahead 合併成少數大 I/O）vs 隨機 4 KB IOPS——**readahead 即隱式 coalesce**。async(fadvise) 無此效應 → 懲罰專屬同步 pread（正是 libprefetch 模型）。這把「libprefetch 的 seek 收益在 NVMe 上消失」精確化為「**改由 readahead + 隨機讀懲罰承載,但同樣只在 deliver 項、不進 first-query**」。
 
 - **learned-prefetcher lineage（Chen+21 formulation 啟發）的輕量 transition baseline**（`learned_markov`，**非重現** neural model）：一階 Markov page-transition、從 START 做 finite-horizon expected-visit、held-out **LOSO**（測 seed1/訓練 2..10）。實測 **async fq/e2e 三 workload 都 ≈ `2f_topN`**（A 391/474 vs 391/473；C 186/267 vs 185/268）→ 此 transition baseline 冷啟動的可用輸出落在**頻率排名**範圍。`J(learned_markov, frequency)=1.0` 是**此 3 層固定深度 B+tree 的觀測性質**（每頁單一深度 → expected-visit = 正規化 visit frequency），**非**「learned 必等於 frequency」的普遍宣稱。Workload E（range scan）未支援（非 3-page episode）。
+  > **C 的 caveat（勿讀成「learned 在 C 有效」）**：C 的 leaf score 是**平的**（每 key 恰 5 次），`learned_markov` 與 `2f_topN` 在統一 tie-break（score desc, page asc）下選出**相同 hotset** → 延遲必然相等（186≈185；對照 v1 版的 659 vs 178 大 gap，差別純來自統一 tie-break）。186 µs 遠低於 interior-only 地板（~660）意味被測 first op 的 leaf **恰落在這組任意選擇裡**——屬 **tie-break 確定性運氣、非 selection 能力**。**預測記檔**：pending 的 full-LOSO 掃全 test seed 時,C 行應呈**雙峰 / 高變異**（有的 seed 首查被覆蓋、有的不）；若 LOSO 果然雙峰,即驗證此 tie-break-luck 解釋。
 
 #### 6.2.7 YCSB D/E self-aging：hotspot 平穩性決定 decay（§6.2.1 的第一個反例）
 
 §6.2.1 證明平穩熱點下 static hotset 不 decay。**YCSB D（read-latest,熱點跟著 insert frontier 移動 = 非平穩）** 提供第一個反例。用 self-aging 路徑（workload 自身 insert 流 age 可寫副本、**per-checkpoint probe** 反映當下 frontier、對凍結 t=0 hotset 量 first-query；10 ckpt × **10 reps × 10 seeds**，`results/aging_v2`，mean±95%CI）：
 
-| static t=0 hotset | YD（read-latest,非平穩）| YE（zipfian,平穩）|
+| static t=0 hotset | YD（read-latest,非平穩）ck0→ck10 µs | YE（zipfian,平穩）ck0→ck10 µs |
 |---|---|---|
-| **2e_K10_static**（access-freq）| **−50%(ck0) → −33%(ck10)** 衰減 | −53% → −55% **不衰** |
-| layers_92_static（structural）| **robust（252→270），從 ck1 起反超 2e** | 微升（260→292）|
+| baseline | 538 → 570 | 550 → 601 |
+| **2e_K10_static**（access-freq）| **267 → 382（−50% → −33%）衰減** | 260 → 273（−53% → −55%）**不衰** |
+| layers_92_static（structural）| **252 → 270（robust,+7%）,從 ck1 起反超 2e** | 260 → 292（微升,+12%）|
 
 - **頻率派衰、結構派耐並反超**:YD 上 access-frequency `2e_K10_static` 收益從 −50% 衰到 −33%（erodes ~half、非歸零）,而 structural `layers_92_static` 幾乎不衰,且**從 ck1 起反超頻率派**（~250–278 vs ~310–420）。機制:頻率 hotset 綁定「哪些 key 熱」（非平穩下失效）,結構 skeleton 綁定「樹長什麼樣」（漂移緩慢）。**YE（zipfian 平穩）則 `2e_K10` 不衰、全程仍優**——證明 decay 是**非平穩性**的性質、非 aging 本身。
 - **維度並存（勿當矛盾）**:`layers_*` 在 cross-seed first-query *level* 上不可恃（§6.2.4 tie/directional）,卻在 aging *robustness* 軸上最耐久——兩個不同軸的結論並存。此結果把 §6.2.1 精確化為「**static t=0 hotset 是否 decay 由 hotspot 平穩性決定;read-latest / append-heavy workload 下頻率派衰、結構 skeleton 耐**」,並直接導出 §6.3 的 read-latest guidance。

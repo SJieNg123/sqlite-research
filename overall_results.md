@@ -372,6 +372,7 @@ held-out LOSO（測 seed1、訓練 2..10）；hotset 取 finite-horizon expected
 | C | 186 / 267 | 185 / 268 | 186 / 268 |
 
 - **learned_markov 三 workload async fq/e2e 都 ≈ 2f_topN**（逐格幾乎相同）→ 此 transition baseline 冷啟動可用輸出落在頻率排名範圍。
+- **C 的 caveat**：C leaf score 平（每 key 恰 5 次），learned/2f_topN 在統一 tie-break 下選出**相同 hotset** → fq 必然相等（186≈185）；186 遠低於 interior-only 地板意味被測 first op 恰落在此任意選擇裡——**tie-break 運氣、非 selection 能力**。full-LOSO 掃全 seed 時 C 應呈雙峰/高變異（驗證此解釋）。**勿讀成「learned 在 C 有效」。**
 - **Jaccard**（hotset 相似度、離線分析、非性能）：`J(learned_markov, frequency)=1.0`（此 3 層固定深度 tree 的觀測性質、非普遍宣稱）；`J(learned_markov, 2f_topN)` A/B N14 0.47/0.56、**C 1.0**。
 - **Workload E 未支援**（scan 非 3-page episode，`gen_pageseq` fail-loud）。
 
