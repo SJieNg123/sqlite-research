@@ -302,3 +302,36 @@ RAM-pressure 矩陣涵蓋 **9 個 (workload × layout) cell × 7 個策略 × 2 
 layers_N 從 6 個採樣點補成全 93 個值 × 3 reps：clean DB 2,511 cells + churn DB
 3,069 cells = **~5,580 額外 benchmark**。發現 sparse 6-pt 在 9/12 cell 結論正確，
 但漏掉 3 個 sweet spot：**A × 1b N=62 -31% / B × 1c N=26 -36% / C × 1b N=87 -57%**。
+
+---
+
+## YCSB core D / E（寫入型，教授建議補齊）
+
+> ⚠️ **命名：** 本節的 **YCSB D / E** 是 YCSB 標準 core workload（read-latest / short-ranges），
+> registry key 為 **`YD` / `YE`**，**與上面既有的「Workload D＝write-heavy churn generator」不同東西**（那個是 aging 用的混寫流）。兩者請勿混淆。
+>
+> **產生器：** `workloads/gen_workload.py`（type `YD`/`YE`，seed 化，各 10 seeds 已入庫 `workload_{yd,ye}_1..10.txt`）。參照 [YCSB-cpp](https://github.com/ls4154/YCSB-cpp) 的比例定義。兩者皆**含 insert（寫入型）**：insert 從 **600001** 起（超過 DB 密集 max id 600000，否則 upsert 只改列不長大）→ DB 隨時間 aging。首 op 強制為 `read`，以便下游唯讀 TTFQ probe 過 `--require-read-first`。
+
+### YCSB D（`YD`）— read-latest
+
+**規模：** 100,000 ops。**op-mix（seed 1 實測）：** `read` **95,108** + `insert` **4,892**（≈ 95/5，對齊 `readproportion=0.95 / insertproportion=0.05`）。
+**分佈：** `requestdistribution=latest` — 讀取熱點集中在**最近插入的 key**。以 Zipf α=0.99 對「距今 recency rank」取樣，`key = cur_max − zipf_rank`（最新插入的最熱）。
+- reads：unique **37,456**，key range **[106, 604892]**；**53,996 筆（57%）讀落在 >600000 的新插入區** → 熱點隨插入往資料尾端漂（top-1 單 key 僅 28 次，無單一 key 獨大，因最熱 key 隨 cur_max 移動）。
+- inserts：**4,892 筆，600001–604892**（DB 實際長大 ~4.9k 列）。
+
+**模擬什麼：** user status / timeline / 最新事件——寫入不斷產生新熱 key，**移動的 hotset**。這是 A/B/C/Z（靜態熱點）都沒有的軸，直接壓測 static / history 派預取（它們預熱的是舊熱點）。
+
+### YCSB E（`YE`）— short-ranges
+
+**規模：** 100,000 ops。**op-mix（seed 1 實測）：** `scan` **94,975** + `insert` **5,024** + `read` 1（op[0]）（≈ 95/5，對齊 `scanproportion=0.95 / insertproportion=0.05`）。
+**分佈：** `requestdistribution=zipfian`，`maxscanlength=100`（uniform）。
+- scans：start 走 scrambled Zipf α=0.99 over [1..600000]（散佈，同 A），**start unique 34,756、range [29, 599899]、start top-1 = 6,429 次**（zipf skew）；**scan length ∈ [1,100]，mean 50.5**（uniform）。harness `scan <start> <len>` → `SELECT payload FROM items WHERE id>=?1 ORDER BY id LIMIT ?2`。
+- inserts：**5,024 筆，600001–605024**。
+
+**模擬什麼：** 短範圍掃描為主的負載（如訊息佇列尾端連續讀），配合 5% 插入的 aging。
+
+### 怎麼跑（自 self-aging 路徑，非唯讀 `run` matrix）
+
+YD/YE 含寫入，不能走 `run`（硬帶 `--readonly` + 無 per-rep restore 會污染 canonical DB）。改走 **`run_experiment.py aging`** 子命令（`WRITE_WORKLOADS={YD,YE}`）：workload 自身的 insert 流灌**可寫副本**做 aging、唯讀 probe（濾掉 insert）量 TTFQ 跨 checkpoint。實作 commit `d110e3d`（生成器/seeds）+ `3889f09`（aging 子命令）。smoke 已驗 DB 真的長大（+N 列＝N 個 insert）；**完整 aging sweep（多 checkpoint × 跨 seed）尚未跑正式批。**
+
+> **資料出處：** 上述 op-mix / unique / range / top-1 / scan-length 均由 `workloads/workload_{yd,ye}_1.txt` 直接統計（可重現：`gen_workload.py YD 1 -` / awk 統計）。
