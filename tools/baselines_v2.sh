@@ -44,12 +44,15 @@ for w in a b c; do
     --w "$W" --layout orig --train-seed 2 --hotset-n 14,28 >>"$LOG" 2>&1
 done
 
+# Each `run` truncates its outdir's raw/summary, so the three families write to SEPARATE
+# subdirs and are merged at the end into $OUT/{raw,summary}.csv.
+
 # (1) libprefetch-style arms — pread-only (synchronous mechanism), no baseline here
 echo "--- lp arms (pread-only) ---" | tee -a "$LOG"
 python3 run_experiment.py run \
   --workload "$WORKLOADS" --db "$DB" --strategy lp_sorted,lp_shuf --no-baseline \
   --pread-reps "$PREAD_REPS" --async-reps 0 \
-  --outdir "$OUT" >>"$LOG" 2>&1
+  --outdir "$OUT/lp" >>"$LOG" 2>&1
 
 # (2) learned-style + reference arms — async + pread (baseline auto-runs)
 echo "--- learned + references (async + pread) ---" | tee -a "$LOG"
@@ -57,7 +60,7 @@ python3 run_experiment.py run \
   --workload "$WORKLOADS" --db "$DB" \
   --strategy learned_14,learned_28,2f_top14,2f_top28,2e_K10 \
   --pread-reps "$PREAD_REPS" --async-reps "$ASYNC_REPS" \
-  --outdir "$OUT" >>"$LOG" 2>&1
+  --outdir "$OUT/learned" >>"$LOG" 2>&1
 
 # (3) 2f_slru full-dump reference -- ASYNC ONLY (pread == lp_sorted byte-identical, in (1);
 # async fq = Sec 4.4 machine-stability anchor). pread-reps 0 -> one discarded pread warmup only.
@@ -65,6 +68,14 @@ echo "--- 2f_slru (async only) ---" | tee -a "$LOG"
 python3 run_experiment.py run \
   --workload "$WORKLOADS" --db "$DB" --strategy 2f_slru --no-baseline \
   --pread-reps 0 --async-reps "$ASYNC_REPS" \
-  --outdir "$OUT" >>"$LOG" 2>&1
+  --outdir "$OUT/anchor" >>"$LOG" 2>&1
 
-echo "=== done $(date -u +%FT%TZ)  raw=$OUT/raw.csv summary=$OUT/summary.csv ===" | tee -a "$LOG"
+# merge the three families into one raw.csv / summary.csv (header once, then all data rows)
+echo "--- merge ---" | tee -a "$LOG"
+for kind in raw summary; do
+  { head -1 "$OUT/lp/$kind.csv"
+    for d in lp learned anchor; do tail -n +2 "$OUT/$d/$kind.csv"; done
+  } > "$OUT/$kind.csv"
+done
+echo "=== done $(date -u +%FT%TZ)  raw=$OUT/raw.csv summary=$OUT/summary.csv "\
+"(cells: $(tail -n +2 "$OUT/summary.csv" | wc -l) summary rows) ===" | tee -a "$LOG"
