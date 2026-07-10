@@ -144,7 +144,7 @@
 
 - **learned_markov 三 workload 的 async fq/e2e 都 ≈ 2f_topN（逐格幾乎相同）** — 此 transition baseline 在冷啟動 regime 的可用輸出，落在 `2f_topN` 已覆蓋的頻率排名範圍。
 - **learned_markov 與 frequency 選同一組頁（J=1.0）**：當前 3 層固定深度 tree 的**觀測性質**（每頁單一深度 → expected-visit score = 正規化 visit frequency），由兩條獨立 code path 算出 — **非**普遍宣稱、不外推其他模型。
-- **C 的 caveat（J(lm,2f_top)=1.0）**：C leaf score 平（每 key 恰 5 次），兩 arm 在統一 tie-break 下選出**相同 hotset** → fq 必然相等（186≈185）；186 遠低於 interior-only 地板意味被測 first op 恰落在此任意選擇裡——**tie-break 運氣、非 selection 能力**。full-LOSO 掃全 seed 時 C 應呈雙峰/高變異。**勿讀成「learned 在 C 有效」。**
+- **C 的 caveat（已驗證，J(lm,2f_top)=1.0）**：C leaf score 平（每 key 恰 5 次），兩 arm 在統一 tie-break 下選出**相同 hotset** → fq 必然相等（186≈185）；**LOSO 離線 coverage（`results/loso/coverage.csv`）確認 C first-op 覆蓋跨 10 seed 呈雙峰 6/10**（covered→~186、not→~660）——**tie-break 運氣、非 selection 能力**；A/B first-op 0/10 覆蓋但 interior 撐住。**勿讀成「learned 在 C 有效」。**
 - **Workload E 未支援**：range scan 非 3-page episode，`gen_pageseq` 對 scan fail-loud（需真正 range 頁序列重建）。
 
 ---
