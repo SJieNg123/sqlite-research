@@ -81,6 +81,23 @@ Corrected aging (per-checkpoint probe; see §4). orig, **10 reps × 10 seeds**,
   (n=10) + `results/baselines_v2`; cross-seed CI (A/B/C 10-seed) and YD/YE aging cross-seed
   (`results/aging_v2`, reps=10 × seeds 1..10) are separate, self-contained batches.
 
+## 4b. Swap sheet — v1 (results/main) → v2 (results/unified_v2), single-instantiation, orig
+
+Apply ONLY to single-instantiation numbers (abstract, §5, §6.1). Cross-seed CI (§6.2.4) is a
+seed-batch product and does NOT change — in parallel "single X / cross-seed Y" sentences, update
+the single side to v2 and label batches. Changes are small (conclusions unchanged).
+
+| item (orig) | v1 | v2 | note |
+|---|---|---|---|
+| baseline first-q A / B / C | 529 / 760 / 1096 | **523 / 749 / 1087** | ~1%, I/O-bound path barely moves |
+| 2f_slru first-q A / B / C | −76% / −83% / −89% (127/128/123 µs) | **−79% / −86% / −91% (108/107/102)** | |
+| 2e_K10 C first-q | −81% (211 µs) | **−83% (186 µs)** | |
+| 2e_K10 e2e_warm A / B / C | −7% / −29% / −73% (C 291 µs) | **−11% / −29% / −75% (C 268 µs)** | headline C −73%→−75% |
+| 2f_slru e2e_warm A / B | +1248% / +843% | **+1299% / +879%** | |
+
+Not swapped (casualty list §1): layers_N sweep, K-sweep, RAM, cadence, size-1GiB, 2a 32/92 → keep
+v1 + provenance note. 10-seed cross-seed CI (C 2e_K10 −70% [−72,−69] etc.) → unchanged.
+
 ## 5. Material-map / memory sync (todo alongside this)
 - add the YD decay finding (frequency decays / structural resists / stationarity axis);
 - confirm the learned-v1 retraction marker is present (v1 marginal-collapse design → replaced
