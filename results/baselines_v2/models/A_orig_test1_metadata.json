@@ -1,0 +1,42 @@
+{
+  "artifacts": {
+    "marginal": "A_orig_test1_marginal.csv",
+    "scores": "A_orig_test1_scores.csv",
+    "transitions": "A_orig_test1_transitions.csv"
+  },
+  "budget_pages": [
+    14,
+    28
+  ],
+  "horizon": 4,
+  "input_sha256": {
+    "10": "15bf3d743ac3c84851765ccb5dbe3efdb1c109d0453a6604a5ff788d60786ab4",
+    "2": "0019113e0af86800b44933a654956ad8394c128726cf3ec49443124fbcb11cd8",
+    "3": "66dd03bed8dcddd96ba7457c99e98130432a37f7115efa107bc1411e208af834",
+    "4": "5157436e352b282000d4376810b10d9c0bf6c0f6798f863b31cd04255502078e",
+    "5": "c17ffbe1c9963eff601c6572b99beceb84c451cb72f7f4ce41c6aa222f206a7d",
+    "6": "b295254c4ec83509d5e366a0ddb281c9f1554b48f4cb676db072d33217ef819d",
+    "7": "a50949036c173891173d15422ca44d85e28aa68a24d1a65887b02c117ebcd9d3",
+    "8": "e19e563f5ab01703142cf2357f4fa5c74ddf366345876531911920efd624f377",
+    "9": "9d0f501d1d54fb476ebc3d0b3d46655cea1861990c769d251b3bca2d4879e174"
+  },
+  "layout": "orig",
+  "max_real_depth": 3,
+  "model": "first_order_markov",
+  "model_version": 2,
+  "reads_only": false,
+  "test_seed": 1,
+  "tie_break": "score_desc_page_asc",
+  "train_seeds": [
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10
+  ],
+  "workload": "A"
+}

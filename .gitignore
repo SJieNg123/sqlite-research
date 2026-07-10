@@ -217,3 +217,9 @@ strategies/access/runs/learned_markov_*.csv
 strategies/access/runs/frequency_*.csv
 strategies/access/runs/*_test*.meta.json
 strategies/learned/artifacts/
+
+# results: heavy regenerable intermediates (DB copies, chunks, probes, hotsets) -- never commit
+results/**/work/
+results/**/regen_work/
+results/**/*.db
+results/**/chunks_*/
