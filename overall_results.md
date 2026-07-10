@@ -3,7 +3,7 @@
 本檔列出**每個策略 × 每個 workload × 每個 layout 的 實驗結果**（對照
 [overall_workloads.md](overall_workloads.md) 的 workload 定義）。
 
-> 本檔所有數字來自 **統一 pipeline**（`run_experiment.py` 家族 → `results/main*/`,全 cell `cold_pct`=0)。
+> 本檔所有數字來自 **統一 pipeline**（`run_experiment.py` 家族,全 cell `cold_pct`=0）。**A/B/C 主矩陣（master batch + 全策略首查表）為 canonical v2 批** `results/unified_v2/`；Z、N/K-sweep、RAM、churn、cadence、size 等仍為各自原批（`results/main*/` 等），跨批只比相對量（impr% / 跨-seed Δ% / ratio），絕對 µs 不跨批逐格對（見「資料可比性」）。
 > Workload D 是 churn generator,無自身 latency 結果。
 >
 > **Preprocessing 計入 e2e（兩個部署模型）**:preprocessing 拆成 **open(db)(冷開 DB ~200µs,per-layout 常數)**
@@ -45,7 +45,7 @@
 <!-- MASTER-RESULTS-START -->
 ## master batch 結果
 
-> 由 `run_experiment.py` 一次跑齊:54 strategy cells × pread/async + 9 baseline,pread 5 / async 10 / baseline 10 reps(丟 warmup)、rep-major、全機 drop-caches、in-harness `--verify-hotset`、釘核升頻、ra=128。**全 117 cell `cold_pct`=0**。原始檔:[`results/main/summary.csv`](results/main/summary.csv) / [`results/main/raw.csv`](results/main/raw.csv)。
+> **canonical v2 批**:由 `run_experiment.py` 一次跑齊 A/B/C × {orig, vacuum, ta} × {baseline, layers_5/92, 2d, 2e_K10/40/92/500, 2f_slru} × {async, pread},async / pread / baseline 各 **n=10**(丟 warmup)、rep-major、全機 drop-caches、in-harness `--verify-hotset`、釘核升頻、ra=128。**全 cell `cold_pct`=0**。與 `results/baselines_v2`、`results/aging_v2` 背靠背同 session、共享 `2f_slru` 錨點。原始檔:[`results/unified_v2/matrix/summary.csv`](results/unified_v2/matrix/summary.csv)。
 > `fq` = first-query median µs;`impr%` = async 相對該 (workload,layout) baseline;`e2e_std` = open+deliver+fq(standalone warmer);`e2e_warm` = deliver+fq(warm-process,≈static,本研究主張);`deliv%` = async delivery_pct;`oracle` = pread 模式 fq(可達上界)。
 > 此為 A/B/C 的詳表(含 delivery_pct/oracle);下方「全維度數據」涵蓋全 workload(含 Z)× layout × 策略 + N/K-sweep + RAM + churn + cadence。
 
@@ -53,81 +53,81 @@
 
 | layout | strategy | fq_async | impr% | deliv% | e2e_std | e2e_warm | oracle(pread) |
 |---|---|--:|--:|--:|--:|--:|--:|
-| **orig** | baseline | **529** | — | — | 529 | 529 | — |
-| orig | layers_5 | 412 | 22% | 100 | 671 | 480 | 207 |
-| orig | layers_92 | 393 | 26% | 100 | 781 | 587 | 210 |
-| orig | 2d | 401 | 24% | 100 | 680 | 487 | 210 |
-| orig | 2e_K10 | 393 | 26% | 100 | 685 | 490 | 212 |
-| orig | 2e_K500 | 212 | 60% | 100 | 1238 | 1044 | 211 |
-| orig | 2f_slru | 127 | 76% | 100 | 7327 | 7134 | 128 |
-| **vacuum** | baseline | **716** | — | — | 716 | 716 | — |
-| vacuum | layers_5 | 574 | 20% | 100 | 838 | 643 | 208 |
-| vacuum | layers_92 | 575 | 20% | 100 | 954 | 759 | 209 |
-| vacuum | 2d | 576 | 20% | 100 | 846 | 654 | 210 |
-| vacuum | 2e_K10 | 571 | 20% | 100 | 894 | 662 | 210 |
-| vacuum | 2e_K500 | 226 | 68% | 18 | 1162 | 934 | 212 |
-| vacuum | 2f_slru | 126 | 82% | 100 | 5684 | 5463 | 123 |
-| **ta** | baseline | **695** | — | — | 695 | 695 | — |
-| ta | layers_5 | 524 | 25% | 100 | 814 | 593 | 505 |
-| ta | layers_92 | 457 | 34% | 51 | 846 | 624 | 212 |
-| ta | 2d | 463 | 33% | 72 | 793 | 573 | 216 |
-| ta | 2e_K10 | 401 | 42% | 100 | 748 | 526 | 219 |
-| ta | 2e_K500 | 340 | 51% | 25 | 1309 | 1086 | 210 |
-| ta | 2f_slru | 128 | 82% | 100 | 7367 | 7146 | 126 |
+| **orig** | baseline | **523** | — | — | 523 | 523 | — |
+| orig | layers_5 | 382 | 27% | 100 | 679 | 453 | 187 |
+| orig | layers_92 | 369 | 30% | 100 | 795 | 570 | 187 |
+| orig | 2d | 364 | 30% | 100 | 678 | 452 | 185 |
+| orig | 2e_K10 | 363 | 31% | 100 | 694 | 464 | 187 |
+| orig | 2e_K500 | 190 | 64% | 100 | 1311 | 1083 | 196 |
+| orig | 2f_slru | 108 | 79% | 100 | 7552 | 7324 | 110 |
+| **vacuum** | baseline | **707** | — | — | 707 | 707 | — |
+| vacuum | layers_5 | 553 | 22% | 100 | 854 | 623 | 186 |
+| vacuum | layers_92 | 557 | 21% | 100 | 977 | 747 | 190 |
+| vacuum | 2d | 555 | 22% | 100 | 863 | 633 | 190 |
+| vacuum | 2e_K10 | 556 | 21% | 100 | 879 | 648 | 189 |
+| vacuum | 2e_K500 | 187 | 74% | 27 | 1261 | 1032 | 204 |
+| vacuum | 2f_slru | 103 | 85% | 100 | 5875 | 5677 | 106 |
+| **ta** | baseline | **658** | — | — | 658 | 658 | — |
+| ta | layers_5 | 501 | 24% | 100 | 764 | 569 | 486 |
+| ta | layers_92 | 451 | 32% | 100 | 823 | 632 | 187 |
+| ta | 2d | 453 | 31% | 72 | 762 | 568 | 196 |
+| ta | 2e_K10 | 390 | 41% | 77 | 753 | 523 | 198 |
+| ta | 2e_K500 | 197 | 70% | 27 | 1263 | 1034 | 195 |
+| ta | 2f_slru | 109 | 84% | 100 | 7595 | 7365 | 107 |
 
 ### Workload B (Uniform)
 
 | layout | strategy | fq_async | impr% | deliv% | e2e_std | e2e_warm | oracle(pread) |
 |---|---|--:|--:|--:|--:|--:|--:|
-| **orig** | baseline | **760** | — | — | 760 | 760 | — |
-| orig | layers_5 | 435 | 43% | 100 | 725 | 503 | 439 |
-| orig | layers_92 | 435 | 43% | 100 | 849 | 630 | 439 |
-| orig | 2d | 441 | 42% | 100 | 749 | 525 | 440 |
-| orig | 2e_K10 | 440 | 42% | 100 | 761 | 540 | 433 |
-| orig | 2e_K500 | 487 | 36% | 100 | 1558 | 1339 | 485 |
-| orig | 2f_slru | 128 | 83% | 100 | 7388 | 7161 | 125 |
-| **vacuum** | baseline | **1046** | — | — | 1046 | 1046 | — |
-| vacuum | layers_5 | 529 | 49% | 100 | 791 | 598 | 532 |
-| vacuum | layers_92 | 534 | 49% | 100 | 915 | 720 | 530 |
-| vacuum | 2d | 528 | 50% | 100 | 795 | 603 | 529 |
-| vacuum | 2e_K10 | 530 | 49% | 100 | 813 | 619 | 530 |
-| vacuum | 2e_K500 | 436 | 58% | 18 | 1407 | 1182 | 489 |
-| vacuum | 2f_slru | 126 | 88% | 100 | 5731 | 5510 | 126 |
-| **ta** | baseline | **788** | — | — | 788 | 788 | — |
-| ta | layers_5 | 625 | 21% | 100 | 918 | 693 | 611 |
-| ta | layers_92 | 603 | 24% | 29 | 991 | 768 | 618 |
-| ta | 2d | 614 | 22% | 78 | 946 | 722 | 595 |
-| ta | 2e_K10 | 614 | 22% | 80 | 959 | 737 | 614 |
-| ta | 2e_K500 | 746 | 5% | 30 | 1676 | 1455 | 549 |
-| ta | 2f_slru | 127 | 84% | 100 | 7370 | 7149 | 125 |
+| **orig** | baseline | **749** | — | — | 749 | 749 | — |
+| orig | layers_5 | 422 | 44% | 100 | 722 | 494 | 412 |
+| orig | layers_92 | 417 | 44% | 100 | 856 | 626 | 421 |
+| orig | 2d | 421 | 44% | 100 | 740 | 509 | 422 |
+| orig | 2e_K10 | 421 | 44% | 100 | 765 | 528 | 419 |
+| orig | 2e_K500 | 461 | 38% | 100 | 1576 | 1349 | 469 |
+| orig | 2f_slru | 107 | 86% | 100 | 7561 | 7328 | 109 |
+| **vacuum** | baseline | **1024** | — | — | 1024 | 1024 | — |
+| vacuum | layers_5 | 510 | 50% | 100 | 814 | 579 | 515 |
+| vacuum | layers_92 | 516 | 50% | 100 | 940 | 707 | 515 |
+| vacuum | 2d | 509 | 50% | 100 | 820 | 588 | 513 |
+| vacuum | 2e_K10 | 516 | 50% | 100 | 843 | 608 | 513 |
+| vacuum | 2e_K500 | 405 | 60% | 29 | 1402 | 1168 | 473 |
+| vacuum | 2f_slru | 104 | 90% | 100 | 5921 | 5688 | 105 |
+| **ta** | baseline | **770** | — | — | 770 | 770 | — |
+| ta | layers_5 | 605 | 21% | 100 | 908 | 675 | 593 |
+| ta | layers_92 | 585 | 24% | 100 | 1003 | 767 | 595 |
+| ta | 2d | 587 | 24% | 78 | 935 | 701 | 569 |
+| ta | 2e_K10 | 592 | 23% | 80 | 951 | 719 | 597 |
+| ta | 2e_K500 | 608 | 21% | 38 | 1633 | 1403 | 548 |
+| ta | 2f_slru | 106 | 86% | 100 | 7596 | 7359 | 111 |
 
 ### Workload C (Churn-heavy)
 
 | layout | strategy | fq_async | impr% | deliv% | e2e_std | e2e_warm | oracle(pread) |
 |---|---|--:|--:|--:|--:|--:|--:|
-| **orig** | baseline | **1096** | — | — | 1096 | 1096 | — |
-| orig | layers_5 | 1067 | 3% | 100 | 1360 | 1138 | 1065 |
-| orig | layers_92 | 687 | 37% | 100 | 1103 | 881 | 685 |
-| orig | 2d | 684 | 38% | 100 | 975 | 753 | 685 |
-| orig | 2e_K10 | 211 | 81% | 100 | 512 | 291 | 206 |
-| orig | 2e_K500 | 209 | 81% | 67 | 921 | 700 | 211 |
-| orig | 2f_slru | 123 | 89% | 100 | 1114 | 892 | 122 |
-| **vacuum** | baseline | **993** | — | — | 993 | 993 | — |
-| vacuum | layers_5 | 895 | 10% | 100 | 1188 | 963 | 818 |
-| vacuum | layers_92 | 508 | 49% | 100 | 920 | 695 | 522 |
-| vacuum | 2d | 517 | 48% | 100 | 805 | 584 | 516 |
-| vacuum | 2e_K10 | 208 | 79% | 100 | 509 | 287 | 211 |
-| vacuum | 2e_K500 | 210 | 79% | 47 | 932 | 711 | 209 |
-| vacuum | 2f_slru | 124 | 88% | 100 | 934 | 712 | 122 |
-| **ta** | baseline | **871** | — | — | 871 | 871 | — |
-| ta | layers_5 | 882 | -1% | 100 | 1174 | 951 | 834 |
-| ta | layers_92 | 498 | 43% | 97 | 885 | 663 | 516 |
-| ta | 2d | 507 | 42% | 65 | 845 | 621 | 479 |
-| ta | 2e_K10 | 208 | 76% | 100 | 556 | 334 | 207 |
-| ta | 2e_K500 | 209 | 76% | 100 | 1053 | 830 | 210 |
-| ta | 2f_slru | 122 | 86% | 100 | 1153 | 930 | 120 |
+| **orig** | baseline | **1087** | — | — | 1087 | 1087 | — |
+| orig | layers_5 | 1048 | 4% | 100 | 1352 | 1120 | 1050 |
+| orig | layers_92 | 669 | 38% | 100 | 1101 | 868 | 669 |
+| orig | 2d | 664 | 39% | 100 | 969 | 735 | 648 |
+| orig | 2e_K10 | 186 | 83% | 100 | 501 | 268 | 186 |
+| orig | 2e_K500 | 188 | 83% | 67 | 915 | 680 | 189 |
+| orig | 2f_slru | 102 | 91% | 100 | 1196 | 962 | 101 |
+| **vacuum** | baseline | **999** | — | — | 999 | 999 | — |
+| vacuum | layers_5 | 880 | 12% | 100 | 1185 | 950 | 871 |
+| vacuum | layers_92 | 494 | 50% | 100 | 913 | 680 | 481 |
+| vacuum | 2d | 484 | 52% | 100 | 789 | 554 | 497 |
+| vacuum | 2e_K10 | 185 | 81% | 100 | 502 | 268 | 187 |
+| vacuum | 2e_K500 | 189 | 81% | 60 | 918 | 682 | 188 |
+| vacuum | 2f_slru | 103 | 90% | 100 | 1014 | 784 | 104 |
+| **ta** | baseline | **867** | — | — | 867 | 867 | — |
+| ta | layers_5 | 835 | 4% | 100 | 1134 | 904 | 841 |
+| ta | layers_92 | 475 | 45% | 100 | 875 | 644 | 489 |
+| ta | 2d | 482 | 44% | 65 | 829 | 600 | 455 |
+| ta | 2e_K10 | 187 | 78% | 100 | 545 | 319 | 188 |
+| ta | 2e_K500 | 189 | 78% | 100 | 1079 | 850 | 190 |
+| ta | 2f_slru | 102 | 88% | 100 | 1229 | 1000 | 102 |
 
-**讀法**:① first-query 最低一律是 **2f_slru**(載整個 working set),但其 deliver(A/B ~7ms、C ~0.76ms)使 `e2e` 多半輸——除 C 外兩個 e2e 模型都超 baseline。② **layers_5 / 2d / 2e_K10** 用極少 syscall:`e2e_warm`(= deliver+fq,warm-process/integrated,本研究主張)在三個 workload 都改善(A −7~9%、B −29~34%、**C × 2e_K10 −73% / 291µs**);`e2e_std`(= open+deliver+fq,standalone warmer)則在快 workload 因 ~200µs 冷 open 而變差。③ 兩個 e2e 模型唯一差是冷 open(db):**median 221µs、stdev 17µs(CV 8%)、p95 231µs**(n=810 non-warmup rep),逐 strategy 與逐 layout 皆 ~221µs → **strategy/layout 無關的 common-mode 固定成本**,非 prefetch 獨有稅。把 baseline 也放上 standalone 基準(`baseline+open`)後 open 兩邊相消、`e2e_std` 排序重現 `e2e_warm` verdict(如 A layers_5 對 base+open **−7%**、對照 e2e_warm −9%);快 workload 在 standalone 變差是「prefetch 省下的 first-query 不足以額外 cover 它自己那次 open」,而非 open 偏袒 baseline。詳見 REPORT §5.5.1–§5.5.2。④ `oracle` 欄是同步 pread 的可達下界。
+**讀法**:① first-query 最低一律是 **2f_slru**(載整個 working set),但其 deliver(A/B ~7ms、C ~0.76ms)使 `e2e` 多半輸——除 C 外兩個 e2e 模型都超 baseline。② **layers_5 / 2d / 2e_K10** 用極少 syscall:`e2e_warm`(= deliver+fq,warm-process/integrated,本研究主張)在三個 workload 都改善(A −11~14%、B −29~34%、**C × 2e_K10 −75% / 268µs**);`e2e_std`(= open+deliver+fq,standalone warmer)則在快 workload 因 ~230µs 冷 open 而變差。③ 兩個 e2e 模型唯一差是冷 open(db):**median ~232µs、跨 72 cell 的 open_us_median stdev ~10µs、p95 ~235µs**,逐 strategy 與逐 layout 皆 ~230µs → **strategy/layout 無關的 common-mode 固定成本**,非 prefetch 獨有稅。把 baseline 也放上 standalone 基準(`baseline+open`)後 open 兩邊相消、`e2e_std` 排序重現 `e2e_warm` verdict(如 A layers_5 對 base+open **−10%**、對照 e2e_warm −14%);快 workload 在 standalone 變差是「prefetch 省下的 first-query 不足以額外 cover 它自己那次 open」,而非 open 偏袒 baseline。詳見 REPORT §5.5.1–§5.5.2。④ `oracle` 欄是同步 pread 的可達下界。
 <!-- MASTER-RESULTS-END -->
 
 ---
@@ -139,31 +139,31 @@
 ## 全策略 × layout × workload（async first-query / e2e µs,median）
 
 > baseline = no-prefetch;此處 cell = first-query µs (impr% 相對該 (workload,layout) baseline)。e2e 兩模型(`e2e_std`/`e2e_warm`)見上方「master batch 結果」詳表。
-> 來源 [`results/main/summary.csv`](results/main/summary.csv)(A/B/C)+ [`results/z/`](results/z/summary.csv)(Z)。
+> 來源 [`results/unified_v2/matrix/summary.csv`](results/unified_v2/matrix/summary.csv)(A/B/C,canonical v2)+ [`results/z/`](results/z/summary.csv)(Z,原批,跨批只比相對量)。
 
 ### Workload A
 
 | layout | baseline | layers_5 | layers_92 | 2d | 2e_K10 | 2e_K500 | 2f_slru |
 |---|--:|--:|--:|--:|--:|--:|--:|
-| orig (1a) | 529 | 412 (−22%) | 393 (−26%) | 401 (−24%) | 393 (−26%) | 212 (−60%) | 127 (−76%) |
-| vacuum (1b) | 716 | 574 (−20%) | 575 (−20%) | 576 (−20%) | 571 (−20%) | 226 (−68%) | 126 (−82%) |
-| ta (1c) | 695 | 524 (−25%) | 457 (−34%) | 463 (−33%) | 401 (−42%) | 340 (−51%) | 128 (−82%) |
+| orig (1a) | 523 | 382 (−27%) | 369 (−30%) | 364 (−30%) | 363 (−31%) | 190 (−64%) | 108 (−79%) |
+| vacuum (1b) | 707 | 553 (−22%) | 557 (−21%) | 555 (−22%) | 556 (−21%) | 187 (−74%) | 103 (−85%) |
+| ta (1c) | 658 | 501 (−24%) | 451 (−32%) | 453 (−31%) | 390 (−41%) | 197 (−70%) | 109 (−84%) |
 
 ### Workload B
 
 | layout | baseline | layers_5 | layers_92 | 2d | 2e_K10 | 2e_K500 | 2f_slru |
 |---|--:|--:|--:|--:|--:|--:|--:|
-| orig (1a) | 760 | 435 (−43%) | 435 (−43%) | 441 (−42%) | 440 (−42%) | 487 (−36%) | 128 (−83%) |
-| vacuum (1b) | 1046 | 529 (−49%) | 534 (−49%) | 528 (−50%) | 530 (−49%) | 436 (−58%) | 126 (−88%) |
-| ta (1c) | 788 | 625 (−21%) | 603 (−24%) | 614 (−22%) | 614 (−22%) | 746 (−5%) | 127 (−84%) |
+| orig (1a) | 749 | 422 (−44%) | 417 (−44%) | 421 (−44%) | 421 (−44%) | 461 (−38%) | 107 (−86%) |
+| vacuum (1b) | 1024 | 510 (−50%) | 516 (−50%) | 509 (−50%) | 516 (−50%) | 405 (−60%) | 104 (−90%) |
+| ta (1c) | 770 | 605 (−21%) | 585 (−24%) | 587 (−24%) | 592 (−23%) | 608 (−21%) | 106 (−86%) |
 
 ### Workload C
 
 | layout | baseline | layers_5 | layers_92 | 2d | 2e_K10 | 2e_K500 | 2f_slru |
 |---|--:|--:|--:|--:|--:|--:|--:|
-| orig (1a) | 1096 | 1067 (−3%) | 687 (−37%) | 684 (−38%) | 211 (−81%) | 209 (−81%) | 123 (−89%) |
-| vacuum (1b) | 993 | 895 (−10%) | 508 (−49%) | 517 (−48%) | 208 (−79%) | 210 (−79%) | 124 (−88%) |
-| ta (1c) | 871 | 882 (−-1%) | 498 (−43%) | 507 (−42%) | 208 (−76%) | 209 (−76%) | 122 (−86%) |
+| orig (1a) | 1087 | 1048 (−4%) | 669 (−38%) | 664 (−39%) | 186 (−83%) | 188 (−83%) | 102 (−91%) |
+| vacuum (1b) | 999 | 880 (−12%) | 494 (−50%) | 484 (−52%) | 185 (−81%) | 189 (−81%) | 103 (−90%) |
+| ta (1c) | 867 | 835 (−4%) | 475 (−45%) | 482 (−44%) | 187 (−78%) | 189 (−78%) | 102 (−88%) |
 
 ### Workload Z
 
