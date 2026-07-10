@@ -44,19 +44,22 @@ Everything in v2's matrix (A/B/C × orig/vacuum/ta × {baseline, layers_5/92, 2d
   **decays** (§3). Together they establish the full statement: **decay is governed by
   hotspot stationarity**, not "static hotsets never decay".
 
-## 3. YD decay finding — with the structural-resistance twist
-Corrected aging (per-checkpoint probe; see §4). YD, orig, seed 1 (reps 3; cross-seed CI
-pending in `results/aging_v2/aging_ci.csv`):
+## 3. YD decay finding — with the structural-resistance twist (cross-seed, paper-grade)
+Corrected aging (per-checkpoint probe; see §4). orig, **10 reps × 10 seeds**,
+`results/aging_v2/aging_ci.csv` (mean ± 95% CI):
 
-- **Access-frequency hotset (`2e_K10_static`) decays**: gain **−82% at ck0 → −41% mean over
-  ck1–10** (2e ~348 µs vs baseline ~586 µs). It **erodes by roughly half — NOT to zero**;
-  but at individual checkpoints the gain vanishes entirely (ck4: +6%). Word it "gain erodes
-  by ~half", not "decays to baseline". (High checkpoint-to-checkpoint variance from the
-  latest-window overlap; cross-seed CI will smooth it.)
-- **Structural hotset (`layers_92_static`) resists**: 265 → 275 (mild). New sub-finding:
-  frequency hotsets bind to *which keys are hot* (fails under non-stationarity); the
-  structural skeleton binds to *what the tree looks like* (drifts slowly).
-- **YE (zipfian, stationary)**: mild rise only (2e 279→333, l92 261→318) → no decay, like C.
+- **YD access-frequency hotset (`2e_K10_static`) decays**: gain **−50% at ck0 (267±110) →
+  −33% at ck10 (382±78)**. It **erodes by ~half — NOT to zero** (still below baseline
+  ~540–570). ck0 CI is large (±110): the initial match is seed-variable. Word it "gain
+  erodes by ~half", not "decays to baseline".
+- **YD structural hotset (`layers_92_static`) resists AND overtakes**: 252±9 → 270±12
+  (+7%, tight CI), and **from ck1 onward layers_92 (~250–278) is lower than 2e (~310–420)**
+  → under read-latest aging the structural skeleton becomes the better static hotset.
+  Frequency hotsets bind to *which keys are hot* (fails under non-stationarity); the skeleton
+  binds to *what the tree looks like* (drifts slowly).
+- **YE (zipfian, stationary)**: `2e_K10_static` **does not decay** (−53%→−55%, stays below
+  layers_92 throughout) → like C. Confirms decay is a non-stationarity property, not aging
+  per se.
 
 **Paper upgrades:**
 - **§7.4 churn:** "static t=0 hotset does not decay" → "**decay is governed by hotspot

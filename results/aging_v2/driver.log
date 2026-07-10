@@ -1,0 +1,263 @@
+=== aging_v2 cross-seed start 2026-07-10T18:32:16Z (reps=10 x seeds 1..10) ===
+--- seed 1 2026-07-10T18:32:16Z ---
+[aging] YD/orig: 11 per-checkpoint probes, 10 chunks x 5000 ops, t=0 hotset frozen from probe_0
+[aging ckpt 0/10] YD/orig: base=572.37 2e=100.965 l92=249.32999999999998
+[aging ckpt 1/10] YD/orig: base=639.1800000000001 2e=456.95 l92=270.72
+[aging ckpt 2/10] YD/orig: base=613.4200000000001 2e=470.45500000000004 l92=311.34000000000003
+[aging ckpt 3/10] YD/orig: base=658.935 2e=153.39 l92=312.53
+[aging ckpt 4/10] YD/orig: base=484.25 2e=427.55499999999995 l92=279.71500000000003
+[aging ckpt 5/10] YD/orig: base=567.86 2e=461.385 l92=273.16499999999996
+[aging ckpt 6/10] YD/orig: base=584.9649999999999 2e=127.33 l92=222.36
+[aging ckpt 7/10] YD/orig: base=656.56 2e=442.685 l92=318.1
+[aging ckpt 8/10] YD/orig: base=608.105 2e=140.465 l92=296.355
+[aging ckpt 9/10] YD/orig: base=546.335 2e=448.42999999999995 l92=287.09000000000003
+[aging ckpt 10/10] YD/orig: base=543.335 2e=451.62 l92=287.44
+[aging] YE/orig: 11 per-checkpoint probes, 10 chunks x 5000 ops, t=0 hotset frozen from probe_0
+[aging ckpt 0/10] YE/orig: base=570.3 2e=260.995 l92=257.99
+[aging ckpt 1/10] YE/orig: base=623.0350000000001 2e=266.1 l92=261.36
+[aging ckpt 2/10] YE/orig: base=647.49 2e=324.935 l92=326.095
+[aging ckpt 3/10] YE/orig: base=562.45 2e=270.19000000000005 l92=259.01
+[aging ckpt 4/10] YE/orig: base=590.56 2e=313.425 l92=287.985
+[aging ckpt 5/10] YE/orig: base=651.04 2e=290.41999999999996 l92=265.755
+[aging ckpt 6/10] YE/orig: base=593.4649999999999 2e=299.185 l92=299.45
+[aging ckpt 7/10] YE/orig: base=415.72 2e=276.53499999999997 l92=282.295
+[aging ckpt 8/10] YE/orig: base=597.52 2e=311.255 l92=304.85
+[aging ckpt 9/10] YE/orig: base=611.68 2e=322.975 l92=321.88
+[aging ckpt 10/10] YE/orig: base=673.885 2e=326.66499999999996 l92=327.25
+wrote results/aging_v2/seed01/aging_evolution.csv (66 rows)
+--- seed 2 2026-07-10T18:35:02Z ---
+[aging] YD/orig: 11 per-checkpoint probes, 10 chunks x 5000 ops, t=0 hotset frozen from probe_0
+[aging ckpt 0/10] YD/orig: base=576.265 2e=439.115 l92=268.24
+[aging ckpt 1/10] YD/orig: base=547.605 2e=354.475 l92=257.97
+[aging ckpt 2/10] YD/orig: base=569.9849999999999 2e=417.485 l92=271.99
+[aging ckpt 3/10] YD/orig: base=576.76 2e=126.58 l92=287.755
+[aging ckpt 4/10] YD/orig: base=575.76 2e=430.91499999999996 l92=317.555
+[aging ckpt 5/10] YD/orig: base=524.995 2e=127.38 l92=228.65
+[aging ckpt 6/10] YD/orig: base=558.27 2e=443.905 l92=262.23
+[aging ckpt 7/10] YD/orig: base=518.4649999999999 2e=128.19 l92=222.45999999999998
+[aging ckpt 8/10] YD/orig: base=582.76 2e=462.0 l92=315.405
+[aging ckpt 9/10] YD/orig: base=512.73 2e=351.655 l92=241.29500000000002
+[aging ckpt 10/10] YD/orig: base=544.5150000000001 2e=440.885 l92=244.98
+[aging] YE/orig: 11 per-checkpoint probes, 10 chunks x 5000 ops, t=0 hotset frozen from probe_0
+[aging ckpt 0/10] YE/orig: base=543.14 2e=265.175 l92=266.63
+[aging ckpt 1/10] YE/orig: base=530.53 2e=261.0 l92=260.625
+[aging ckpt 2/10] YE/orig: base=359.405 2e=102.535 l92=257.075
+[aging ckpt 3/10] YE/orig: base=525.79 2e=290.83500000000004 l92=285.94
+[aging ckpt 4/10] YE/orig: base=519.065 2e=264.495 l92=265.15999999999997
+[aging ckpt 5/10] YE/orig: base=597.8199999999999 2e=315.53 l92=316.185
+[aging ckpt 6/10] YE/orig: base=593.8199999999999 2e=310.96000000000004 l92=309.825
+[aging ckpt 7/10] YE/orig: base=513.175 2e=270.495 l92=242.79000000000002
+[aging ckpt 8/10] YE/orig: base=595.865 2e=258.76 l92=257.35
+[aging ckpt 9/10] YE/orig: base=540.3050000000001 2e=257.205 l92=264.515
+[aging ckpt 10/10] YE/orig: base=544.6 2e=258.38 l92=257.665
+wrote results/aging_v2/seed02/aging_evolution.csv (66 rows)
+--- seed 3 2026-07-10T18:37:55Z ---
+[aging] YD/orig: 11 per-checkpoint probes, 10 chunks x 5000 ops, t=0 hotset frozen from probe_0
+[aging ckpt 0/10] YD/orig: base=499.235 2e=96.69 l92=233.22000000000003
+[aging ckpt 1/10] YD/orig: base=364.695 2e=425.695 l92=283.255
+[aging ckpt 2/10] YD/orig: base=529.4549999999999 2e=443.29999999999995 l92=260.725
+[aging ckpt 3/10] YD/orig: base=592.23 2e=466.71500000000003 l92=307.515
+[aging ckpt 4/10] YD/orig: base=545.395 2e=443.29499999999996 l92=263.92499999999995
+[aging ckpt 5/10] YD/orig: base=595.975 2e=477.555 l92=294.585
+[aging ckpt 6/10] YD/orig: base=479.57000000000005 2e=126.955 l92=239.765
+[aging ckpt 7/10] YD/orig: base=551.1800000000001 2e=128.03 l92=291.78999999999996
+[aging ckpt 8/10] YD/orig: base=534.62 2e=413.23 l92=254.31
+[aging ckpt 9/10] YD/orig: base=582.5799999999999 2e=146.76 l92=311.45500000000004
+[aging ckpt 10/10] YD/orig: base=556.395 2e=148.58499999999998 l92=294.575
+[aging] YE/orig: 11 per-checkpoint probes, 10 chunks x 5000 ops, t=0 hotset frozen from probe_0
+[aging ckpt 0/10] YE/orig: base=602.605 2e=263.68 l92=264.07
+[aging ckpt 1/10] YE/orig: base=546.495 2e=265.875 l92=265.04499999999996
+[aging ckpt 2/10] YE/orig: base=580.03 2e=261.22 l92=264.04499999999996
+[aging ckpt 3/10] YE/orig: base=369.595 2e=98.24000000000001 l92=276.85
+[aging ckpt 4/10] YE/orig: base=528.8499999999999 2e=265.185 l92=266.83000000000004
+[aging ckpt 5/10] YE/orig: base=535.285 2e=260.62 l92=258.345
+[aging ckpt 6/10] YE/orig: base=375.745 2e=99.365 l92=316.44500000000005
+[aging ckpt 7/10] YE/orig: base=617.75 2e=324.41499999999996 l92=323.565
+[aging ckpt 8/10] YE/orig: base=556.145 2e=290.75 l92=290.68
+[aging ckpt 9/10] YE/orig: base=704.095 2e=339.30499999999995 l92=360.495
+[aging ckpt 10/10] YE/orig: base=667.13 2e=297.685 l92=359.72
+wrote results/aging_v2/seed03/aging_evolution.csv (66 rows)
+--- seed 4 2026-07-10T18:40:47Z ---
+[aging] YD/orig: 11 per-checkpoint probes, 10 chunks x 5000 ops, t=0 hotset frozen from probe_0
+[aging ckpt 0/10] YD/orig: base=523.04 2e=97.94999999999999 l92=245.32999999999998
+[aging ckpt 1/10] YD/orig: base=501.46000000000004 2e=387.65 l92=227.04500000000002
+[aging ckpt 2/10] YD/orig: base=474.875 2e=128.725 l92=215.97
+[aging ckpt 3/10] YD/orig: base=524.845 2e=440.265 l92=261.72
+[aging ckpt 4/10] YD/orig: base=533.76 2e=134.67000000000002 l92=262.735
+[aging ckpt 5/10] YD/orig: base=636.775 2e=424.515 l92=307.555
+[aging ckpt 6/10] YD/orig: base=534.81 2e=442.65 l92=268.81
+[aging ckpt 7/10] YD/orig: base=506.3 2e=129.7 l92=225.655
+[aging ckpt 8/10] YD/orig: base=560.115 2e=415.05 l92=262.105
+[aging ckpt 9/10] YD/orig: base=592.095 2e=439.7 l92=257.83
+[aging ckpt 10/10] YD/orig: base=620.8599999999999 2e=437.895 l92=258.28
+[aging] YE/orig: 11 per-checkpoint probes, 10 chunks x 5000 ops, t=0 hotset frozen from probe_0
+[aging ckpt 0/10] YE/orig: base=549.435 2e=258.265 l92=260.575
+[aging ckpt 1/10] YE/orig: base=537.865 2e=100.325 l92=260.66999999999996
+[aging ckpt 2/10] YE/orig: base=528.405 2e=98.17500000000001 l92=266.205
+[aging ckpt 3/10] YE/orig: base=561.555 2e=266.54999999999995 l92=270.0
+[aging ckpt 4/10] YE/orig: base=539.95 2e=102.21000000000001 l92=260.47
+[aging ckpt 5/10] YE/orig: base=623.8050000000001 2e=281.81 l92=282.03999999999996
+[aging ckpt 6/10] YE/orig: base=651.84 2e=296.71000000000004 l92=294.975
+[aging ckpt 7/10] YE/orig: base=569.4549999999999 2e=99.41499999999999 l92=267.015
+[aging ckpt 8/10] YE/orig: base=613.885 2e=355.57 l92=358.26
+[aging ckpt 9/10] YE/orig: base=559.73 2e=99.31 l92=260.455
+[aging ckpt 10/10] YE/orig: base=518.22 2e=100.45 l92=266.70500000000004
+wrote results/aging_v2/seed04/aging_evolution.csv (66 rows)
+--- seed 5 2026-07-10T18:43:41Z ---
+[aging] YD/orig: 11 per-checkpoint probes, 10 chunks x 5000 ops, t=0 hotset frozen from probe_0
+[aging ckpt 0/10] YD/orig: base=516.37 2e=441.04999999999995 l92=265.045
+[aging ckpt 1/10] YD/orig: base=522.825 2e=446.54 l92=255.945
+[aging ckpt 2/10] YD/orig: base=548.6700000000001 2e=437.53 l92=266.53499999999997
+[aging ckpt 3/10] YD/orig: base=559.14 2e=96.74000000000001 l92=304.03999999999996
+[aging ckpt 4/10] YD/orig: base=595.835 2e=142.03 l92=309.9
+[aging ckpt 5/10] YD/orig: base=610.8199999999999 2e=138.095 l92=305.51
+[aging ckpt 6/10] YD/orig: base=549.975 2e=128.10999999999999 l92=240.85
+[aging ckpt 7/10] YD/orig: base=585.75 2e=471.17999999999995 l92=326.425
+[aging ckpt 8/10] YD/orig: base=542.7950000000001 2e=438.48 l92=261.445
+[aging ckpt 9/10] YD/orig: base=531.36 2e=131.655 l92=249.28
+[aging ckpt 10/10] YD/orig: base=619.995 2e=141.815 l92=305.395
+[aging] YE/orig: 11 per-checkpoint probes, 10 chunks x 5000 ops, t=0 hotset frozen from probe_0
+[aging ckpt 0/10] YE/orig: base=529.22 2e=261.83000000000004 l92=264.21500000000003
+[aging ckpt 1/10] YE/orig: base=585.02 2e=102.1 l92=265.87
+[aging ckpt 2/10] YE/orig: base=525.3900000000001 2e=262.015 l92=264.95000000000005
+[aging ckpt 3/10] YE/orig: base=526.075 2e=98.405 l92=262.925
+[aging ckpt 4/10] YE/orig: base=647.855 2e=322.795 l92=322.065
+[aging ckpt 5/10] YE/orig: base=617.87 2e=97.02 l92=295.695
+[aging ckpt 6/10] YE/orig: base=523.2850000000001 2e=263.205 l92=264.385
+[aging ckpt 7/10] YE/orig: base=567.79 2e=301.66499999999996 l92=301.495
+[aging ckpt 8/10] YE/orig: base=596.675 2e=295.36 l92=295.115
+[aging ckpt 9/10] YE/orig: base=537.33 2e=270.745 l92=273.16499999999996
+[aging ckpt 10/10] YE/orig: base=535.9 2e=293.28999999999996 l92=270.95500000000004
+wrote results/aging_v2/seed05/aging_evolution.csv (66 rows)
+--- seed 6 2026-07-10T18:46:35Z ---
+[aging] YD/orig: 11 per-checkpoint probes, 10 chunks x 5000 ops, t=0 hotset frozen from probe_0
+[aging ckpt 0/10] YD/orig: base=530.595 2e=438.93 l92=259.61
+[aging ckpt 1/10] YD/orig: base=423.99 2e=338.70500000000004 l92=173.43
+[aging ckpt 2/10] YD/orig: base=513.9549999999999 2e=425.85 l92=253.82999999999998
+[aging ckpt 3/10] YD/orig: base=596.1700000000001 2e=465.66499999999996 l92=291.565
+[aging ckpt 4/10] YD/orig: base=561.89 2e=434.525 l92=261.85
+[aging ckpt 5/10] YD/orig: base=498.055 2e=391.42499999999995 l92=231.98000000000002
+[aging ckpt 6/10] YD/orig: base=544.5799999999999 2e=425.7 l92=254.44
+[aging ckpt 7/10] YD/orig: base=601.37 2e=431.645 l92=312.82000000000005
+[aging ckpt 8/10] YD/orig: base=621.22 2e=91.47999999999999 l92=255.845
+[aging ckpt 9/10] YD/orig: base=470.375 2e=398.145 l92=218.865
+[aging ckpt 10/10] YD/orig: base=585.265 2e=427.84000000000003 l92=261.62
+[aging] YE/orig: 11 per-checkpoint probes, 10 chunks x 5000 ops, t=0 hotset frozen from probe_0
+[aging ckpt 0/10] YE/orig: base=522.045 2e=260.48 l92=255.8
+[aging ckpt 1/10] YE/orig: base=528.5450000000001 2e=93.38 l92=257.425
+[aging ckpt 2/10] YE/orig: base=545.265 2e=286.36 l92=285.575
+[aging ckpt 3/10] YE/orig: base=567.905 2e=95.645 l92=253.115
+[aging ckpt 4/10] YE/orig: base=547.96 2e=90.53 l92=256.70000000000005
+[aging ckpt 5/10] YE/orig: base=339.27 2e=252.74 l92=249.79500000000002
+[aging ckpt 6/10] YE/orig: base=510.27 2e=89.66 l92=257.84000000000003
+[aging ckpt 7/10] YE/orig: base=554.73 2e=258.9 l92=250.935
+[aging ckpt 8/10] YE/orig: base=511.93999999999994 2e=255.44 l92=260.29
+[aging ckpt 9/10] YE/orig: base=634.655 2e=303.355 l92=291.21500000000003
+[aging ckpt 10/10] YE/orig: base=685.27 2e=302.195 l92=301.6
+wrote results/aging_v2/seed06/aging_evolution.csv (66 rows)
+--- seed 7 2026-07-10T18:49:18Z ---
+[aging] YD/orig: 11 per-checkpoint probes, 10 chunks x 5000 ops, t=0 hotset frozen from probe_0
+[aging ckpt 0/10] YD/orig: base=570.65 2e=109.47 l92=246.20999999999998
+[aging ckpt 1/10] YD/orig: base=606.335 2e=482.025 l92=257.88
+[aging ckpt 2/10] YD/orig: base=614.98 2e=121.65 l92=251.78
+[aging ckpt 3/10] YD/orig: base=511.765 2e=428.435 l92=251.13
+[aging ckpt 4/10] YD/orig: base=607.77 2e=199.83499999999998 l92=269.355
+[aging ckpt 5/10] YD/orig: base=574.165 2e=120.46 l92=281.935
+[aging ckpt 6/10] YD/orig: base=537.97 2e=426.155 l92=249.445
+[aging ckpt 7/10] YD/orig: base=592.53 2e=442.6 l92=257.455
+[aging ckpt 8/10] YD/orig: base=528.9449999999999 2e=122.88499999999999 l92=275.955
+[aging ckpt 9/10] YD/orig: base=552.2049999999999 2e=428.71500000000003 l92=248.505
+[aging ckpt 10/10] YD/orig: base=518.015 2e=434.835 l92=249.62
+[aging] YE/orig: 11 per-checkpoint probes, 10 chunks x 5000 ops, t=0 hotset frozen from probe_0
+[aging ckpt 0/10] YE/orig: base=557.385 2e=248.04500000000002 l92=252.965
+[aging ckpt 1/10] YE/orig: base=510.025 2e=259.755 l92=257.07500000000005
+[aging ckpt 2/10] YE/orig: base=526.4300000000001 2e=91.545 l92=249.73000000000002
+[aging ckpt 3/10] YE/orig: base=586.8199999999999 2e=252.29000000000002 l92=251.125
+[aging ckpt 4/10] YE/orig: base=529.835 2e=277.435 l92=279.23
+[aging ckpt 5/10] YE/orig: base=413.365 2e=315.74 l92=362.94
+[aging ckpt 6/10] YE/orig: base=588.26 2e=256.32 l92=258.275
+[aging ckpt 7/10] YE/orig: base=600.7850000000001 2e=93.035 l92=274.195
+[aging ckpt 8/10] YE/orig: base=533.09 2e=252.905 l92=250.185
+[aging ckpt 9/10] YE/orig: base=561.065 2e=256.545 l92=269.565
+[aging ckpt 10/10] YE/orig: base=585.41 2e=289.945 l92=277.46500000000003
+wrote results/aging_v2/seed07/aging_evolution.csv (66 rows)
+--- seed 8 2026-07-10T18:51:57Z ---
+[aging] YD/orig: 11 per-checkpoint probes, 10 chunks x 5000 ops, t=0 hotset frozen from probe_0
+[aging ckpt 0/10] YD/orig: base=543.515 2e=90.465 l92=227.05
+[aging ckpt 1/10] YD/orig: base=601.815 2e=430.375 l92=252.79500000000002
+[aging ckpt 2/10] YD/orig: base=544.5250000000001 2e=452.75 l92=258.85
+[aging ckpt 3/10] YD/orig: base=542.81 2e=468.96500000000003 l92=257.58000000000004
+[aging ckpt 4/10] YD/orig: base=554.8199999999999 2e=412.08 l92=233.08999999999997
+[aging ckpt 5/10] YD/orig: base=545.495 2e=431.20500000000004 l92=252.81
+[aging ckpt 6/10] YD/orig: base=582.1949999999999 2e=416.815 l92=252.375
+[aging ckpt 7/10] YD/orig: base=545.1949999999999 2e=385.22 l92=216.185
+[aging ckpt 8/10] YD/orig: base=558.1199999999999 2e=257.63 l92=213.18
+[aging ckpt 9/10] YD/orig: base=618.415 2e=445.475 l92=267.88
+[aging ckpt 10/10] YD/orig: base=618.39 2e=450.66499999999996 l92=269.475
+[aging] YE/orig: 11 per-checkpoint probes, 10 chunks x 5000 ops, t=0 hotset frozen from probe_0
+[aging ckpt 0/10] YE/orig: base=520.94 2e=253.13 l92=254.415
+[aging ckpt 1/10] YE/orig: base=516.89 2e=255.3 l92=258.68
+[aging ckpt 2/10] YE/orig: base=494.175 2e=254.73000000000002 l92=267.685
+[aging ckpt 3/10] YE/orig: base=523.35 2e=255.965 l92=254.71
+[aging ckpt 4/10] YE/orig: base=530.275 2e=253.93 l92=252.10500000000002
+[aging ckpt 5/10] YE/orig: base=546.79 2e=257.395 l92=261.365
+[aging ckpt 6/10] YE/orig: base=580.685 2e=91.795 l92=262.19
+[aging ckpt 7/10] YE/orig: base=337.21500000000003 2e=324.525 l92=285.79999999999995
+[aging ckpt 8/10] YE/orig: base=367.53499999999997 2e=255.4 l92=251.87
+[aging ckpt 9/10] YE/orig: base=524.12 2e=264.305 l92=287.81
+[aging ckpt 10/10] YE/orig: base=512.085 2e=267.88 l92=269.78
+wrote results/aging_v2/seed08/aging_evolution.csv (66 rows)
+--- seed 9 2026-07-10T18:54:39Z ---
+[aging] YD/orig: 11 per-checkpoint probes, 10 chunks x 5000 ops, t=0 hotset frozen from probe_0
+[aging ckpt 0/10] YD/orig: base=520.755 2e=422.045 l92=261.41499999999996
+[aging ckpt 1/10] YD/orig: base=352.03999999999996 2e=433.78 l92=265.115
+[aging ckpt 2/10] YD/orig: base=558.355 2e=432.78499999999997 l92=260.015
+[aging ckpt 3/10] YD/orig: base=520.0799999999999 2e=133.875 l92=257.58000000000004
+[aging ckpt 4/10] YD/orig: base=523.9000000000001 2e=131.2 l92=252.08999999999997
+[aging ckpt 5/10] YD/orig: base=479.545 2e=123.575 l92=213.26999999999998
+[aging ckpt 6/10] YD/orig: base=503.91999999999996 2e=124.94 l92=225.685
+[aging ckpt 7/10] YD/orig: base=484.98 2e=119.8 l92=222.615
+[aging ckpt 8/10] YD/orig: base=512.4449999999999 2e=438.355 l92=253.69
+[aging ckpt 9/10] YD/orig: base=580.165 2e=447.265 l92=258.995
+[aging ckpt 10/10] YD/orig: base=565.255 2e=446.82 l92=262.895
+[aging] YE/orig: 11 per-checkpoint probes, 10 chunks x 5000 ops, t=0 hotset frozen from probe_0
+[aging ckpt 0/10] YE/orig: base=572.53 2e=262.94 l92=260.40999999999997
+[aging ckpt 1/10] YE/orig: base=574.835 2e=265.47 l92=263.6
+[aging ckpt 2/10] YE/orig: base=644.97 2e=93.435 l92=279.40999999999997
+[aging ckpt 3/10] YE/orig: base=543.625 2e=295.255 l92=259.345
+[aging ckpt 4/10] YE/orig: base=551.675 2e=261.57000000000005 l92=259.86
+[aging ckpt 5/10] YE/orig: base=609.325 2e=95.32 l92=264.7
+[aging ckpt 6/10] YE/orig: base=542.185 2e=96.6 l92=258.125
+[aging ckpt 7/10] YE/orig: base=665.48 2e=319.52 l92=285.27
+[aging ckpt 8/10] YE/orig: base=608.4200000000001 2e=283.645 l92=281.445
+[aging ckpt 9/10] YE/orig: base=566.7349999999999 2e=289.14 l92=295.83000000000004
+[aging ckpt 10/10] YE/orig: base=648.735 2e=292.68 l92=290.83500000000004
+wrote results/aging_v2/seed09/aging_evolution.csv (66 rows)
+--- seed 10 2026-07-10T18:57:25Z ---
+[aging] YD/orig: 11 per-checkpoint probes, 10 chunks x 5000 ops, t=0 hotset frozen from probe_0
+[aging ckpt 0/10] YD/orig: base=531.2850000000001 2e=436.325 l92=260.88
+[aging ckpt 1/10] YD/orig: base=548.45 2e=440.45500000000004 l92=256.105
+[aging ckpt 2/10] YD/orig: base=557.525 2e=364.73 l92=263.97
+[aging ckpt 3/10] YD/orig: base=536.615 2e=424.56 l92=253.42000000000002
+[aging ckpt 4/10] YD/orig: base=620.96 2e=490.115 l92=295.665
+[aging ckpt 5/10] YD/orig: base=536.965 2e=433.21500000000003 l92=262.655
+[aging ckpt 6/10] YD/orig: base=483.85 2e=399.815 l92=223.365
+[aging ckpt 7/10] YD/orig: base=635.0799999999999 2e=440.945 l92=277.115
+[aging ckpt 8/10] YD/orig: base=496.78 2e=417.125 l92=233.555
+[aging ckpt 9/10] YD/orig: base=506.04999999999995 2e=393.37 l92=217.305
+[aging ckpt 10/10] YD/orig: base=532.735 2e=443.46500000000003 l92=266.475
+[aging] YE/orig: 11 per-checkpoint probes, 10 chunks x 5000 ops, t=0 hotset frozen from probe_0
+[aging ckpt 0/10] YE/orig: base=533.16 2e=264.58000000000004 l92=264.545
+[aging ckpt 1/10] YE/orig: base=526.24 2e=250.925 l92=255.225
+[aging ckpt 2/10] YE/orig: base=523.88 2e=93.53999999999999 l92=259.345
+[aging ckpt 3/10] YE/orig: base=527.125 2e=97.35 l92=258.695
+[aging ckpt 4/10] YE/orig: base=560.77 2e=289.54999999999995 l92=285.6
+[aging ckpt 5/10] YE/orig: base=519.115 2e=260.23 l92=258.815
+[aging ckpt 6/10] YE/orig: base=590.51 2e=259.69 l92=281.375
+[aging ckpt 7/10] YE/orig: base=597.61 2e=94.73 l92=354.46500000000003
+[aging ckpt 8/10] YE/orig: base=574.3299999999999 2e=320.55 l92=318.195
+[aging ckpt 9/10] YE/orig: base=677.985 2e=295.85 l92=299.645
+[aging ckpt 10/10] YE/orig: base=634.37 2e=301.385 l92=299.52
+wrote results/aging_v2/seed10/aging_evolution.csv (66 rows)
+wrote aging_ci.csv (66 rows)
+=== AGING_V2 done 2026-07-10T19:00:10Z ===
