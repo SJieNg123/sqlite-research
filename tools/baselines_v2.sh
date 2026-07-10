@@ -33,12 +33,13 @@ echo "=== baselines_v2 batch $(date -u +%FT%TZ) ===" | tee -a "$LOG"
 
 # (0) prep: (re)generate the learned ml_static hotsets (they carry _seed2 -> gitignored
 # as regenerable). Trains on seed 2; measured on the master (=seed 1) below -> no leakage.
-DB=$(python3 -c "import run_experiment as R; print(R.resolve_pointer(R.DBS['orig']))")
-CL=$(python3 -c "import run_experiment as R; print(R.resolve_pointer(R.CLASSIFY['orig']))")
+# NB: use DBPATH/CLPATH (resolved file paths) for the generators; --db below wants the KEY.
+DBPATH=$(python3 -c "import run_experiment as R; print(R.resolve_pointer(R.DBS['orig']))")
+CLPATH=$(python3 -c "import run_experiment as R; print(R.resolve_pointer(R.CLASSIFY['orig']))")
 echo "--- prep: learned hotsets (train seed 2) ---" | tee -a "$LOG"
 for w in a b c; do
   W=$(echo "$w" | tr a-z A-Z)
-  python3 strategies/learned/gen_pageseq.py "$DB" "$CL" "workloads/workload_${w}_2.txt" "$OUT/seq_${w}.csv" >>"$LOG" 2>&1
+  python3 strategies/learned/gen_pageseq.py "$DBPATH" "$CLPATH" "workloads/workload_${w}_2.txt" "$OUT/seq_${w}.csv" >>"$LOG" 2>&1
   python3 strategies/learned/train_markov.py "$OUT/seq_${w}.csv" "$OUT/mk_${w}" \
     --w "$W" --layout orig --train-seed 2 --hotset-n 14,28 >>"$LOG" 2>&1
 done
