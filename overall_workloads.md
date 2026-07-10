@@ -1,337 +1,115 @@
-# Overall Results — Workload 説明
+# Overall Workloads — Workload 説明
 
-這個檔案說明 repo 裡**現階段實際使用**的 workload，以及每個 workload 對應到哪個實驗、想模擬什麼情境。
-
-所有 workload 都跑在同一個 reference DB 上 (`testdb_builder.py` 產生的
-`items(id PK, k1, k2, payload BLOB(100))`，**600,000 rows**)。
-
-> 所有 workload 的 cold-start measurement 機制為 **統一 pipeline**——harness MADV chain
-> (`--cold-advice dontneed`) + `/usr/local/sbin/drop-caches` 全機 drop + harness 內建
-> `--verify-hotset`（量 `cold_pct`/`delivery_pct`）。本檔為 workload **定義**（key 範圍、
-> 分布、ops 數）;measurement 數字權威全表見 [overall_results.md](overall_results.md)（全 cell `cold_pct`=0）。
+repo 現階段使用的 workload、每個模擬什麼情境、以及分布指紋。所有 workload 跑在同一 reference DB（`testdb_builder.py` 產生的 `items(id PK, k1, k2, payload BLOB(100))`，**600,000 rows**）。measurement 權威全表見 [overall_results.md](overall_results.md)、策略結果見 [overall_strategies.md](overall_strategies.md)。
 
 ---
 
 ## Reference DB 結構
 
-**Schema：** `items(id INTEGER PRIMARY KEY, k1 INTEGER, k2 INTEGER, payload BLOB(100))`
-加上一個 secondary index `idx_items_k1k2 ON items(k1, k2)`。
-
-**核心數字（layout 1a 原始 DB）：**
+**Schema：** `items(id INTEGER PRIMARY KEY, k1 INTEGER, k2 INTEGER, payload BLOB(100))` + secondary index `idx_items_k1k2(k1,k2)`。
 
 | 項目 | 數值 |
 |---|---|
-| `PRAGMA page_size` | **4096 bytes (4 KB)** — SQLite 預設 |
-| 總 row 數 | **600,000** |
-| 總 page 數 | **26,331** |
-| 整個 DB 大小 | **107,851,776 bytes ≈ 102.86 MiB（~102 MB）** |
-| **Interior pages** | **92 個 → 92 × 4 KB = 368 KB（0.35%）** |
-| **Leaf pages** | **26,239 個 → 26,239 × 4 KB ≈ 102.5 MB（99.65%）** |
+| `page_size` | 4096 bytes（SQLite 預設）|
+| row 數 | 600,000 |
+| page 數 | 26,331 |
+| DB 大小 | ~102 MB（107,851,776 bytes）|
+| **Interior pages** | **92（368 KB，0.35%）** = 51 table interior + 41 index interior |
+| Leaf pages | 26,239（~102.5 MB，99.65%）|
 
-**比例直觀感受：** Interior 跟 Leaf 的數量比 ≈ **1 : 285**；大小比 ≈ **368 KB : 102 MB**。
-**Interior 全載只需 368 KB，就可避開 cold start 時 92 次 4 KB random I/O。**
+**核心洞見：** interior 只占 0.35%，但**每筆 query 都得 root→leaf 沿路經過 interior**，cold start 時這 92 頁**每個觸發一次 4 KB random I/O**（NVMe ~50–100 µs）。leaf 雖占 99.65%，但熱 key 反覆查會自然 warm。→ **project 目標：prefetch 這 92 個 interior（只 368 KB）避開 cold-start random I/O。**
 
-**Interior 細分（92 = 51 table interior + 41 index interior）：**
+**三 layout 的 interior 散佈（scatter score = interior 平均頁號的正規化位置；0=全擠檔頭、≈1=uniform 散佈）：**
 
-| Page type | 個數 | 用途 |
-|---:|---:|---|
-| `interior_table` | 51 | `items` table B+tree 的內部節點 |
-| `interior_index` | 41 | secondary index `idx_items_k1k2` 的內部節點 |
-| **合計** | **92** | |
-
-**三個 layout 的 DB 大小對照：**
-
-| Layout | 檔案大小 | Page count | Interior | Leaf |
-|---|---|---|---|---|
-| **1a 原始（orig）** | 102.86 MiB | 26,331 | **92**（368 KB）| 26,239 |
-| **1b VACUUM** | 100.05 MiB | 25,613 | 85（340 KB）| 25,528 |
-| **1c Type-aware** | 102.86 MiB | 26,331 | **92**（368 KB）| 26,239 |
-
-資料來源：[pipeline/preparation/layout_rewriter/runs/classify_before.csv](pipeline/preparation/layout_rewriter/runs/classify_before.csv)（1a/1c）、
-[pipeline/preparation/layout_rewriter/runs/classify_vacuum.csv](pipeline/preparation/layout_rewriter/runs/classify_vacuum.csv)（1b）。
-
-**為什麼只有 1b VACUUM 變小、1c 不變？**
-
-- **1b VACUUM = 整庫打掉重建+壓實**，所以 page 數和檔案都變小；**1c type-aware
-  只把 page 重新排位置、不重塞資料**，所以 page 數/大小跟 1a 完全一樣（只有
-  scatter 變了，見下表）。
-- **1b 省下來的 718 個 page 全部來自 secondary index，table 一個都沒少：**
-
-  | Page type | 1a / 1c | 1b VACUUM | 差異 |
-  |---|---:|---:|---:|
-  | `interior_table`（items 表）| 51 | 51 | **0** |
-  | `leaf_table`（items 表資料）| 19,984 | 19,984 | **0** |
-  | `interior_index`（k1k2 索引）| 41 | 34 | **−7** |
-  | `leaf_index`（k1k2 索引資料）| 6,255 | 5,544 | **−711** |
-  | **合計** | **26,331** | **25,613** | **−718** |
-
-- 原因：`items` 的主鍵 `id` 是**遞增插入**，leaf 一頁塞滿才開新頁、本來就很密，
-  VACUUM 沒得壓；但 secondary index `idx_items_k1k2(k1,k2)` 是**亂序建的**，
-  page split 讓索引頁只塞到 ~60–90% 滿，VACUUM 改成按 key 排序灌入、把索引葉
-  子塞緊（−711 葉子 ≈ −11%），葉子變少後上層 index interior 也跟著少 7 個
-  （92→85 的 interior 減少**全部**是 41→34 的 index interior）。
-
-**為什麼這 92 個 interior page 是重點？**
-
-- Interior pages 只占整個 DB 的 **0.35%**（92/26,331），但 **每筆 query 都得從 root 走到 leaf**，沿路經過的 interior page **全部必須在記憶體裡**才能繼續往下找。
-- Cold start 時，這 92 個 page **每個都會觸發一次 disk I/O**（4 KB random read，HDD 上 ~5-10 ms，SSD 上 ~50-100 µs）。
-- Leaf page 雖然占 99.65%，但每筆 query 通常只命中 1-2 個 leaf；而且熱 keys 反覆被查，leaf 自然 cache warm。
-- → **整個 project 的目標：用 prefetch 把這 92 個 interior page 提前載進 OS page cache，避開 cold-start 的 random I/O。**
-
-**Interior page 的 file 散佈情況（scatter score）：**
-
-| Layout | Interior page 位置範圍 | Scatter score | 意義 |
+| Layout | 檔案大小 | interior 位置 | scatter |
 |---|---|---|---|
-| 1a orig | page 2 到 page 26,007 | **0.96** | 散佈於整個 file（接近 uniform） |
-| 1b vacuum | 跟 1a 類似 | **1.13**（更散） | VACUUM 沒幫忙，反而稍微更散 |
-| 1c type-aware | page 2 到 page 93（連續）| **0.0001** | 全部集中到檔頭、幾乎完美 clustering |
+| 1a orig | 102.86 MiB | page 2..26,007 | **0.96**（散佈全檔）|
+| 1b VACUUM | 100.05 MiB（85 interior）| 類似 1a | 1.13（反而更散）|
+| 1c type-aware | 102.86 MiB | page 2..93（連續）| **0.0001**（幾乎完美 clustering）|
 
-> **Scatter score 定義（以計算程式 `scatter.py` / `plot_pages.py` 為準）**：interior pages 的**平均頁號（centroid 位置）**經正規化：
->
-> ```
-> scatter = (mean_pos - (k+1)/2) / (N/2 - (k+1)/2)
-> ```
->
-> `mean_pos` = interior pages 的平均頁號、`k` = interior 頁數（此 DB 92）、`N` = 檔案總頁數。**0 = interior 全部連續擠在檔頭**（mean_pos =(k+1)/2）、**≈1 = uniform 散佈**（mean_pos = N/2）、**>1 = centroid 落在檔案後半**（如 1b vacuum = 1.13，故此分數不設 [0,1] 上界）。它量的是 interior pages **平均落在檔案多後面**，不是它們的離散／破碎程度。
+> 1b VACUUM 縮小的 718 page **全來自 secondary index**（table 一頁沒少）：`id` 遞增插入本就密實，但 `idx_items_k1k2` 亂序建、頁只塞 60–90% 滿，VACUUM 按 key 排序灌緊 → −711 index leaf、−7 index interior。1c 只重排位置不重塞資料，故大小/頁數同 1a。
 
 ---
 
-這樣不同 workload 的結果可以橫向比較。
+## Workload 格式
 
-Workload 格式（`benchmark_harness` 讀的）每行一個 op：
-```
-read <id>
-update <id>
-insert <id>
-scan <id> <len>
-readmodifywrite <id>
-```
-
-> Op string 格式 reference 自 [YCSB-cpp](https://github.com/ls4154/YCSB-cpp)
-> （C++ port of YCSB）。Workload A 對應 YCSB-C profile（read-only,
-> Zipfian over single table），Workload B 對應 YCSB-A 的 read 部分
-> （uniform random read）。C 跟 D 是我們自己加的（high-key locality
-> 與 write-heavy churn generator），不在 YCSB 原本的 6 個 profile 裡。
+`benchmark_harness` 每行一 op：`read <id>` / `update <id>` / `insert <id>` / `scan <id> <len>` / `readmodifywrite <id>`。op string 格式參照 [YCSB-cpp](https://github.com/ls4154/YCSB-cpp)。
 
 ---
 
-## Workload A — Zipfian Point Read（YCSB-C 風格）
+## Workload A — Zipfian Point Read
 
-**檔案：** [workloads/workload_a.txt](workloads/workload_a.txt)
-**規模：** 100,000 ops，全部 `read`
-**Key 範圍：** id ∈ [8, 99997]（只打 DB 前 1/6 的 id 區段）
-**分佈：** 強 Zipfian skew，**Zipf α = 0.99**（rank r 的取樣權重 ∝ 1/r^0.99，over 100,000 keys，再 scramble 成隨機 permutation 使熱 key 散佈全 key space）
-- 100,000 次查詢只觸及 **23,253 個 unique key**（76% 是 repeat query）
-- **Top 100 個熱 key 吃掉 42.3% 的流量**
-- 最熱的單一 key (`id=74406`) 被查 **7,752 次**（單 key 佔總流量 7.75%）
+**規模：** 100,000 ops 全 `read`。**Key：** id ∈ [8, 99997]（DB 前 1/6 區段）。**分佈：** Zipf α=0.99、scramble（熱 key 散佈全 key space）。
+- unique **23,253**（76% repeat）；top-100 熱 key 吃 **42.3%** 流量；最熱單 key 被查 **7,752 次（7.75%）**。
 
-> **產生器與 α 出處：** `workloads/gen_workload.py`（`A_ALPHA = 0.99`，即 YCSB 預設 zipfian constant）。此 generator 為**逆推重建、校準自原始 committed 檔的分佈**（原始 exact bytes/seed 未知）——上面的 unique/top-key 指紋即校準目標；10-seed sweep（見 [overall_results.md](overall_results.md)）即以此 α=0.99 重生成。實作為 **direct power-law `1/r^α` + permutation scramble**，非 YCSB 的 zeta-based `ScrambledZipfianGenerator`（α 數值一致、skew 已校準對齊）。**同一 generator 的 robustness 變體 Workload Z**（低 key hotspot，REPORT §A.2）亦為 **α = 0.99**，但 `rank = key` 不 scramble（熱點落在低 id）。
-
-**模擬什麼：** 真實 App 的「熱資料反覆被打」情境 — 使用者常開的聯絡人、最近瀏覽
-的相簿、首頁那幾筆 item。少數熱 key 把對應 leaf page 撐成熱頁，**leaf 自然會
-warm；唯一還是 cold 的是 interior page**。所以這個 workload 是 prefetch 的最佳
-舞台，會放大 interior prefetch 的效益。
-
-**用在哪：**
-- `prefetch_vacuum/` 第 9–11 週的全部實驗（baseline / range / perpage / layers N）
-- `pipeline/preparation/layout_rewriter/` 的 type-aware layout（把 A/B baseline 推高、C 較快;見 overall_results.md）
-- `pipeline/preparation/layout_rewriter/runs/` 的 1b VACUUM、N sweep 全矩陣
-- 2f SLRU（**first-q −76~89%**;但 deliver ~0.8–7ms 使 e2e 多半不具優勢）
-
-**為什麼會出現「漂亮」的 first-query 改善（2f −76~89%、2e_K10 在 C −81%）：**
-因為 cold start 的 cost 被拆成「interior fault + leaf fault + CPU」，Zipfian 下
-leaf 部分被反覆查詢拉進 cache，**剩下的瓶頸只有 interior**，prefetch 一解就
-見效。而 2f SLRU 連 leaf 一起 preload，連那點 leaf cold fault 都消掉。
-
----
+**模擬：** 熱資料反覆被打（常開聯絡人、首頁 item）。熱 key 把 leaf 撐熱、**唯一還 cold 的是 interior** → prefetch 的最佳舞台，放大 interior prefetch 效益。（robustness 變體 **Workload Z**：α=0.99 但 `rank=key` 不 scramble、熱點落在低 id，REPORT §A.2。）
 
 ## Workload B — Uniform Random Point Read
 
-**檔案：** [workloads/workload_b.txt](workloads/workload_b.txt)
-**規模：** 100,000 ops，全部 `read`
-**Key 範圍：** id ∈ [1, 99999]（同 Workload A 的 1/6 區段）
-**分佈：** 均勻
-- 100,000 次查詢觸及 **63,138 個 unique key**（多數查詢是新的）
-- 最熱的 key 也只被查 7–8 次
-- 每 10k id 區段平均 ~10,000 次（誤差 < 5%）
+**規模：** 100,000 ops 全 `read`。**Key：** id ∈ [1, 99999]。**分佈：** 均勻。
+- unique **63,138**（多數是新查詢）；最熱 key 也只 7–8 次。
 
-**模擬什麼：** 沒有熱點的 OLTP/批次掃描情境，例如「按 id 一筆筆檢查」、隨機
-sampling、爬蟲式存取。**每筆 query 都打到沒看過的 leaf**，leaf fault 不可避免。
+**模擬：** 無熱點的 OLTP/批次掃描（逐筆檢查、隨機 sampling）。**每筆都打到沒看過的 leaf** → leaf fault 不可避免、攤薄 prefetch 效益（量 prefetch 的**下界**）。
 
-**用在哪：**（最初是對照組，後來變成完整實測 workload）
-- `pipeline/preparation/layout_rewriter/runs/` 的 1b VACUUM 補測、1c type-aware 補測、N sweep × {orig, vacuum} 全矩陣
-  - **發現一**：B 上 N sweep 從 N=5 開始全 plateau（沒有 A 的 U 型曲線）
-  - **發現二**：ta 在 B 上把 baseline 推高、layers_N 改善也較弱（B/ta −24% vs orig −47%），非 universal best
-- `strategies/slru/` 的 2f SLRU 驗證（B first-q −83%,但 e2e 多半不具優勢）
-- 原始定位：當 Workload A 量出「prefetch 省了 54%」，B 回答「這效益只在熱點下
-  才有意義嗎」 — 答案是 prefetch 仍然有效，但比例會被「無法被解決的 leaf
-  fault」攤薄
+## Workload C — High-key Uniform Read
 
----
+**規模：** 100,000 ops 全 `read`。**Key：** id ∈ [590000, 609999]（**DB 末段 20k**）。**分佈：** 均勻（每 id 平均 5 次）。
 
-## Workload C — High-key Uniform Read（churn 後段查詢）
-
-**檔案：** [workloads/workload_c.txt](workloads/workload_c.txt)
-**規模：** 100,000 ops，全部 `read`
-**Key 範圍：** id ∈ [590000, 609999]（**只打 DB 末段 20k id**，含 churn 後新增的 id）
-**分佈：** 均勻覆蓋這 20k 個 id（剛好每個 id 平均被打 5 次）
-
-**模擬什麼：** 「新加入的資料馬上被讀取」— 例如剛收到的訊息、剛拍的照片、剛
-push 的 commit。**重點不是熱點，而是 id 落在哪個 file region**。Churn 過程持續
-INSERT 會把新資料放在檔尾，這個 workload 就在量「檔尾新資料 cost start 的 latency
-怎麼隨 churn 累積而漂移」。
-
-**用在哪：**
-- `prefetch_churn/` 的 10 個 checkpoint：每個 checkpoint 之間先用 Workload D
-  製造寫入壓力，然後 drop cache，再跑這個 workload 量 cold-start latency；
-  N sweep（N=0/1/5/10/20/46/92 × 10 checkpoints）見 [overall_results.md](overall_results.md) churn 段
-- `pipeline/preparation/layout_rewriter/runs/` 的 1b VACUUM、1c type-aware、N sweep × {orig, vacuum}
-  全矩陣
-  - **關鍵發現**：C 上 layers_N 必須 N=92（載全部 interior）才有 -46% 改善，
-    N≤46 只有 ~15%。原因：C 走的 interior path 不在 file 前段，按 offset 排
-    top-N 完全選錯 page。**這直接證明「layers_N 是 zipfian-friendly 啟發式」**
-  - **churned DB 上同樣的形狀**：N=92 −50%、N≤46 plateau ~−14%
-- `strategies/slru/` 的 2f SLRU 驗證（C 上 hot set ~1.7 MB，preproc 只 ~1.1 ms
-  vs A/B 的 ~7.5 ms — 是 2f preproc 最低的情境）
-
-**為什麼選 high-key 而不是低 key：** 因為 prefetch_churn 想觀察 layout 隨寫入
-漂移的效果，而新 interior page 都會配在檔尾（id 590k+），打這段最能看到 layout
-惡化的影響。**意外副作用**：因 leaves 高度集中在檔尾，C 也成了 2f SLRU 的最
-小 hot set 對照點。
-
----
+**模擬：** 「新加入資料馬上被讀」（剛收訊息、剛 push commit）。重點是 id 落在**檔尾 region**。因 leaves 高度集中檔尾，C 也是 2f SLRU 最小 hot set（~1.7 MB）的對照點，且 2e_K10 在 C 上 first-q −83% / e2e_warm −75% 是全矩陣最佳。
 
 ## Workload D — Mixed Write-heavy Churn Generator
 
-**檔案：** [workloads/workload_churn_write.txt](workloads/workload_churn_write.txt)
-**檔案規模：** 100,000 ops，混合操作（**檔內定義**）
-**每 batch 實際用量：** 5,000 ops（**取前 5,000 行**，跑 10 batch = 累計 50,000 ops）
-**Op 組成：**
-
-| op | 次數 | 佔比 |
-|---|---:|---:|
-| `update` | 30,000 | 30% |
-| `insert` | 20,000 | 20% |
-| `read` | 20,000 | 20% |
-| `readmodifywrite` | 20,000 | 20% |
-| `scan <len>` | 10,000 | 10% |
-
-**Key 行為：**
-- `insert` 從 id = 600,001 開始往上長（DB 原本 600k 筆，所以每 batch 都是真
-  新資料、不是 overwrite）
-- `update` / `read` / `rmw` / `scan` 都打既有 id 範圍
-- `readmodifywrite` 被 harness 預設 remap 成 DELETE（見 [project-churn-rmw-delete-remap](memory/project-churn-rmw-delete-remap.md)）——raw 檔沒 `delete` 字樣但有實際刪除
-
-**模擬什麼：** **不是用來測 latency 的**。它是 churn generator — 製造大量
-INSERT/UPDATE/DELETE 的寫入壓力，讓 SQLite freelist 重新分配、interior pages
-分裂、layout 隨時間漂移。
-
-**用在哪：** `prefetch_churn/` 的 checkpoint 之間。每個 checkpoint 之間執行
-5,000 ops 的這個 workload（取前 5,000 行），跑 10 次累積 50,000 ops。然後在每個
-checkpoint 用 Workload C 量 cold-start latency，看「prefetch 在被 churn 過的
-layout 上還剩多少效益」。
-
-> **規模標示（[CONTRADICTIONS.md](legacy/CONTRADICTIONS.md) #29）**：檔案規模 100,000 ops，
-> 但實際每 checkpoint 只用 5,000 ops、共 10 個 checkpoint = 50,000 ops（非單次跑滿）。
+**規模：** 100,000 ops 混合（`update` 30% / `insert` 20% / `read` 20% / `readmodifywrite` 20% / `scan` 10%）。**不量 latency**，是 churn generator：製造 INSERT/UPDATE/DELETE 壓力讓 layout 隨時間漂移。
+- `insert` 從 id=600,001 起（真新資料）；`readmodifywrite` 被 harness remap 成 DELETE（見 [project-churn-rmw-delete-remap](memory/project-churn-rmw-delete-remap.md)）。
+- 用在 `churn` 實驗的 checkpoint 之間（每 checkpoint 灌 5,000 ops、共 10 個），再用 Workload C 量 cold-start latency 隨 churn 的漂移。
 
 ---
 
-## Workload 與實驗的對照表
+## 為什麼需要多種 workload
 
-| 實驗 | 用的 workload | 想回答的問題 |
-|---|---|---|
-| `prefetch_vacuum/` (Week 9–11) | A (Zipfian) | Prefetch interior pages 在熱點 workload 下能省多少？甜蜜點是 N=幾個 page？|
-| `pipeline/preparation/layout_rewriter/` (type-aware vacuum 端到端) | A (Zipfian) | 把 interior 重排到檔頭，能不能救回 prefetch 效益？(A/ta baseline 反被推高 +31%) |
-| `pipeline/preparation/layout_rewriter/runs/` (1b VACUUM × B/C) | B + C | VACUUM 對 baseline 和 prefetch 的影響在非 Zipfian workload 上是什麼樣 |
-| `pipeline/preparation/layout_rewriter/runs/` (1c type-aware × B/C) | B + C | ta layout 是否 universal best？(答案：B 上反效果) |
-| `pipeline/preparation/layout_rewriter/runs/` (N sweep × A/B/C × {orig, vacuum}) | A + B + C | 「N=5 甜蜜點」是 zipfian-friendly 還是 universal？(答案：zipfian-only) |
-| `strategies/slru/` (2f SLRU × A/B/C × {orig, vacuum}) | A + B + C | mincore-dumped resident set preload 在三種 workload 的效益 (first-q −76~89%,但 deliver 太重→e2e 多半不具優勢;warm-process 下 C 例外) |
-| `prefetch_churn/` 量測 (N=5 only) | C (high-key uniform) | Layout 隨 churn 漂移後，prefetch 效益怎麼變？|
-| `prefetch_churn/runs_nsweep/` (N=0,1,5,10,20,46,92) | C (high-key uniform) | churned DB 的 N sweep 形狀是否跟乾淨 DB 一致？(形狀一致,N=92 −50%) |
-| `prefetch_churn/` churn 生成 | D (mixed write) | 製造真實的 layout 漂移壓力（不量 latency）|
-| `multiprocess/` | 不用 workload（只測 residency / RSS）| MAP_SHARED 是否真的跨 process 共享 page cache？|
-
----
-
-## 為什麼需要這四種 workload，而不是只用一個
-
-不同 workload 拆解 cold-start latency 的不同 component，缺一不可：
+不同 workload 拆解 cold-start latency 的不同 component：
 
 ```
-[Interior page fault]  +  [Leaf page fault]  +  [SQLite CPU]
-        ↑                          ↑
-   prefetch 能解決              prefetch 解決不了
-                                （workload-dependent）
+[Interior fault]  +  [Leaf fault]  +  [SQLite CPU]
+      ↑                   ↑
+ prefetch 能解決      prefetch 解決不了（workload-dependent）
 ```
 
-- **Workload A (Zipfian)** 把「leaf fault」這項壓低（leaf 自然熱），讓 interior
-  fault 成為唯一瓶頸 → 量出 prefetch 的**上界效益**
-- **Workload B (uniform)** 讓「leaf fault」這項變最大，prefetch 只能解決剩下
-  的 interior 部分 → 量出 prefetch 的**下界效益**
-- **Workload C (high-key uniform)** 同 B 的分佈但鎖定檔尾，跟 Workload D 配合 →
-  量「layout 漂移」隨時間的影響
-- **Workload D** 不為了 latency 而存在，純粹是製造寫入歷史，讓 layout 偏離
-  testdb_builder 剛建好的乾淨狀態
+- **A（Zipfian）** 壓低 leaf fault（leaf 自然熱）→ interior 成唯一瓶頸 → prefetch **上界效益**。
+- **B（uniform）** 放大 leaf fault → prefetch 只能解 interior → **下界效益**。
+- **C（high-key）** 同 B 分佈但鎖檔尾，配合 D 量 **layout 漂移**隨時間的影響。
+- **D** 不為 latency，純製造寫入歷史讓 layout 偏離乾淨狀態。
 
 ---
 
-## 已完成的覆蓋（A/B/C 三維 × 全策略矩陣）
+## YCSB core D / E（寫入型）
 
-對照原本只有「A → prefetch_vacuum + layout_rewriter; C → prefetch_churn; B 只
-是對照組」的設計，目前實際已跑：
+> ⚠️ **命名：** 本節 **YCSB D / E**（registry key `YD` / `YE`）是 YCSB 標準 core workload（read-latest / short-ranges），**與上面「Workload D＝churn generator」不同東西**，勿混。
 
-| | A (Zipfian) | B (Uniform) | C (high-key) |
-|---|---|---|---|
-| **Layout 1a (orig)** | 全策略 + **RAM 20M** + **dense N=0..92** | 全策略 + **RAM 20M** + **dense N=0..92** | 全策略 + **RAM 20M** + **dense N=0..92** |
-| **Layout 1b (VACUUM)** | baseline + range/perpage/layers_5 + **N sweep + 2f SLRU + 2d/2e + RAM 20M** + **dense N=0..92** | 全策略 + **2d/2e + RAM 20M** + **dense N=0..92** | 全策略 + **2d/2e + RAM 20M** + **dense N=0..92** |
-| **Layout 1c (type-aware)** | baseline + range/perpage + **N sweep** + 2f SLRU + **2d/2e + RAM 20M** + **dense N=0..92** | baseline + range/perpage + **N sweep** + 2f SLRU + **2d/2e + RAM 20M** + **dense N=0..92** | baseline + range/perpage + **N sweep** + 2f SLRU + **2d/2e + RAM 20M** + **dense N=0..92** |
-| **Churn 漂移** | **N sweep + 2d/2e × delete-churn** + **dense N=0..92 × churn** | **N sweep + 2d/2e × churn** + **dense N=0..92 × churn** | 10 checkpoints × **N sweep + 2d/2e × insert-churn** + **dense N=0..92 × churn** |
-| **RAM-pressure 全矩陣** | 7 strategies × 1a/1b/1c × {20M, none} × 6 reps | 同左 | 同左 |
-
-B 不只是「對照組」 — 它是 prefetch 失敗模式（leaf fault 主導）和 ta
-layout 反效果（B/ta baseline +4%、prefetch 改善較弱）的主要證據來源。
-
-RAM-pressure 矩陣涵蓋 **9 個 (workload × layout) cell × 7 個策略 × 2 個 mem 上限**，
-6 reps median 聚合（756 cells）。
-
-
-# New Workloads
-請參考new_workloads 資料夾底下的 README.md
-
-**Dense N=0..92 全 sweep** 把每個 (workload × layout) 的
-layers_N 從 6 個採樣點補成全 93 個值 × 3 reps：clean DB 2,511 cells + churn DB
-3,069 cells = **~5,580 額外 benchmark**。發現 sparse 6-pt 在 9/12 cell 結論正確，
-但漏掉 3 個 sweet spot：**A × 1b N=62 -31% / B × 1c N=26 -36% / C × 1b N=87 -57%**。
-
----
-
-## YCSB core D / E（寫入型，教授建議補齊）
-
-> ⚠️ **命名：** 本節的 **YCSB D / E** 是 YCSB 標準 core workload（read-latest / short-ranges），
-> registry key 為 **`YD` / `YE`**，**與上面既有的「Workload D＝write-heavy churn generator」不同東西**（那個是 aging 用的混寫流）。兩者請勿混淆。
->
-> **產生器：** `workloads/gen_workload.py`（type `YD`/`YE`，seed 化，各 10 seeds 已入庫 `workload_{yd,ye}_1..10.txt`）。參照 [YCSB-cpp](https://github.com/ls4154/YCSB-cpp) 的比例定義。兩者皆**含 insert（寫入型）**：insert 從 **600001** 起（超過 DB 密集 max id 600000，否則 upsert 只改列不長大）→ DB 隨時間 aging。首 op 強制為 `read`，以便下游唯讀 TTFQ probe 過 `--require-read-first`。
+**產生器：** `workloads/gen_workload.py`（type `YD`/`YE`，各 10 seeds `workload_{yd,ye}_1..10.txt`，比例參照 [YCSB-cpp](https://github.com/ls4154/YCSB-cpp)）。兩者**含 insert（寫入型）**：insert 從 **600001** 起（超過 DB 密集 max id 600000，否則 upsert 只改列不長大）→ DB 隨時間 aging。首 op 強制 `read`（供唯讀 TTFQ probe 過 `--require-read-first`）。
 
 ### YCSB D（`YD`）— read-latest
-
-**規模：** 100,000 ops。**op-mix（seed 1 實測）：** `read` **95,108** + `insert` **4,892**（≈ 95/5，對齊 `readproportion=0.95 / insertproportion=0.05`）。
-**分佈：** `requestdistribution=latest` — 讀取熱點集中在**最近插入的 key**。以 Zipf α=0.99 對「距今 recency rank」取樣，`key = cur_max − zipf_rank`（最新插入的最熱）。
-- reads：unique **37,456**，key range **[106, 604892]**；**53,996 筆（57%）讀落在 >600000 的新插入區** → 熱點隨插入往資料尾端漂（top-1 單 key 僅 28 次，無單一 key 獨大，因最熱 key 隨 cur_max 移動）。
-- inserts：**4,892 筆，600001–604892**（DB 實際長大 ~4.9k 列）。
-
-**模擬什麼：** user status / timeline / 最新事件——寫入不斷產生新熱 key，**移動的 hotset**。這是 A/B/C/Z（靜態熱點）都沒有的軸，直接壓測 static / history 派預取（它們預熱的是舊熱點）。
+op-mix（seed 1 實測）：`read` **95,108** + `insert` **4,892**（≈95/5）。`requestdistribution=latest`：讀熱點集中最近插入 key（Zipf α=0.99 對 recency rank、`key=cur_max−zipf_rank`）。
+- reads：unique **37,456**、range **[106, 604892]**；**57%（53,996 筆）落在 >600000 新插入區** → **移動的 hotset**（top-1 單 key 僅 28 次，因最熱 key 隨 cur_max 漂）。inserts **600001–604892**（DB 長大 ~4.9k 列）。
+- **模擬：** timeline / 最新事件——寫入不斷產生新熱 key，這是 A/B/C/Z（靜態熱點）沒有的軸，壓測 static/history 派預取。
 
 ### YCSB E（`YE`）— short-ranges
+op-mix（seed 1 實測）：`scan` **94,975** + `insert` **5,024** + `read` 1。`requestdistribution=zipfian`、`maxscanlength=100`。
+- scans：start = scrambled Zipf α=0.99 over [1..600000]（散佈，同 A），start unique **34,756**、range [29, 599899]、top-1 6,429 次；**scan length ∈ [1,100]，mean 50.5**。inserts **600001–605024**。
+- **模擬：** 短範圍掃描為主（訊息佇列尾端連續讀）+ 5% 插入 aging。
 
-**規模：** 100,000 ops。**op-mix（seed 1 實測）：** `scan` **94,975** + `insert` **5,024** + `read` 1（op[0]）（≈ 95/5，對齊 `scanproportion=0.95 / insertproportion=0.05`）。
-**分佈：** `requestdistribution=zipfian`，`maxscanlength=100`（uniform）。
-- scans：start 走 scrambled Zipf α=0.99 over [1..600000]（散佈，同 A），**start unique 34,756、range [29, 599899]、start top-1 = 6,429 次**（zipf skew）；**scan length ∈ [1,100]，mean 50.5**（uniform）。harness `scan <start> <len>` → `SELECT payload FROM items WHERE id>=?1 ORDER BY id LIMIT ?2`。
-- inserts：**5,024 筆，600001–605024**。
+### aging 量測（自 self-aging 路徑）
+YD/YE 含寫入、不能走唯讀 `run`，走 **`run_experiment.py aging`**（`WRITE_WORKLOADS={YD,YE}`）：workload 自身 insert 流灌**可寫副本**做 aging、唯讀 probe（濾掉 insert）量 TTFQ 跨 checkpoint。實作 commit `d110e3d` + `3889f09`。
 
-**模擬什麼：** 短範圍掃描為主的負載（如訊息佇列尾端連續讀），配合 5% 插入的 aging。
+**實測 aging 演化（orig，10 checkpoints × 3 reps，`results/aging/aging_evolution.csv`；first_query_us）：**
 
-### 怎麼跑（自 self-aging 路徑，非唯讀 `run` matrix）
+| static t=0 hotset | YD ck0 → ck10 | YE ck0 → ck10 |
+|---|---|---|
+| baseline（no prefetch）| 541 → 557 | 540 → 531 |
+| **2e_K10_static** | **101 → 98（Δ−3）** | 265 → 291（Δ+25）|
+| layers_92_static | 232 → 262（Δ+31）| 260 → 273（Δ+13）|
 
-YD/YE 含寫入，不能走 `run`（硬帶 `--readonly` + 無 per-rep restore 會污染 canonical DB）。改走 **`run_experiment.py aging`** 子命令（`WRITE_WORKLOADS={YD,YE}`）：workload 自身的 insert 流灌**可寫副本**做 aging、唯讀 probe（濾掉 insert）量 TTFQ 跨 checkpoint。實作 commit `d110e3d`（生成器/seeds）+ `3889f09`（aging 子命令）。smoke 已驗 DB 真的長大（+N 列＝N 個 insert）；**完整 aging sweep（多 checkpoint × 跨 seed）尚未跑正式批。**
+- **static t=0 prefetch hotset 對 YD/YE aging 相當穩健**：10 個 checkpoint（YD ~4.9k inserts）內，2e_K10_static 在 YD 幾乎不衰退（101→98 µs）、在 YE 僅微升（+25 µs）。因 DB 只長大 ~1% 列、interior 骨架跨 aging 不變。
+- **未跑：** 跨 seed aging（10-seed sweep 素材已備）、更多 checkpoint 深度。
 
-> **資料出處：** 上述 op-mix / unique / range / top-1 / scan-length 均由 `workloads/workload_{yd,ye}_1.txt` 直接統計（可重現：`gen_workload.py YD 1 -` / awk 統計）。
+> **資料出處：** 分布數字由 `workloads/workload_{yd,ye}_1.txt` 直接統計；aging 演化由 `results/aging/aging_evolution.csv`。絕對 µs 為批內自洽（演化比較），非跨批。
