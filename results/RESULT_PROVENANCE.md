@@ -2,10 +2,9 @@
 
 Human-readable provenance for the canonical result set after the first-op
 tie-break leakage fix. **Provenance only** — this file does not restate the
-study's conclusions. Machine-readable companion (already committed):
-[`CANONICAL_RESULTS.yaml`](CANONICAL_RESULTS.yaml) (validator:
-`tools/check_canonical_manifest.py`). This `.md` is the authoritative human
-narrative; the `.yaml` encodes the same selectors for tools.
+study's conclusions. It is the single, self-contained source of truth for which
+result directory is canonical per cell; the explicit supersession selectors live
+in §4.2 below.
 
 ## 4.1 Freeze metadata
 
@@ -58,7 +57,7 @@ Prohibited:
 ## 4.4 Source-selection rules (per cell, by scope — not a vague global order)
 
 1. Determine whether the cell is in the tie-break **impact-audit changed set**
-   (§4.2 "supersedes" rows; encoded in `CANONICAL_RESULTS.yaml → superseded_cells`).
+   (§4.2 "supersedes" rows).
 2. **Changed** main-matrix cell → `results/tiebreak_fix` (`master_summary.csv` for
    single-inst; `seeds/` for cross-seed).
 3. **Unchanged** main-matrix cell → `results/unified_v2`.
