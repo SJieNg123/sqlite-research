@@ -32,11 +32,15 @@ in §4.2 below.
 | Corrected single-instantiation | `results/tiebreak_fix/master_summary.csv` (+ `master_raw.csv`) | A:`2e_K500`; B:`2e_K10,2e_K40,2e_K92,2e_K500`; C:`2e_K10,2e_K40,2e_K92` — × {orig,vacuum,ta}; single-inst | **supersedes** `results/unified_v2` for exactly these cells | Same-batch baseline + `2f_slru` anchor in the same run |
 | Corrected cross-seed | `results/tiebreak_fix/seeds/seed{01..10}/summary.csv` (CI: `results/tiebreak_fix/uncertainty.csv`) | A:`2e_K500`; B:`2e_K10,2e_K500`; C:`2e_K10` — × {orig,vacuum,ta}; seeds 1–10 | **supersedes** pre-fix cross-seed `results/seeds` (non-canonical) for these cells | Each seed's corrected strategy paired with its same-seed baseline |
 | C_hit — unaffected arms | `results/c_hit/seed{01..10}/summary.csv` (`FINDINGS.md`) | C_hit × orig × {2d, layers_92, 2f_top14, 2f_top28, learned_markov_14, learned_markov_28, 2f_slru}; seeds 1–10 | — | **orig-only**; no layout-robustness claim |
-| C_hit — corrected arms | `results/c_hit_v2/seed{01..10}/summary.csv` (CI: `uncertainty.csv`) | C_hit × orig × {2e_K10, 2e_K40, 2e_K92, 2e_K500, 2f_slru}; seeds 1–10 | **supersedes** `results/c_hit` for `2e_K10/40/92/500` | **orig-only** |
+| C_hit — corrected arms | `results/c_hit_v2/seed{01..10}/summary.csv` (CI: `uncertainty.csv`) | C_hit × orig × {2e_K10, 2e_K40, 2e_K92, 2e_K500}; seeds 1–10 (+ `2f_slru` as same-batch anchor only) | **`2e_K10`, `2e_K500` supersede** `results/c_hit` (leaky); **`2e_K40`, `2e_K92` are newly measured** here (absent from the old `results/c_hit` batch) | **orig-only**; the canonical C_hit `2f_slru` stays in `results/c_hit` (anchor note below) |
 | C_mixed ablation + competitive | `results/ablation_comp_v2/uncertainty.csv` (seeds `seed{01..10}/summary.csv`) | C (=C_mixed) × orig × {2d, leaf_rand_K10, leaf_freq_K10, 2e_K10, 2f_top14, 2f_top28, 2f_slru}; seeds 1–10 | **supersedes** pre-fix `results/ablation` + `results/competitive` for C/orig | Same-batch three-lever ablation + footprint-matched competitor |
-| Prior-art baselines | `results/baselines_v2/summary.csv` (+ `raw.csv`, `models/`) | A/B/C × orig × {lp_sorted, lp_shuf, learned_markov_14/28, 2f_top14/28, 2e_K10, 2f_slru anchor}; test seed 1 | — | Not affected by leaf tie-break |
+| Prior-art baselines | `results/baselines_v2/summary.csv` (+ `raw.csv`) | A/B/C × orig × {lp_sorted, lp_shuf, learned_markov_14/28, 2f_top14/28, 2e_K10, 2f_slru anchor}; test seed 1 | — | Not affected by leaf tie-break. `results/baselines_v2/models/` = optional learned-model reproducibility artifact (model inputs), **not** a canonical measurement source |
 | Aging | `results/aging_v2/aging_ci.csv` (per-seed `seed{01..10}/aging_evolution.csv`) | YD/YE × orig × {baseline, 2e_K10_static, layers_92_static}; seeds 1–10; **11 checkpoints ck0–ck10** (10 aging increments); bootstrap CI | — | Independent workload axis |
 | **Legacy first-seen tie-break** | `strategies/access/runs/legacy_same_trace_first_seen_tiebreak/` (`README.md` + regen recipe) | archived pre-fix `hot2e_*.csv` hotsets | — | **canonical = NO.** Provenance/debugging only |
+
+> **C_hit `2f_slru` anchor note.** The `2f_slru` rows in `results/c_hit_v2` are
+> same-batch machine-state anchors only. The canonical C_hit `2f_slru` result
+> remains sourced from `results/c_hit`.
 
 ## 4.3 Atomic replacement rule
 
@@ -61,11 +65,15 @@ Prohibited:
 2. **Changed** main-matrix cell → `results/tiebreak_fix` (`master_summary.csv` for
    single-inst; `seeds/` for cross-seed).
 3. **Unchanged** main-matrix cell → `results/unified_v2`.
-4. C_hit **corrected** strategy (`2e_K10/40/92/500`) → `results/c_hit_v2`.
+4. C_hit `2e_K10`/`2e_K40`/`2e_K92`/`2e_K500` → `results/c_hit_v2`
+   (`2e_K10`/`2e_K500` supersede `results/c_hit`; `2e_K40`/`2e_K92` exist only
+   here). C_hit `2f_slru` → `results/c_hit` (the `c_hit_v2` `2f_slru` is an
+   anchor only).
 5. C_hit **unaffected** arms (`2d`, `2f_top14/28`, `learned_*`, `layers_92`,
    `2f_slru`) → `results/c_hit`.
 6. C_mixed **ablation / competitive** (C/orig) → `results/ablation_comp_v2`.
-7. Prior-art comparison → `results/baselines_v2`.
+7. Prior-art comparison → `results/baselines_v2` (`summary.csv`/`raw.csv`;
+   `models/` is a reproducibility artifact, not a measurement source).
 8. Aging → `results/aging_v2`.
 9. **Legacy directory must never be a fallback.**
 
