@@ -3,11 +3,12 @@
 
 Where does the targeted-prefetch win come from? Each arm isolates one selection lever;
 bars show the cross-seed mean first-query / e2e_warm reduction vs baseline (async arm)
-with bootstrap 95% CI whiskers. The money comparison is leaf_rand vs leaf_freq: same
-page-type (leaf), same count -- so any gap is the ACCESS-FREQUENCY signal, not page-type.
-Rows = layout (orig vs ta) isolate the layout-clustering lever.
+with bootstrap 95% CI whiskers. POST-FIX (tie-break): on C_mixed the page-type lever
+(2d) is the robust one; leaf_freq (access-frequency, leaf-only) is a TIE -- its pre-fix
+-40% was first-op leakage. leaf_rand is a net-slower control. orig-only.
 
-Data: results/ablation/uncertainty.csv (+ results/ablation_k500/uncertainty_k500.csv for A).
+Data: results/ablation/uncertainty.csv (A/B) + results/ablation_comp_v2/uncertainty.csv
+(C/orig, post-fix).
 Run:  python3 figures/17_lever_ablation.py
 """
 import csv
@@ -48,12 +49,18 @@ def val(idx, w, ly, s, metric, arm="async"):
 def main():
     idx = load(ROOT / "results/ablation/uncertainty.csv")
     idx.update(load(ROOT / "results/ablation_k500/uncertainty_k500.csv"))
+    # tie-break fix (commit de4490f): C/orig lever arms were re-measured with the
+    # deterministic (-count,pageno) hotset in results/ablation_comp_v2. Overriding
+    # the pre-fix C/orig rows (leaf_freq's old -40% was first-op leakage -> now a tie).
+    idx.update(load(ROOT / "results/ablation_comp_v2/uncertainty.csv"))
     if not idx:
         sys.exit("no results/ablation/uncertainty.csv — run the sweep + stats first")
 
-    layouts = ["orig", "ta"]
+    # orig only: the post-fix rerun (ablation_comp_v2) is orig-only, so we drop the
+    # pre-fix C/ta row rather than mix a leaky cell into the figure.
+    layouts = ["orig"]
     fig, axes = plt.subplots(len(layouts), len(METRICS),
-                             figsize=(11, 7), sharex=True)
+                             figsize=(11, 4.2), sharex=True, squeeze=False)
     x = list(range(len(WORKLOADS)))
     w_bar = 0.2
 

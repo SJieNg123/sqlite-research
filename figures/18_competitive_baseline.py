@@ -52,6 +52,14 @@ def main():
     if not unc.exists():
         sys.exit("no results/competitive/uncertainty.csv — run the sweep + stats first")
     idx = load_unc(unc)
+    # tie-break fix (commit de4490f): C/orig 2e_K10 + 2f_top14/28 were re-measured in
+    # the same post-fix batch (results/ablation_comp_v2). Override the pre-fix C cells
+    # (2e_K10's old -72% was first-op leakage -> now -55%, matching 2f_top14).
+    comp2 = ROOT / "results/ablation_comp_v2/uncertainty.csv"
+    if comp2.exists():
+        for r in csv.DictReader(open(comp2)):
+            if r["db"] == "orig":
+                idx[(r["workload"], r["strategy"], r["arm"], r["metric"])] = r
     fp = footprints()
 
     fig, axes = plt.subplots(1, 2, figsize=(12, 5))
@@ -82,8 +90,9 @@ def main():
         ax.set_ylabel(ylabel)
         ax.set_title(metric.replace("_us", ""))
     axes[1].legend(fontsize=7, ncol=1, loc="upper left")
-    fig.suptitle("Competitive baseline: a tuned ranked dump (2f_topN) matches 2e_K10 (★) on broad A/B; "
-                 "2e_K10 still wins narrow C; full dump explodes (e2e, right)", fontsize=11)
+    fig.suptitle("Competitive baseline (post tie-break fix): a tuned ranked dump (2f_topN) matches 2e_K10 (★) "
+                 "on A/B AND narrow C; type-aware gives no win over footprint-matched ranking; "
+                 "full dump explodes (e2e, right)", fontsize=10)
     fig.tight_layout(rect=(0, 0, 1, 0.96))
     save(fig, "18_competitive_baseline")
 
