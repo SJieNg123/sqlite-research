@@ -792,35 +792,35 @@ first-query improvement上限(orig,vs baseline):
 > (~70–200 µs)、冷 open ~220 µs,所以 e2e 由 first-q 決定。**※ 此 186/268 µs 是 `results/main` seed 1 的 single-instantiation**;跨 seed（修正 tie-break 後）為 **−55% [−67,−43] 雙峰**——首查是 not-found probe 的 seed ~−70%（真實最右葉熱點）、是真 hit 的 seed ~−31%（interior skeleton）。**舊的 −70% [−72,−69] tight/robust 是 first-op leakage 把 hit-seed 也灌到 −70% 的假象**（§6.2.8 已修正）。
 > **此 −75% 的量級專屬 C 的 mixed / not-found 結構**（~50% not-found 高 key 集中到最右葉成真實熱點）——pure-hit 控制 **C_hit** 移除該熱點後,tail-read 的普適 targeted 效益是 interior skeleton 的 **~−28% e2e_warm**,修正後 `2e_K10` 在 C_hit 亦回落到 −27%（**§6.2.8**）。
 
-#### 5.4.1 三槓桿 ablation：C 的勝利來自 access-frequency，不是 page-type（S1）
+#### 5.4.1 三槓桿 ablation：page-type(interior) 是 robust 槓桿；access-frequency leaf 僅在真熱點時（S1，tie-break 修正後）
 
-本節(同批 ablation)的 2e_K10 把 C 的 first-q 從 2d 的 −43% 再壓到 −81%——多出來那 38 點，到底是「page-type 感知」還是「access-frequency 選 hot leaf」？我們把 2e_K10 的 hotset 拆成兩個 selection 槓桿、再加一個對照組(同 layout、同一批跑、10-seed bootstrap CI):
+2e_K10 把 C 的 first-q 從 2d 的 −43% 再壓到 −63%——多出來那部分，是「page-type 感知」還是「access-frequency 選 hot leaf」？我們把 2e_K10 的 hotset 拆成兩個 selection 槓桿、再加一個對照組（同 layout、同一批跑、**tie-break 修正後** `results/ablation_comp_v2`、10-seed bootstrap CI）:
 
 - **2d** = 只載 interior（**page-type** 槓桿）
 - **leaf_freq_K10** = 只載 top-10 hot leaves（**access-frequency** 槓桿，= 2e_K10 扣掉 interior）
-- **leaf_rand_K10** = 載「**同型別(leaf_table)、同 10 張、但隨機抽的非 hot leaf**」(對照組:差別在「有沒有照頻率挑」)
+- **leaf_rand_K10** = 載「**同型別(leaf_table)、同 10 張、但隨機抽的非 hot leaf**」(對照組)
 - **2e_K10** = interior ∪ hot leaves（合併）
 
-集合上 `2e_K10 = 2d ∪ leaf_freq_K10`，是 exact 分解。Workload C、orig、async first-q（10-seed mean Δ% [95% CI]、皆 robust）:
+集合上 `2e_K10 = 2d ∪ leaf_freq_K10`。Workload C_mixed、orig（10-seed mean Δ% [95% CI]）:
 
-| arm | 隔離的槓桿 | pages | first-q Δ% | e2e_warm Δ% |
-|---|---|---:|---:|---:|
-| 2d | page-type（interior） | 4 | −43% [−46,−41] | −36% |
-| **leaf_rand_K10** | 對照·隨機 leaf | 10 | **−2% [−3,−1]** | +6%(更慢) |
-| **leaf_freq_K10** | **access-frequency** | 10 | **−40% [−43,−37]** | −32% |
-| 2e_K10 | 合併 | 14 | −81% [−82,−80] | −73% |
+| arm | 隔離的槓桿 | pages | first-q Δ% | e2e_warm Δ% | verdict |
+|---|---|---:|---:|---:|---|
+| **2d** | **page-type（interior）** | 4 | **−43% [−46,−41]** | **−36% [−38,−34]** | **robust** |
+| leaf_rand_K10 | 對照·隨機 leaf | 10 | −1% [−2,+1] | **+7%（更慢）** | robust(worse) |
+| **leaf_freq_K10** | **access-frequency（leaf-only）** | 10 | −11% [−22,0] | **−3% [−14,+8]** | **tie** |
+| 2e_K10 | 合併 | 14 | −63% [−75,−51] | −55% [−67,−42] | robust·雙峰 |
 
-**結論:同型別、同張數下,隨機 10 leaves 幾乎無效(−2%),照頻率挑的 10 leaves −40%——這 38 點全是 access-frequency 訊號、與 page-type 無關。** C 的 headline −81% = interior(−43%)疊加 hot leaf(−40%)。對照之下:**B(uniform、無 hot leaf)的 leaf_freq≈leaf_rand≈0,全靠 2d(interior, −36%)扛**;A 居中(leaf_freq −13% robust、leaf_rand 打平,主力仍是 2d −37%)。三 workload 跨 10 seed 皆 robust。
+**結論（tie-break 修正後，與 pre-fix 相反）：page-type（interior）是 robust 的那根槓桿（2d −36% robust）；access-frequency 的 leaf-only 槓桿 `leaf_freq_K10` 只是 tie（e2e_warm −3%、CI 跨 0）**——它舊版的 −40% **幾乎全部是 first-op leakage**（§6.2.8；leaf-only 沒有 interior path、又只在首查恰為 not-found probe 時才靠最右葉得利 → 標準差極大、非 robust）。隨機 leaf 甚至**淨變慢（+7%）**。合併的 2e_K10 −55% 是雙峰，且（見下 competitive）**與 footprint-matched 的純頻率 dump 統計上不可分**。**即 interior skeleton 既是 robust 貢獻者、也是使 leaf prefetch 有用的前提（leaf 不搭 interior 幾乎無效）——「access-frequency 才是主力」的 pre-fix 結論在修正後不成立。**
 
-> **⚠️ C 的 access-frequency 訊號來源（§6.2.8 深化）**:此處 C 上 `leaf_freq_K10 −40%` 的「頻率訊號」**幾乎全部來自 C 的 not-found 集中**——C 的 range 有 ~50% 超出 DB 範圍的高 key，全落到最右葉使其成為壓倒性單一 hot leaf。pure-hit 控制 **C_hit**（把 range 收進 DB 範圍）上，同樣的 `leaf_freq` 加分**幾乎消失**（frequency leaf 相對 interior-only 只多 ~2 點），代表 **C 的「access-frequency 有效」是這個 not-found 熱點的產物、非 uniform tail 讀取的普適性質**。故本 ablation 的「兩槓桿分工」在 C 上成立，但 access-frequency 槓桿的普適性受 §6.2.8 限定：**只在有真實 access 熱點時才生效**。
+> **競品對照（同批）**：C_mixed 上 warm e2e，`2e_K10` **−54.5% [−66.6,−42.2]** vs footprint-matched 純頻率 dump `2f_top14` **−55.2% [−66.8,−43.2]**、`2f_top28` **−58.3% [−68.1,−47.4]**——**CI 幾乎完全重疊，type-aware `2e_K10` 沒有證據勝過純頻率排名**。舊競品章「2e robustly 勝出、從未被 tuned dump 打敗」在 tie-break 修正後**撤回**。
 
-layout 槓桿(orig→ta)只改 deliver 成本、不改上述 selection 故事:ta 把 interior collocate,卻也讓 2d/2e 的 interior 集合變大(C: 4→48 頁),warm e2e 反而略遜(C 2e_K10 orig −73% vs ta −65%),與 §6.1「type-aware layout 非淨贏」一致。全表見 [overall_results.md](https://github.com/wongzinc/sqlite-research-project-sharing/blob/main/overall_results.md) 「三槓桿 ablation」節。
+> **B / A 對照**（pre-fix 批，方向性）：B(uniform、無 hot leaf) leaf_freq≈leaf_rand≈0，全靠 2d(interior)扛；A 的 leaf_freq 有真實 Zipfian 訊號（把 A 從 2d 的 −25% 推到 2e_K10 −36%）——**只有 A 的 access-frequency 是真訊號**。
 
-> **批次註記**:本節（§5.4.1）數字（C 2d −43%、2e_K10 −81% / e2e_warm −73% 等）出自**獨立的 10-seed ablation 批**（自身錨點、cross-seed mean + bootstrap CI），**不是** §5.4 的 canonical v2 single-instantiation 矩陣（C 2e_K10 first-q −83% / e2e_warm −75%）。兩批屬不同機器狀態群，**只比相對量（各槓桿的貢獻分解）、不逐格對絕對 µs**；勿把此處 −81% / −73% 讀成 canonical headline。
+layout 槓桿(orig→ta)只改 deliver 成本、不改上述 selection 故事(§6.1「type-aware layout 非淨贏」)。
 
-![三槓桿 ablation:勝利來自 access-frequency,非 page-type](figures/out/17_lever_ablation.png)
+![三槓桿 ablation（tie-break 修正後）](figures/out/17_lever_ablation.png)
 
-*圖 17:三槓桿 ablation(10-seed mean Δ%、bootstrap 95% CI)。每組 4 條 = 4 個 selection 槓桿;**grey=leaf_rand 對照幾乎貼 0、green=leaf_freq 才是真正出力的那根**(C 最明顯)。e2e_warm 欄裡 leaf_rand 甚至微正(多付 deliver 卻無 first-q 紅利)。故 targeted prefetch 在 C 的效益是 **access-frequency-driven**;page-type 感知負責 interior(撐起 uniform B 與 A 的主力)。*
+*圖 17（⚠ 此圖為 **pre-fix** 資料、待重生）:三槓桿 ablation。修正後的正確結論見上表——**leaf_freq 修正後掉到 tie（其 pre-fix 的大值是 first-op leakage）、page-type(2d) 才是 robust 的那根**;leaf_rand 淨變慢。*
 
 > **命名校正(回應 R2 W4 / CONSENSUS-2 #9)**:本框架其實同時用了**兩個** selection 槓桿——**page-type 感知**(選 interior,扛 uniform B 與 A 的主力)與 **access-frequency 感知**(選 hot leaf,解鎖 C 的 headline)。單用「page-type-aware」命名會低估後者;準確說法是 **type-aware(interior)＋ access-frequency-aware(hot leaf)的複合 targeting**。
 
@@ -832,9 +832,9 @@ e2e_warm Δ% vs baseline（async、orig、跨 10 seed mean [95% CI]，footprint 
 
 | arm | footprint | A | B | C |
 |---|---:|---:|---:|---:|
-| **2e_K10**（targeted） | 14–28 | **−38 [−53,−25]** | **−24 [−31,−12]** | **−72 [−74,−71]** |
-| 2f_top14（ranked dump） | 14 | −33 [−43,−24] | −27 [−34,−16] | −57 [−68,−45] |
-| 2f_top28 | 28 | −37 [−52,−24] | −26 [−32,−16] | −60 [−69,−49] |
+| **2e_K10**（targeted） | 14–28 | **−38 [−53,−25]** | **−24 [−31,−12]** | **−55 [−67,−42]**† |
+| 2f_top14（ranked dump） | 14 | −33 [−43,−24] | −27 [−34,−16] | **−55 [−67,−43]**† |
+| 2f_top28 | 28 | −37 [−52,−24] | −26 [−32,−16] | **−58 [−68,−47]**† |
 | 2f_top100 | 100 | −32 [−45,−19] | −18 [−32,−4] | −52 [−60,−42] |
 | 2f_top500 | 500 | **+81 [34,151]** | **+44 [28,60]** | −13 [−17,−8] |
 | 2f_slru（full dump） | ~4400 | **+762 [674,899]** | **+730 [644,848]** | −12 [−17,−7] |
@@ -842,14 +842,14 @@ e2e_warm Δ% vs baseline（async、orig、跨 10 seed mean [95% CI]，footprint 
 三個結論：
 
 1. **cost-accounting headline 不靠稻草人**：e2e_warm 隨 dump footprint **單調惡化**——full dump 在 A/B 爆到 **+730 ~ +762%**，唯有**小而排序的 partial dump 才贏**（sweet spot 在 N≈14–28）。「dump 整份」輸的不是 dump 機制本身、而是 **dump 太多**；這正是本研究 cost-accounting 要量化的 deliver trade-off。
-2. **broad workload（A/B）：page-type 非必要**——tuned `2f_topN`（純頻率、零 page-type）在 matched footprint 下**追平** `2e_K10`（A `2e_K10` −38% vs `2f_top28` −37%、B −24% vs `2f_top14` −27%，CI 重疊；first-q 亦同）。與 §5.4.1 ablation 一致：有效的是 **access-frequency**、不是 page-type。
-3. **narrow workload（C）：page-type 仍有價值**——`2e_K10` **−72% [−74,−71]** robustly 勝過 matched `2f_top14` **−57% [−68,−45]**（CI 分離；first-q −81% vs −65% 亦然），且 `2f_top28/100` 加大預算也追不上。機制：C 的 query 很窄，純頻率 top-14 只挑到 **2 個**最 hot 的 interior，而 `2e_K10` 用 page-type 知識**保證載入整個 interior skeleton（4 個）**，在跨 seed 抽樣下對 path coverage 更 robust。
+2. **broad workload（A/B）：page-type 非必要**——tuned `2f_topN`（純頻率、零 page-type）在 matched footprint 下**追平** `2e_K10`（A `2e_K10` −38% vs `2f_top28` −37%、B −24% vs `2f_top14` −27%，CI 重疊；first-q 亦同）。
+3. **narrow workload（C）：修正後 page-type 也不勝**——tie-break 修正後同批（`results/ablation_comp_v2`）`2e_K10` **−55% [−67,−42]** vs matched `2f_top14` **−55% [−67,−43]**（first-q −63% vs −64%）——**CI 幾乎完全重疊、統計不可分**。舊表的「`2e_K10` −72% robustly 勝 `2f_top14` −57%」是 **first-op leakage** 造成的假象（§6.2.8）。
 
-> **綜合**：`2e_K10` **從未被任何 tuned dump 打敗**（broad A/B 打平、narrow C 勝），故 §5.5「targeted > dump」結論**成立且非稻草人勝**。但機制歸因要精確——**勝利主要來自「小 footprint + frequency ranking」（這點 page-type 與純頻率等價），page-type 的額外價值在 narrow workload 下保證 path coverage 的 robustness**。完整表見 [overall_results.md](https://github.com/wongzinc/sqlite-research-project-sharing/blob/main/overall_results.md)「競爭性 baseline」節。
+> **綜合（修正後）**：`2e_K10` 與 tuned dump 在 **A/B/C 全面相當、無一格 robustly 勝**（含修正後的 C）。故 §5.5「targeted > naive full-dump」仍成立且非稻草人勝——**輸的是 dump 太多（deliver）**；但 **type-aware `2e_K10` 沒有證據勝過 footprint-matched 純頻率排名**。機制歸因＝「**小 footprint + frequency ranking**」；page-type 的價值在**保證載入 interior skeleton**（robust、且是 leaf prefetch 生效的前提），不是在 narrow workload 勝過純頻率。完整表見 [overall_results.md](https://github.com/wongzinc/sqlite-research-project-sharing/blob/main/overall_results.md)「競爭性 baseline」節。† C 列同批修正後值。
 
 ![競爭性 baseline：tuned ranked dump vs targeted](figures/out/18_competitive_baseline.png)
 
-*圖 18：competitive baseline（10-seed mean Δ%、bootstrap 95% CI）。x = dump footprint（頁、log）；`2f_topN`（線）= 純頻率 ranked partial dump，`2e_K10`（★）= page-type＋frequency targeted。**右（e2e_warm）**：footprint 一大、deliver 成本就吃掉一切——full dump（~4400 頁）在 A/B 爆到 +700~800%；小而排序的 dump 才在 0 線下。**★ 落在 A/B 的 partial-dump curve 上（page-type 非必要），但 C 的紅★明顯低於紅線（narrow workload 上 page-type 仍勝）**。*
+*圖 18（⚠ C 的 `2e_K10` ★ 為 **pre-fix**、待重生）：competitive baseline（10-seed mean Δ%、bootstrap 95% CI）。x = dump footprint（頁、log）；`2f_topN`（線）= 純頻率 ranked partial dump，`2e_K10`（★）= page-type＋frequency targeted。**右（e2e_warm）**：footprint 一大、deliver 成本就吃掉一切——full dump（~4400 頁）在 A/B 爆到 +700~800%；小而排序的 dump 才在 0 線下。**★ 落在 A/B 的 partial-dump curve 上（page-type 非必要）；C 圖上的紅★偏低是 pre-fix first-op leakage，tie-break 修正後 C `2e_K10 −55%` 與 `2f_top14 −55%` 統計不可分（正文 §5.4.2）**。*
 
 ### 5.5 The preprocessing trade-off （本研究的核心觀察）
 

@@ -294,10 +294,12 @@
 | B | **leaf_rand_K10** | 對照 | 10 | **−2% [−3,−1] robust** | +7% [+6,+8] robust |
 | B | **leaf_freq_K10** | (iii) access-freq | 10 | **−3% [−4,−2] robust** | +6% [+5,+7] robust |
 | B | 2e_K10 | 合併 | 28 | −37% [−43,−28] robust | −26% [−32,−15] robust |
-| C | 2d | (ii) page-type | 4 | −43% [−46,−41] robust | −36% [−38,−34] robust |
-| C | **leaf_rand_K10** | 對照 | 10 | **−2% [−3,−1] robust** | +6% [+5,+7] robust |
-| C | **leaf_freq_K10** | (iii) access-freq | 10 | **−40% [−43,−37] robust** | −32% [−35,−28] robust |
-| C | 2e_K10 | 合併 | 14 | **−81% [−82,−80] robust** | **−73% [−74,−72] robust** |
+| C | 2d | (ii) page-type | 4 | −43% [−46,−41] robust | **−36% [−38,−34] robust** |
+| C | **leaf_rand_K10** | 對照 | 10 | −1% [−2,+1] dir. | **+7% [+6,+10] robust(worse)** |
+| C | **leaf_freq_K10** | (iii) access-freq | 10 | **−11% [−22,−0] robust** | **−3% [−14,+8] tie** |
+| C | 2e_K10 | 合併 | 14 | **−63% [−75,−51] robust** | **−55% [−67,−42] robust·雙峰** |
+
+> **C 列為 tie-break 修正後 `results/ablation_comp_v2`**（其餘 A/B 為 pre-fix 方向性對照）。**修正後 C 的 `leaf_freq_K10` 從舊 −40% 掉到 tie（−3%）**——舊值幾乎全是 first-op leakage（§C_hit / REPORT §6.2.8）。**結論反轉**：page-type(2d −36%) 是 robust 那根;access-frequency leaf-only 只是 tie(且 leaf-only 沒 interior path、只在首查是 not-found probe 時靠最右葉得利);隨機 leaf 淨變慢(+7%)。**競品同批**：C_mixed warm e2e `2e_K10 −54.5% [−66.6,−42.2]` vs 純頻率 `2f_top14 −55.2% [−66.8,−43.2]`／`2f_top28 −58.3%`——**CI 重疊、type-aware 沒有勝過 footprint-matched 頻率排名**（舊「2e 從未被打敗」撤回）。
 
 ### layout ta
 
@@ -318,7 +320,7 @@
 | C | 2e_K10 | 合併 | 58 | −80% [−81,−79] robust | −65% [−67,−64] robust |
 
 **讀法總結:**
-1. **C(tail-region uniform reads)**:`leaf_rand` −2%(對照,無效)vs `leaf_freq` −40%——同 page-type、同 10 張,38 點全是 **access-frequency 訊號**。headline −81% = interior(2d −43%)＋熱 leaf(−40%)疊加。**這是「page-type-aware」命名對不上 headline 的直接證據。**
+1. **C_mixed（tie-break 修正後，`ablation_comp_v2`）**:`leaf_rand_K10` +7%(對照,淨變慢)、`leaf_freq_K10` **−3% e2e_warm（tie）**——**修正後 access-frequency leaf-only 不再是 robust 訊號**（其舊 −40% 幾乎全是 first-op leakage）。robust 的那根是 **page-type `2d`（−36%）**;`2e_K10 −55%` 雙峰且**與 footprint-matched 純頻率 `2f_top14 −55%` 統計不可分**。**pre-fix 的「page-type-aware 命名對不上 headline / 38 點全是 access-frequency」結論已撤回。**
 2. **B(uniform)**:無熱 leaf → `leaf_freq ≈ leaf_rand ≈ 0`,改善全由 **2d(interior, page-type, −36%)** 提供;2e_K10 ≈ 2d。
 3. **A(zipfian)**:居中——leaf_freq_K10 −13%(robust、真有頻率訊號)但主力仍是 2d(−37%);**K=500 的 leaf-only 在 orig 反而 +21%(載 500 散落 leaf 的 deliver 成本壓過紅利)**,且所有 K500 的 `e2e_warm` 皆轉正(+39~114%,deliver ~0.8 ms 吃掉一切)——**access-frequency 的價值在於「小而準」(K=10),不在「多」**。
 4. **layout 槓桿(orig→ta)**:只改 deliver 成本、不改 selection 故事;ta collocate interior 卻使 2d/2e 的 interior 集合變大(C 4→48 頁),warm e2e 反略遜(C 2e_K10 orig −73% vs ta −65%),呼應 §6.1「type-aware layout 非淨贏」。
@@ -336,9 +338,9 @@
 
 | arm（footprint） | A | B | C |
 |---|---:|---:|---:|
-| 2e_K10（targeted, 14–28p） | −50 [−64,−38] | −35 [−42,−25] | −81 [−82,−80] |
-| 2f_top14 | −42 [−52,−35] | −36 [−43,−27] | −65 [−76,−53] |
-| 2f_top28 | −49 [−63,−37] | −37 [−43,−29] | −70 [−80,−59] |
+| 2e_K10（targeted, 14–28p） | −50 [−64,−38] | −35 [−42,−25] | **−63 [−75,−51]**† |
+| 2f_top14 | −42 [−52,−35] | −36 [−43,−27] | **−64 [−76,−52]**† |
+| 2f_top28 | −49 [−63,−37] | −37 [−43,−29] | **−69 [−79,−58]**† |
 | 2f_top100 | −56 [−68,−44] | −41 [−53,−30] | −70 [−80,−60] |
 | 2f_top500 | −16 [−62,+58] | −50 [−63,−37] | −90 [−90,−90] |
 | 2f_slru（full） | −88 [−89,−86] | −89 [−90,−87] | −90 [−90,−90] |
@@ -347,18 +349,19 @@
 
 | arm（footprint） | A | B | C |
 |---|---:|---:|---:|
-| **2e_K10（targeted, 14–28p）** | **−38 [−53,−25]** | **−24 [−31,−12]** | **−72 [−74,−71]** |
-| 2f_top14 | −33 [−43,−24] | −27 [−34,−16] | −57 [−68,−45] |
-| 2f_top28 | −37 [−52,−24] | −26 [−32,−16] | −60 [−69,−49] |
+| **2e_K10（targeted, 14–28p）** | **−38 [−53,−25]** | **−24 [−31,−12]** | **−55 [−67,−42]**† |
+| 2f_top14 | −33 [−43,−24] | −27 [−34,−16] | **−55 [−67,−43]**† |
+| 2f_top28 | −37 [−52,−24] | −26 [−32,−16] | **−58 [−68,−47]**† |
 | 2f_top100 | −32 [−45,−19] | −18 [−32,−4] | −52 [−60,−42] |
 | 2f_top500 | **+81 [+34,+151]** | **+44 [+28,+60]** | −13 [−17,−8] |
 | 2f_slru（full, ~4400p） | **+762 [+674,+899]** | **+730 [+644,+848]** | −12 [−17,−7] |
 
 **讀法：**
 1. **first-q 看 footprint 越大越低**（2f_slru 全載 → −88~90% 最低），但 **e2e_warm 越大越糟**（deliver 成本）——正是 §5.5「first-q ≠ e2e」的 trade-off。sweet spot 在小 footprint（N≈14–28）。
+> † C 列為 **tie-break 修正後同批** `results/ablation_comp_v2`（2e_K10 + 2f_top14/28 背靠背）；A/B 列為 `results/competitive`（其 hotset 未受 tie-break 影響，見 precedence 表）。
 2. **broad A/B**：tuned `2f_topN`（純頻率）在 matched footprint 下 e2e_warm **追平** `2e_K10`（CI 重疊）→ **page-type 非必要**，與 §5.4.1 ablation 一致。
-3. **narrow C**：`2e_K10` −72%[−74,−71] **robustly 勝** matched `2f_top14` −57%[−68,−45]（CI 分離）→ page-type 用「保證載入 interior skeleton」在窄 workload 提供 robustness（純頻率 top-14 只挑到 2 個 interior）。
-4. **結論**：`2e_K10` **從未被 tuned dump 打敗**（A/B 平、C 勝）→ §5.5 非稻草人勝；機制歸因＝「**小 footprint + frequency ranking**」為主、page-type 在 narrow workload 加 robustness。圖見 [figures/out/18_competitive_baseline.png](figures/out/18_competitive_baseline.png)。
+3. **narrow C（修正後翻轉）**：`2e_K10` **−55%[−67,−42]** vs matched `2f_top14` **−55%[−67,−43]**——**CI 幾乎完全重疊、統計不可分**。舊表的「2e_K10 −72% robustly 勝 2f_top14 −57%」是 **first-op leakage** 造成的假象（§6.2.8）；修正後**沒有證據 type-aware `2e_K10` 勝過 footprint-matched 純頻率排名**。
+4. **結論（修正後）**：`2e_K10` 與 tuned dump 在 A/B/C **全面相當**（無一格 robustly 勝）→ 機制歸因＝「**小 footprint + frequency ranking**」；page-type 的價值在**保證載入 interior skeleton**（robust、且是 leaf prefetch 生效的前提），**不是**在 C 上勝過純頻率。⚠ [figures/out/18_competitive_baseline.png] 為 pre-fix、待重生。
 
 ## Prior-art baselines v2（在同一 harness 重現 libprefetch / learned 核心）
 
