@@ -71,19 +71,19 @@ open；**對應 scale-from-zero 的冷容器**）作為對照——在 standalon
 
 本研究環繞四個 research question，對應前述兩大挑戰（targeting / cost-accounting）：
 
-- **RQ1（targeting）**：cold-start cost 集中在哪些 page？只針對 page type（B+tree interior）做 prefetch，first-query latency 能省多少？
-- **RQ2（cost-accounting）**：把 prefetch 自身的 preprocessing overhead 算進去後，end-to-end cold-start 是否仍改善？在什麼條件下贏、什麼條件下反而變差？
-- **RQ3（selection vs delivery）**：prefetch 效益可拆成「選對哪些 page（selection）」與「真的把 page 載進 cache（delivery）」；async `madvise` hint 在 first-query 之前實際交付多少？與強制載入（pread oracle）差多少？
-- **RQ4（robustness）**：上述效益在 write churn 造成的 layout 漂移、RAM 壓力（cgroup）、多 process 共享 cache 下是否穩定？
+- **RQ1（mandatory structure + conditional leaf value）**：哪些 page 構成 cold-start 的**必經 navigation skeleton**（B+tree interior）？在什麼 access distribution 下，**在 skeleton 之外**再加 leaf-frequency selection 才提供增量效益？
+- **RQ2（cost-accounting / e2e）**：把 prefetch 自身的 preprocessing overhead（open + deliver）算進去後，哪些策略真的降低 **end-to-end** cold-start（不只 first-query）？在什麼條件下贏、什麼條件下反而變差？
+- **RQ3（selection vs delivery）**：效益有多少來自「選對哪些 page（selection）」、多少取決於「交付機制與順序（delivery）」？async `madvise` hint 在 first-query 之前實際交付多少、與 pread oracle 及 delivery-order 對照差多少？
+- **RQ4（robustness / staleness）**：上述效益在 layout 變化、RAM 壓力、DB 放大、多 process 重用、write aging、與 **hotspot 漂移**下如何變化？（明確區分 **write churn** 與 **hotspot 非平穩性**兩種不同的 staleness。）
 
 下列貢獻 C1–C4 與 §3.5 的 selection–delivery 拆解共同回應這四個問題。
 
 本文的主要貢獻如下（完整數據見 §5）：
 
-- **(C1) Type-aware layout rewriter**：實作並驗證在 binary 層級reorder SQLite
-  file 並修補所有 page-number reference 的可行性與正確性。實驗下structural
+- **(C1) Type-aware layout rewriter（作為 design alternative 評估、非 flagship）**：實作並驗證在 binary 層級 reorder SQLite
+  file 並修補所有 page-number reference 的可行性與正確性。實驗下 structural
   prefetch(layers_5)在 A 取得 **first-query −27%**(523→382 µs);**e2e 取決於部署模型**——
-  warm-process(integrated)下 e2e −14%、standalone(含冷 open)下反而 +30%(見 C3)。
+  warm-process(integrated)下 e2e −14%、standalone(含冷 open)下反而 +30%(見 C3)。**逐格最佳 warm e2e 一律落在 orig(1a)+access-pattern；1c 沒有一格贏過 orig**，故本研究把 layout rewriter 定位為**評估過的 design alternative / negative result**、非推薦的 default stack（普適的 robust 贏面是 C2 的 interior skeleton）。
 - **(C2) 兩個 selection 槓桿的分工——page-type 普適、access-frequency 需熱點**：基於 `mincore()`
   snapshot 的 targeted prefetch 用**極少 syscall** 取得 first-query **−31 ~ −83%**。**穩健且普適的贏面是
   page-type-aware 的 interior skeleton**：uniform workload B 上與 blind-load 全部 interior 相當(皆約
