@@ -223,3 +223,4 @@ results/**/work/
 results/**/regen_work/
 results/**/*.db
 results/**/chunks_*/
+strategies/access/runs/legacy_same_trace_first_seen_tiebreak/hot2e_*.csv
