@@ -51,7 +51,7 @@ repo 現階段使用的 workload、每個模擬什麼情境、以及分布指紋
 
 **模擬：** 無熱點的 OLTP/批次掃描（逐筆檢查、隨機 sampling）。**uniform 讀把 first-query 機率攤到大量 leaf** → 小 leaf hotset 的**期望覆蓋率低**、leaf fault 不可避免、攤薄 targeted prefetch 效益（量 prefetch 的**下界**;所有頁在首查前皆 cold）。
 
-## Workload C — Mixed Tail-boundary Lookup（~50% not-found）
+## Workload C（C_mixed）— Mixed Tail-boundary Lookup（~50% not-found）
 
 **規模：** 100,000 ops 全 `read`。**Key：** id ∈ [590000, 609999]（20,000 unique，每 id 平均 5 次）。**分佈：** 均勻。
 
@@ -65,19 +65,19 @@ repo 現階段使用的 workload、每個模擬什麼情境、以及分布指紋
 
 **用途：** C 的 pure-hit 控制——**同 20k key-space、同 tail-region locality、同 uniform ×5 結構，唯一差別是把 range 收進 DB 範圍**，移除 C 那 ~50% not-found 高 key 造成的最右葉超熱點。回答：「拿掉 not-found 集中後，frequency-aware prefetch 還有效嗎？」
 
-**結果（orig，10 seeds × 10 reps，`results/c_hit/`，跨 seed warm-process e2e、皆 robust）：**
+**結果（orig，10 seeds × 10 reps，跨 seed warm-process e2e、皆 robust；`2e_K10` 為 tie-break 修正後 `results/c_hit_v2`，其餘 `results/c_hit`）：**
 
 | strategy | e2e_warm | 這是什麼 |
 |---|---:|---|
 | 2d（interior only）| **−28.5%** [−34.9,−19.6] | interior skeleton |
-| 2f_top14（freq leaf, page tie-break）| **−30.6%** [−37.1,−22.4] | 真實 frequency |
-| learned_markov_14（LOSO held-out）| **−29.0%** [−36.1,−19.4] | 真實、無 leakage |
-| **2e_K10（freq leaf, insertion tie-break）**| **−69.6%** [−73.6,−64.2] | **tie-break artifact** |
+| 2f_top14（freq, page tie-break）| **−30.6%** [−37.1,−22.4] | 真實 frequency |
+| learned_markov_14（LOSO held-out）| **−29.0%** [−36.1,−19.4] | held-out |
+| **2e_K10（tie-break 修正後）**| **−27.2%** [−34.6,−17.7] | **== interior skeleton** |
 | 2f_slru | +76.5% | deliver trap |
 
-- **C 的 −75% 是 not-found 驅動**：pure hit 上穩健效益回落到 **interior skeleton ~−30%**；frequency leaf 相對 interior-only 只多 ~2 點（**uniform tail 無真實 leaf 熱點**）。
-- **`2e_K10` −70% 是 tie-break artifact**：C_hit 每葉 count 打平（~150），`gen_hotleaves` 的 `Counter.most_common` 用 **insertion-order tie-break → 最早出現的 K 葉 → 恰含被測 first-op 葉**。10-fold coverage（`results/loso/coverage_c_hit.csv`）：first-op 覆蓋 **2e_K10 10/10 vs 2f_top14/learned/frequency 0/10**。LOSO-held-out 無此對齊、給誠實 −30%。
-- **三段機制 B → C_hit → C → A**：B（global uniform，無熱點）→ C_hit（tail-local uniform，仍無熱點、interior 撐 −30%）→ C（mixed，not-found 最右葉成真實熱點 −75%）→ A（Zipfian，真實 skew −36%）。**access-frequency leaf 只在有真實熱點時生效；page-type interior skeleton 才是普適 robust 贏面。** 完整見 [`results/c_hit/FINDINGS.md`](results/c_hit/FINDINGS.md)。
+- **C 的大效益是 not-found 驅動**：pure hit 上穩健效益是 **interior skeleton ~−28%**；frequency leaf 相對 interior-only 幾乎不加分（**uniform tail 無真實 leaf 熱點**）。
+- **`2e_K10` 的舊 −69.6% 是 first-op leakage，已修正**：C_hit 每葉 count 打平（~150），舊 `gen_hotleaves` 的 `Counter.most_common` 用 insertion-order tie-break → 最早出現的 K 葉 → 恰含被測 first-op 葉（10-fold coverage `results/loso/coverage_c_hit.csv`：2e_K10 10/10 vs 2f_top14/learned/frequency 0/10）。改成 `(-count, pageno)` deterministic tie-break（commit `de4490f`）後 `2e_K10` = **−27.2%**，落進 interior-skeleton band。
+- **三個 access regime**：無真實 leaf 熱點（**B、C_hit**）→ interior skeleton ~−25~28%，frequency leaf 不加分；真實 skew（**A**）→ frequency leaf 加分（2e_K10 −36%）；key-range 集中（**C mixed** 的 not-found probe）→ 最右葉超熱、~−70%。C（mixed）整體 = hit(regime 1)/miss(regime 3) first-op 混合 → 雙峰 −55%。**page-type interior skeleton 才是普適 robust 贏面。** 完整見 [`results/c_hit/FINDINGS.md`](results/c_hit/FINDINGS.md)、`results/c_hit_v2`、`results/tiebreak_fix`。
 
 ## Workload D — Mixed Write-heavy Churn Generator
 

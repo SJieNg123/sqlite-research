@@ -1,5 +1,13 @@
 # C_hit control — findings
 
+> **UPDATE (commit de4490f + a493768): the 2e_K10 tie-break was subsequently FIXED, not just
+> disclosed.** `gen_hotleaves` now ranks by `(-count, pageno)` (trace-order-independent;
+> regression test). After the fix + rerun (`results/c_hit_v2`, `results/tiebreak_fix`):
+> **C_hit 2e_K10 = −27.2% [−34.6,−17.7]** (== interior skeleton, artifact gone);
+> **C (mixed) 2e_K10 cross-seed = −55% [−67,−43]**, bimodal (miss-first-op ~−70% genuine
+> rightmost-leaf hotspot; hit-first-op ~−31% interior). The analysis below describes the
+> PRE-FIX artifact that motivated the fix; the mechanism conclusions still hold.
+
 **Question.** C's headline (2e_K10 e2e_warm −75%) is now known to sit on top of a
 key-range artifact: C's range [590000,609999] exceeds the DB max id 600000, so ~50%
 of its queries are not-found high-key lookups that all descend the right edge to the

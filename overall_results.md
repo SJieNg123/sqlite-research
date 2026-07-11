@@ -385,12 +385,14 @@ C_hit（`id∈[580001,600000]`、同 20k key-space、tail locality、uniform ×5
 | 2d（interior only）| −36.6% | **−28.5%** [−34.9,−19.6] | interior skeleton |
 | 2f_top14（freq, page tie-break）| −39.9% | **−30.6%** [−37.1,−22.4] | 真實 frequency |
 | learned_markov_14（LOSO）| −38.2% | **−29.0%** [−36.1,−19.4] | 真實、無 leakage |
-| **2e_K10（freq, insertion tie-break）**| −79.0% | **−69.6%** [−73.6,−64.2] | **tie-break artifact** |
+| **2e_K10（tie-break 修正後）**| −36.6% | **−27.2%** [−34.6,−17.7] | **== interior skeleton** |
 | 2f_slru | −88.8% | +76.5% | deliver trap |
 
-- **C 的 −75% 是 not-found 驅動**：pure hit 上穩健效益回落到 **interior skeleton ~−30%**；frequency leaf 對 interior-only 只多 ~2 點（uniform tail 無真實 leaf 熱點）。
-- **`2e_K10` −70% 是 tie-break artifact**：leaf count 打平（~150）→ `gen_hotleaves` 的 `Counter.most_common` insertion-order tie-break → 最早出現的 K 葉 → 恰含被測 first-op（`gen_freqdump` 用 page-number tie-break 則不追）。10-fold coverage `results/loso/coverage_c_hit.csv`：first-op 覆蓋 **2e_K10 10/10 vs 2f_top14/learned/frequency 0/10**（LOSO-held-out 無對齊 → 誠實 −30%）。
-- **三段機制 B→C_hit→C→A**：page-type interior skeleton 普適 robust；access-frequency leaf 只在有真實熱點（A skew、C not-found 集中）時生效。報普適值用 2d/learned（~−30%），非 2e_K10。完整 [`results/c_hit/FINDINGS.md`](results/c_hit/FINDINGS.md)。
+> `2e_K10` 為 tie-break 修正後 `results/c_hit_v2`；其餘列 `results/c_hit`（其 hotset 修正前後不變）。
+
+- **C 的大效益是 not-found 驅動**：pure hit 上穩健效益是 **interior skeleton ~−28%**；frequency leaf 對 interior-only 幾乎不加分（uniform tail 無真實 leaf 熱點）。
+- **`2e_K10` 的舊 −69.6% 是 first-op leakage，已修正**：leaf count 打平（~150）→ 舊 `gen_hotleaves` 的 `Counter.most_common` insertion-order tie-break → 最早出現的 K 葉 → 恰含被測 first-op（`gen_freqdump` 用 page-number tie-break 則不追）。10-fold coverage `results/loso/coverage_c_hit.csv`：first-op 覆蓋 **2e_K10(舊) 10/10 vs 2f_top14/learned/frequency 0/10**。改成 `(-count, pageno)` tie-break（commit `de4490f`）後 `2e_K10` = **−27.2%**（== 2d/learned）。
+- **三個 access regime**：無真實 leaf 熱點（B、C_hit）→ interior skeleton ~−28%、frequency leaf 不加分；真實 skew（A）→ frequency leaf 加分（2e_K10 −36%）；key-range 集中（C mixed 的 not-found probe）→ 最右葉超熱 ~−70%。C（mixed）整體 = hit/miss first-op 混合 → 雙峰 −55% [−67,−43]（`results/tiebreak_fix`）。**page-type interior skeleton 才是普適 robust 贏面。** 完整 [`results/c_hit/FINDINGS.md`](results/c_hit/FINDINGS.md)。
 
 ## RAM-pressure（cgroup MemoryMax=20M / unlimited 比值,async first-q）
 
@@ -781,6 +783,6 @@ orig 欄取自已 commit 的 [`results/stats/uncertainty.csv`](results/stats/unc
 **13/18 一致;5 個 ⚠ 全部集中在窄域 workload C**(以及 A/layers_5 那格其實是 orig=tie→1gb 變乾淨,非真矛盾)。原因一致:**C 的 working set 隨 DB 變大而膨脹**(resident set 483→984 page),deliver 成本翻倍,把幾個「靠少量 deliver 取勝」的策略由贏轉輸,且跨 10 seed `robust`(非雜訊):
 - **`2f_slru/C`:−9% → +139%**——100MB 唯一能讓 2f 在 e2e 取勝的格,到 1GB 確定變成大輸。
 - **`2e_K500/C`:−31% → +35%**、**`layers_92/C`:−21% → +7%**——同樣由贏轉小輸。
-- 對照:小 hotset 的 `2d`/`2e_K10` 兩尺寸 e2e 都穩贏(C 2e_K10 −70%/−68%),size-robust。
+- 對照:小 hotset 的 `2d`/`2e_K10` 兩尺寸 e2e 都穩贏(C 2e_K10 −70%/−68%,此為 1gb size-sweep 的 pre-fix 值;C 2e_K10 現知為 not-found 雙峰、§6.2.8,但 size-robust 結論不受影響),size-robust。
 
 **結論(對齊後)**:① **冷啟動 first-query 的效益 size-robust**——18/18 跨尺寸方向一致、1gb 全 robust。② **部署 e2e 的 size 敏感性集中在窄域 workload**:DB 變大會放大 working set→deliver,使 `2f_slru`/`2e_K500`/`layers_92` 在 C 由贏轉輸(robust);**小而準的 hotset(2d / 2e_K10)是唯一兩尺寸 e2e 都穩贏的策略**。
