@@ -3,14 +3,29 @@
 本檔列出**每個策略 × 每個 workload × 每個 layout 的 實驗結果**（對照
 [overall_workloads.md](overall_workloads.md) 的 workload 定義）。
 
-> 本檔所有數字來自 **統一 pipeline**（`run_experiment.py` 家族,全 cell `cold_pct`=0）。**A/B/C 主矩陣（master batch + 全策略首查表）為 canonical v2 批** `results/unified_v2/`；Z、N/K-sweep、RAM、churn、cadence、size 等仍為各自原批（`results/main*/` 等），跨批只比相對量（impr% / 跨-seed Δ% / ratio），絕對 µs 不跨批逐格對（見「資料可比性」）。
+> 本檔所有數字來自 **統一 pipeline**（`run_experiment.py` 家族,全 cell `cold_pct`=0）。跨批只比相對量（impr% / 跨-seed Δ% / ratio），絕對 µs 不跨批逐格對（見「資料可比性」）。
+
+### Canonical source precedence（tie-break 修正後）
+
+**Replacement is atomic at `(workload, layout, strategy, seed)` scope**：修正後的 strategy 結果、它的 same-seed baseline、以及 machine anchor（`2f_slru`）**取自同一個 rerun batch**——不跨批拼裝。逐格 canonical 來源依下表優先序：
+
+| cell 類型 | canonical source |
+|---|---|
+| A/B/C 主矩陣 · tie-break **未受影響** cells | `results/unified_v2/matrix` |
+| tie-break **受影響** single-instantiation cells（(A,2e_K500)/(B,2e_K10)/(B,2e_K500)/(C,2e_K10)）| `results/tiebreak_fix/master` |
+| tie-break **受影響** cross-seed cells（同上）| `results/tiebreak_fix/seeds` |
+| **C_hit `2e_K10`**（tie-break 修正後）| `results/c_hit_v2` |
+| **C_hit** 其他 arms（2d/2f_top14/learned，hotset 未變）| `results/c_hit` |
+| C_mixed ablation + competitive（tie-break 修正後）| `results/ablation_comp_v2` |
+| Z / N-K-sweep / RAM / churn / cadence / size | 各自原批（`results/{z,nsweep,ksweep,ram_pressure,cadence,size_1gb}`）|
+| **舊 first-seen tie-break**（`gen_hotleaves` 修正前）| **archived, non-canonical**（`legacy_same_trace_first_seen_tiebreak`）|
 > Workload D 是 churn generator,無自身 latency 結果。
 >
 > **Preprocessing 計入 e2e（兩個部署模型）**:preprocessing 拆成 **open(db)(冷開 DB ~200µs,per-layout 常數)**
 > 與 **deliver(逐頁 madvise/pread,隨 hotset)**。`e2e_warm` = deliver+fq(warm-process/integrated,
 > 重用既有 handle、不付冷 open;≈ static `effective_first_query`,**本研究主張**);`e2e_std` = open+deliver+fq
 > (standalone warmer)。**2f_slru first-query 最低(−79~91%)但 deliver ~0.8–7ms 使 e2e 多半輸**;
-> targeted prefetch(layers_5 / 2d / 2e_K10)deliver 小,**warm-process e2e 三 workload 皆改善**(尤其 C × 2e_K10 −73%)。
+> targeted prefetch(layers_5 / 2d / 2e_K10)deliver 小,**warm-process e2e 三 workload 皆改善**——普適贏面是 interior skeleton `2d`（robust ~−25~28%）;C(mixed)× 2e_K10 single-seed −75%、跨 seed −55% 雙峰、pure-hit C_hit −27~30%（scoped,見「C_hit」節）。
 > 視覺化:[figures 13/14](figures/out/13_strategy_firstq_bars.png)。
 > 完整執行覆蓋見 [IMPLEMENTATION_PIPELINES.md §3.8](IMPLEMENTATION_PIPELINES.md)。
 
@@ -101,7 +116,7 @@
 | ta | 2e_K500 | 608 | 21% | 38 | 1633 | 1403 | 548 |
 | ta | 2f_slru | 106 | 86% | 100 | 7596 | 7359 | 111 |
 
-### Workload C (High-key / tail-region uniform point reads)
+### Workload C (C_mixed) — Mixed Tail-boundary Lookup (~50% not-found)
 
 | layout | strategy | fq_async | impr% | deliv% | e2e_std | e2e_warm | oracle(pread) |
 |---|---|--:|--:|--:|--:|--:|--:|
@@ -584,7 +599,7 @@ C_hit（`id∈[580001,600000]`、同 20k key-space、tail locality、uniform ×5
 
 ## 資料來源
 
-- 主矩陣:[`results/main/summary.csv`](results/main/summary.csv)、Z:[`results/z/`](results/z/summary.csv)
+- **主矩陣（canonical）:[`results/unified_v2/matrix/summary.csv`](results/unified_v2/matrix/summary.csv)**；tie-break 修正後受影響 cell:`results/tiebreak_fix`、`results/c_hit_v2`（見文件開頭 provenance precedence 表）。Z:[`results/z/`](results/z/summary.csv)。legacy 單批（pre-canonical）:`results/main/summary.csv`
 - DB 尺寸 scaling(orig vs 1gb,seed-1):[`results/size_1gb/`](results/size_1gb/summary.csv)
 - DB 尺寸 × 跨-seed(1gb,A/B/C × 10 seed):[`results/seeds_1gb/`](results/seeds_1gb/) → [`results/stats/uncertainty_1gb.csv`](results/stats/uncertainty_1gb.csv)(腳本 `tools/run_seed_sweep_1gb.sh` + `tools/stats_uncertainty.py`)
 - N-sweep:[`results/nsweep_dense/`](results/nsweep_dense/summary.csv)、K-sweep:[`results/ksweep/`](results/ksweep/summary.csv)

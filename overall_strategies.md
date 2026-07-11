@@ -160,15 +160,19 @@
 
 ---
 
-## 組合策略 — 目前最佳堆疊
+## 組合策略 — 條件式建議（沒有單一最佳堆疊）
+
+跨 seed 校正 + tie-break 修正後，**沒有單一「最佳堆疊」**：type-aware layout 在目前矩陣中被 **orig + access-pattern 支配**（逐格最佳 warm e2e 一律落在 1a orig，§6.2/REPORT §6.1），而 `2e_K10` 的 leaf 加分**只在已驗證存在真實 leaf hotspot 時**才有效。故建議為條件式：
 
 ```
-Layout:   type-aware (1c)   ← scatter 0.00
-Prefetch: 2e_K10            ← C 上 first-q −83% / e2e_warm 268 µs（−75%）
-Memory:   MAP_SHARED (4a)   ← 多 process 自動受惠
+Layout:   orig (1a)             ← 預設；type-aware 未淨贏（抬高 leaf-fault baseline）
+Prefetch: 2d interior skeleton  ← 預設；三 workload robust ~−25~28% warm e2e
+  + top-K leaves (2e_K10)       ← 僅在「已驗證的穩定 skew」時加（如 A 的 Zipfian，−25%→−36%）
+  moving hotspot / read-latest  ← 改用 structural coverage 或週期性 refresh hotset（§6.2.7）
+Memory:   MAP_SHARED (4a)       ← 多 process 自動受惠（prefetch 成本 O(1)、效益 O(N)）
 ```
 
-慢 workload C 上 2e_K10 把 first-q 從 1087 → ~185 µs（**−83%**）、warm-process e2e **268 µs（−75%）**，且少數 prefetch syscall 可由任一 process 出資、整個 fleet 共享。
+**注意**：C（mixed）single-inst 的 `2e_K10` −75% 是 not-found 熱點 + seed-1 巧合，跨 seed 為 −55% 雙峰（§6.2.8）——不是通用推薦 `2e_K10` 的理由；一般 tail-read 用 `2d` interior skeleton。少數 prefetch syscall 可由任一 process 出資、整個 fleet 共享。
 
 ---
 

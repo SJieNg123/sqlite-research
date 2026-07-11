@@ -97,10 +97,15 @@ repo 現階段使用的 workload、每個模擬什麼情境、以及分布指紋
  prefetch 能解決      prefetch 解決不了（workload-dependent）
 ```
 
-- **A（Zipfian）** 壓低 leaf fault（leaf 自然熱）→ interior 成唯一瓶頸 → prefetch **上界效益**。
-- **B（uniform）** 放大 leaf fault → prefetch 只能解 interior → **下界效益**。
-- **C（high-key）** 同 B 分佈但鎖檔尾，配合 D 量 **layout 漂移**隨時間的影響。
+（注:每個 cold-start trial 前均 drop caches → 首查時 interior 與 leaf **皆 cold**;以下講的是「小 leaf hotset 能否覆蓋首查」而非「leaf 是否已 warm」。）
+
+- **A（Zipfian skew）** first-query 機率集中在少數 leaf → **小的 frequency leaf hotset 覆蓋率高** → access-frequency 有額外收益（2e_K10 把 A 從 2d 的 −25% 推進到 −36%）。
+- **B（global uniform）** first-query 機率攤到大量 leaf → **無 leaf hotspot、小 leaf hotset 期望覆蓋率低** → 靠 interior skeleton（2d −25%），量 targeted prefetch 的 **下界**。
+- **C_hit（pure-hit uniform tail）** tail-local uniform hits → **仍無真實 leaf hotspot** → interior skeleton 主導（2d/learned/修正後 2e_K10 ~−28%）；frequency leaf 幾乎不加分。
+- **C_mixed（mixed tail-boundary）** range 超出 DB max key → ~50% not-found 高 key **匯聚到最右葉** → 造成 key-range 的 rightmost-leaf 集中（首查是 not-found probe 時 2e_K10 可達 ~−70%，跨 seed 雙峰 −55%）；亦配合 D 量 **layout 漂移**。
 - **D** 不為 latency，純製造寫入歷史讓 layout 偏離乾淨狀態。
+
+四者正好覆蓋三個 access regime：**無真實 leaf 熱點（B、C_hit）→ interior skeleton;真實 skew（A）→ frequency 加分;key-range 集中（C_mixed）→ not-found 匯聚**。
 
 ---
 
