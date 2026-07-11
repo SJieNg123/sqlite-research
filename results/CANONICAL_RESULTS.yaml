@@ -1,0 +1,255 @@
+schema_version: 1
+
+generated:
+  git_commit: 9d8f5fed3828fbc2a26d00dd6f530a24cc9b3015
+  branch: main
+  generated_at_utc: "2026-07-11T14:02:34Z"
+  note: >
+    Provenance freeze (Phase 0). Records the single canonical result source per
+    (workload, layout, strategy, seed) cell after the tie-break leakage fix.
+    Data-file workload labels are A / B / C / C_hit; the display name for data
+    label "C" is "C_mixed" (see terminology). No raw CSV was modified to produce
+    this manifest.
+
+# ---------------------------------------------------------------------------
+# Canonical result sources. Each entry lists the machine-usable summary CSV and
+# the exact scope it covers. Batches with non-overlapping scope are NOT ranked
+# against each other; overriding only happens where scopes overlap and is made
+# explicit in `superseded_cells` below.
+# ---------------------------------------------------------------------------
+canonical_sources:
+
+  main_matrix:
+    path: results/unified_v2
+    summary_csv: results/unified_v2/matrix/summary.csv
+    raw_csv: results/unified_v2/matrix/raw.csv
+    canonical: true
+    scope:
+      workloads: [A, B, C]        # data label C == C_mixed (display)
+      layouts: [orig, vacuum, ta]
+      strategies: [baseline, layers_5, layers_92, 2d, 2e_K10, 2e_K40, 2e_K92, 2e_K500, 2f_slru]
+      seeds: single_instantiation  # master (seed-1 stream), not a cross-seed batch
+    note: >
+      Canonical source for main-matrix cells NOT superseded by a
+      tie-break-corrected atomic rerun (see superseded_cells).
+
+  prior_art:
+    path: results/baselines_v2
+    summary_csv: results/baselines_v2/summary.csv
+    raw_csv: results/baselines_v2/raw.csv
+    canonical: true
+    scope:
+      workloads: [A, B, C]
+      layouts: [orig]
+      strategies: [baseline, lp_sorted, lp_shuf, learned_markov_14, learned_markov_28, 2f_top14, 2f_top28, 2e_K10, 2f_slru]
+      seeds: single_instantiation  # test seed 1 (LOSO measured on the master)
+    note: >
+      Same-harness prior-art comparison batch (libprefetch delivery-order arms
+      and the Chen-inspired first-order Markov transition baseline), including
+      the shared 2f_slru anchor. Not affected by the leaf tie-break change
+      (freqdump / learned use their own deterministic ordering).
+
+  aging:
+    path: results/aging_v2
+    summary_csv: results/aging_v2/aging_ci.csv
+    canonical: true
+    scope:
+      workloads: [YD, YE]
+      layouts: [orig]
+      strategies: [baseline, 2e_K10_static, layers_92_static]
+      seeds: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+      checkpoints: 11              # ck0..ck10 (10 aging increments)
+    note: >
+      Cross-seed self-aging results with per-checkpoint probes and bootstrap
+      confidence intervals. Independent workload axis; does not overlap the
+      main matrix.
+
+  tiebreak_corrected_master:
+    path: results/tiebreak_fix
+    summary_csv: results/tiebreak_fix/master_summary.csv
+    raw_csv: results/tiebreak_fix/master_raw.csv
+    canonical: true
+    scope:
+      workloads: [A, B, C]
+      layouts: [orig, vacuum, ta]
+      strategies: [2e_K10, 2e_K40, 2e_K50, 2e_K92, 2e_K100, 2e_K500, 2f_slru]
+      seeds: single_instantiation
+    note: >
+      Corrected single-instantiation cells whose selected hotset changed after
+      replacing insertion-order tie-breaking with (count desc, page asc). Each
+      run carries its own same-batch baseline + 2f_slru anchor. Only the changed
+      cells (see superseded_cells) supersede main_matrix.
+
+  tiebreak_corrected_seeds:
+    path: results/tiebreak_fix/seeds
+    summary_csv: results/tiebreak_fix/uncertainty.csv   # cross-seed CI over seeds/seed*/summary.csv
+    canonical: true
+    scope:
+      workloads: [A, B, C]
+      layouts: [orig, vacuum, ta]
+      strategies: [2e_K10, 2e_K500, 2f_slru]
+      seeds: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    note: >
+      Corrected cross-seed cells with same-batch baseline and machine anchor.
+      Only the changed cells (see superseded_cells) supersede the pre-fix
+      cross-seed batch (results/seeds, non-canonical).
+
+  pure_hit_control_base:
+    path: results/c_hit
+    summary_glob: results/c_hit/seed*/summary.csv
+    readme: results/c_hit/FINDINGS.md
+    canonical: true
+    scope:
+      workloads: [C_hit]
+      layouts: [orig]
+      strategies: [2d, layers_92, 2f_top14, 2f_top28, learned_markov_14, learned_markov_28, 2f_slru]
+      seeds: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    note: >
+      C_hit pure-hit uniform-tail control, for strategies UNAFFECTED by the
+      tie-break correction. The 2e_K10 / 2e_K500 columns in this batch are the
+      pre-fix (leaky) hotsets and are superseded by pure_hit_control_corrected.
+
+  pure_hit_control_corrected:
+    path: results/c_hit_v2
+    summary_glob: results/c_hit_v2/seed*/summary.csv
+    summary_csv: results/c_hit_v2/uncertainty.csv
+    canonical: true
+    scope:
+      workloads: [C_hit]
+      layouts: [orig]              # orig-only; no layout-robustness claim
+      strategies: [2e_K10, 2e_K40, 2e_K92, 2e_K500, 2f_slru]
+      seeds: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    note: >
+      Corrected C_hit cells affected by the tie-break change (2e_K* recomputed
+      with the deterministic tie-break). orig-only.
+
+  cmixed_ablation_competitive:
+    path: results/ablation_comp_v2
+    summary_csv: results/ablation_comp_v2/uncertainty.csv
+    canonical: true
+    scope:
+      workloads: [C]              # C == C_mixed
+      layouts: [orig]
+      strategies: [2d, leaf_rand_K10, leaf_freq_K10, 2e_K10, 2f_top14, 2f_top28, 2f_slru]
+      seeds: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    note: >
+      Same-batch, post-fix three-lever ablation + competitive comparison on
+      C_mixed / orig. Canonical for the C/orig ablation (2d, leaf_rand, leaf_freq,
+      2e_K10) and competitive (2e_K10 vs 2f_top14/28) cells; supersedes the
+      pre-fix results/ablation and results/competitive C/orig cells.
+
+  legacy_first_seen_tiebreak:
+    path: strategies/access/runs/legacy_same_trace_first_seen_tiebreak
+    readme: strategies/access/runs/legacy_same_trace_first_seen_tiebreak/README.md
+    canonical: false
+    prohibited_for_headline_claims: true
+    note: >
+      Archived first-seen / insertion-order tie-break hotset artifacts (pre-fix).
+      May be cited only for provenance or debugging history and must be labeled
+      legacy. Must never be a headline number, canonical table, current strategy
+      recommendation, or figure input.
+
+# ---------------------------------------------------------------------------
+# How to assemble a canonical value for any cell.
+# ---------------------------------------------------------------------------
+replacement_policy:
+
+  atomic_unit:
+    - workload
+    - layout
+    - strategy
+    - seed
+
+  rule: >
+    When a cell is superseded by a corrected rerun, the corrected strategy
+    measurement, its paired same-seed baseline, and its machine-state anchor
+    (2f_slru) must ALL come from the same rerun batch. Values must not be
+    assembled across different batches. Absolute microseconds must not be
+    compared across machine-state batches; relative metrics (impr% / cross-seed
+    Δ% / ratio) must use that batch's own paired baseline.
+
+  # Precedence is only meaningful where scopes OVERLAP; the authoritative,
+  # machine-readable overrides are the explicit selectors in superseded_cells.
+  precedence:
+    - results/tiebreak_fix/seeds
+    - results/tiebreak_fix
+    - results/c_hit_v2
+    - results/ablation_comp_v2
+    - results/c_hit
+    - results/unified_v2
+    - results/baselines_v2
+    - results/aging_v2
+
+  legacy_fallback_allowed: false
+
+# ---------------------------------------------------------------------------
+# Explicit, machine-readable supersession selectors (from the impact audit —
+# hotset resident-page diff of legacy vs regenerated). Do NOT infer beyond these.
+# ---------------------------------------------------------------------------
+superseded_cells:
+
+  - id: main_matrix_singleinst_tiebreak
+    source: results/unified_v2
+    replaced_by: results/tiebreak_fix          # master_summary.csv
+    scope: single_instantiation
+    selector:
+      layouts: [orig, vacuum, ta]
+      by_workload:
+        A: [2e_K500]
+        B: [2e_K10, 2e_K40, 2e_K92, 2e_K500]
+        C: [2e_K10, 2e_K40, 2e_K92]
+    reason: tie_break_changed_selected_hotset
+
+  - id: cross_seed_tiebreak
+    source: results/seeds                       # pre-fix cross-seed (non-canonical)
+    replaced_by: results/tiebreak_fix/seeds
+    scope: cross_seed
+    selector:
+      layouts: [orig, vacuum, ta]
+      by_workload:
+        A: [2e_K500]
+        B: [2e_K10, 2e_K500]
+        C: [2e_K10]
+    reason: tie_break_changed_selected_hotset
+
+  - id: c_hit_tiebreak
+    source: results/c_hit
+    replaced_by: results/c_hit_v2
+    scope: cross_seed
+    selector:
+      workloads: [C_hit]
+      layouts: [orig]
+      strategies: [2e_K10, 2e_K40, 2e_K92, 2e_K500]
+    reason: tie_break_changed_selected_hotset
+
+  - id: c_mixed_ablation_competitive_tiebreak
+    source: [results/ablation, results/competitive]
+    replaced_by: results/ablation_comp_v2
+    scope: cross_seed
+    selector:
+      workloads: [C]
+      layouts: [orig]
+      strategies: [2d, leaf_rand_K10, leaf_freq_K10, 2e_K10, 2f_top14, 2f_top28]
+    reason: tie_break_changed_selected_hotset
+
+# ---------------------------------------------------------------------------
+terminology:
+
+  C_mixed:
+    data_label: C
+    description: mixed tail-boundary lookup
+    approximately_not_found_fraction: 0.5
+
+  C_hit:
+    data_label: C_hit
+    description: pure-hit uniform-tail control
+    evaluated_layouts: [orig]
+    claims_layout_robustness: false
+
+  corrected_leaf_tiebreak:
+    applies_to: [2e_K10, 2e_K40, 2e_K50, 2e_K92, 2e_K100, 2e_K500, leaf_freq_K10, leaf_rand_K10]
+    ordering:
+      - count_descending
+      - page_number_ascending
+    trace_order_independent: true
+    fixed_in_commit: de4490f
