@@ -8,13 +8,23 @@ re-running the matrix under many seeds measures workload sensitivity.
 
 Usage:
     gen_workload.py <type> <seed> <out>
-    <type> in {A, B, C, Z, CHURN, YD, YE}
+    <type> in {A, B, C, C_HIT, Z, CHURN, YD, YE}
 
 Calibration targets (from the original files, 100k ops each):
     A     Zipf alpha=0.99 over 100000 keys, SCRAMBLED (rank->permuted key)
           ~23k unique, top1 ~7.8%      (scattered hot keys)
     B     uniform [1,100000]            ~63k unique, flat
-    C     5 copies of [590000,609999] shuffled  -> 20000 unique, each exactly 5x
+    C     5 copies of [590000,609999] shuffled  -> 20000 unique, each exactly 5x.
+          NOTE: [590000,609999] straddles the DB's max id (600000), so ~50% of the
+          keys (600001..609999) are OUT-OF-RANGE not-found lookups. C is therefore a
+          MIXED tail-boundary workload (50% existing hits + 50% negative lookups),
+          NOT pure newly-added-data reads. Every negative lookup descends the B+tree
+          right edge to the rightmost real leaf, concentrating traffic there.
+    C_HIT 5 copies of [580001,600000] shuffled  -> 20000 unique, each exactly 5x.
+          Pure-hit control for C: SAME 20k key-space size, uniform, tail-region
+          locality, but ALL keys exist (max 600000 == db max) -> zero not-found
+          artifact. Isolates whether frequency-aware prefetch still helps once the
+          unintended negative-lookup right-edge concentration is removed.
     Z     Zipf alpha=0.99 over 1000 keys, NOT scrambled (rank=key)
           1000 unique, top1 ~13%       (low-key hot)
     CHURN repeating 10-op block [rmw,insert,update,update,read,
@@ -41,7 +51,14 @@ N_OPS = 100000
 A_NKEYS, A_ALPHA = 100000, 0.99        # scrambled high-key zipf
 B_LO, B_HI       = 1, 100000           # uniform head
 C_LO, C_HI, C_COPIES = 590000, 609999, 5
+C_HIT_LO, C_HIT_HI, C_HIT_COPIES = 580001, 600000, 5   # pure-hit tail control (all keys exist)
 Z_NKEYS, Z_ALPHA = 1000, 0.99          # low-key zipf, no scramble
+# The experiment DB (items) holds a DENSE id space 1..600000. A read of id>DB_MAX_KEY
+# is a not-found (negative) lookup. HIT_ONLY workloads are asserted to contain no such
+# keys, so their measured first-query behaviour can't be attributed to a right-edge
+# not-found concentration artifact (see the C vs C_HIT control).
+DB_MAX_KEY = 600000
+HIT_ONLY = {"C_HIT"}
 CHURN_POOL_LO, CHURN_POOL_HI = 1, 600000
 CHURN_INSERT_START = 600001
 CHURN_SCAN_COUNT = 128
@@ -105,6 +122,10 @@ def gen(wtype, seed):
         pool = list(range(C_LO, C_HI + 1)) * C_COPIES
         rng.shuffle(pool)
         return [f"read {k}" for k in pool]
+    if wtype == "C_HIT":
+        pool = list(range(C_HIT_LO, C_HIT_HI + 1)) * C_HIT_COPIES
+        rng.shuffle(pool)
+        return [f"read {k}" for k in pool]
     if wtype == "CHURN":
         nblocks = N_OPS // len(CHURN_BLOCK)
         # non-insert keys: sample-without-replacement from the pool (matches the
@@ -162,7 +183,38 @@ def gen(wtype, seed):
             else:
                 lines.append(f"scan {starts[si]} {rng.randint(1, YE_MAXSCAN)}"); si += 1
         return lines
-    raise SystemExit(f"unknown type {wtype!r} (want A/B/C/Z/CHURN/YD/YE)")
+    raise SystemExit(f"unknown type {wtype!r} (want A/B/C/C_HIT/Z/CHURN/YD/YE)")
+
+
+def write_manifest(out, wtype, seed, lines):
+    """Emit a sidecar <out>.manifest.json recording hit/miss accounting against the
+    DB's key space, so a workload's semantics can never silently drift from its actual
+    query behaviour again. For HIT_ONLY types, hard-assert no key exceeds DB_MAX_KEY."""
+    import json
+    tgt = [int(l.split()[1]) for l in lines if l.split()[0] in ("read", "scan")]
+    hit = sum(1 for k in tgt if k <= DB_MAX_KEY)
+    miss = len(tgt) - hit
+    gmin = min(tgt) if tgt else None
+    gmax = max(tgt) if tgt else None
+    if wtype in HIT_ONLY and gmax is not None and gmax > DB_MAX_KEY:
+        raise SystemExit(
+            f"ASSERTION FAILED: {wtype} declared expected_hit_only but "
+            f"max_generated_key={gmax} > db_max_key={DB_MAX_KEY} "
+            f"(would introduce not-found lookups)")
+    manifest = {
+        "workload": wtype, "seed": seed, "out": out, "n_ops": len(lines),
+        "hit_only_declared": wtype in HIT_ONLY,
+        "hit_count": hit, "miss_count": miss,
+        "hit_ratio": round(hit / len(tgt), 6) if tgt else None,
+        "generated_min_key": gmin, "generated_max_key": gmax,
+        "db_max_key": DB_MAX_KEY,
+        "first_op": lines[0] if lines else None,
+        "first_op_is_hit": (int(lines[0].split()[1]) <= DB_MAX_KEY)
+                           if lines and lines[0].split()[0] in ("read", "scan") else None,
+    }
+    with open(out + ".manifest.json", "w") as f:
+        json.dump(manifest, f, indent=2)
+    return manifest
 
 
 def main():
@@ -170,6 +222,7 @@ def main():
         raise SystemExit(__doc__)
     wtype, seed, out = sys.argv[1].upper(), int(sys.argv[2]), sys.argv[3]
     lines = gen(wtype, seed)
+    man = write_manifest(out, wtype, seed, lines)   # asserts BEFORE writing the trace
     with open(out, "w") as f:
         f.write("\n".join(lines) + "\n")
     # summary for calibration (op-mix always; key stats over read+scan targets)
@@ -183,6 +236,9 @@ def main():
               f"range=[{min(tgt)},{max(tgt)}] "
               f"top1={top[0][1]/len(tgt)*100:.2f}% "
               f"top10={sum(x[1] for x in top[:10])/len(tgt)*100:.2f}%")
+        print(f"    hit={man['hit_count']} miss={man['miss_count']} "
+              f"hit_ratio={man['hit_ratio']} first_op={man['first_op']!r} "
+              f"(hit={man['first_op_is_hit']})  db_max_key={DB_MAX_KEY}")
 
 
 if __name__ == "__main__":

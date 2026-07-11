@@ -1,0 +1,15 @@
+{
+  "workload": "C_HIT",
+  "seed": 3,
+  "out": "workloads/workload_c_hit_3.txt",
+  "n_ops": 100000,
+  "hit_only_declared": true,
+  "hit_count": 100000,
+  "miss_count": 0,
+  "hit_ratio": 1.0,
+  "generated_min_key": 580001,
+  "generated_max_key": 600000,
+  "db_max_key": 600000,
+  "first_op": "read 599878",
+  "first_op_is_hit": true
+}

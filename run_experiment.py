@@ -96,6 +96,7 @@ WORKLOADS = {
     "A": _base_workload("a"),
     "B": _base_workload("b"),
     "C": _base_workload("c"),
+    "C_hit": _base_workload("c_hit"),  # pure-hit tail control for C (all keys exist, no not-found artifact)
     "Z": _base_workload("z"),   # low-key Zipfian (robustness)
     # YCSB core D/E: write-containing (insert stream ages the DB). Run via the
     # churn/aging path, NOT the read-only `run` matrix (it forces --readonly).
