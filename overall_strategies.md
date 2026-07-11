@@ -77,9 +77,11 @@
 | B | −44% | −38% | 2e_K10 −29%（uniform 無 hot leaf，K 無增益）|
 | **C** | **−83%** | −83% | **2e_K10：e2e_warm 268 µs（−75%）— 全矩陣最佳 e2e** |
 
-- **C：top-K hot leaf 解鎖 first-q −83%，K=10 即 saturate**，且 **e2e_warm −75%（268 µs）是全矩陣最佳**。
-- **A：要 K=500 才 first-q −64%**，但 deliver ~0.8 ms → e2e_warm 反而 +107%；小 K 不夠、大 K 太貴。
-- **B（uniform）沒有 hot leaf**，K 無增益，卡在 −44%。
+- **C：top-K hot leaf 解鎖 first-q −83%，K=10 即 saturate**，且 **e2e_warm −75%（268 µs）是全矩陣最佳**——但**此優勢主要來自 C 的 not-found 熱點、非普適**（見下）。
+- **A：要 K=500 才 first-q −64%**，但 deliver ~0.8 ms → e2e_warm 反而 +107%；小 K 不夠、大 K 太貴。A 的 hot leaf 是**真實 key skew**（唯一 tie-break 無關的真實熱點，K10 −36% robust）。
+- **B（uniform）沒有 hot leaf**，K 無增益，卡在 −44%（interior skeleton 撐）。
+
+> **⚠️ C 的 −75% 是 not-found 熱點 + tie-break，非普適 frequency 效益（C_hit 控制，`results/c_hit/`）：** C 的 range 有 ~50% not-found 高 key 全落最右葉 → 真實但 key-range 造成的熱點。pure-hit 控制 **C_hit**（`id∈[580001,600000]`、全部存在）上，穩健效益回落到 **interior skeleton ~−30% e2e_warm**（2d −28.5% / 2f_top14 −30.6% / LOSO learned −29.0%，皆 robust），frequency leaf 相對 interior-only 只多 ~2 點。**`2e_K10` 的 −70% 是 tie-break artifact**：leaf count 打平時 `gen_hotleaves` 的 `Counter.most_common` 用 insertion-order tie-break → 最早出現的 K 葉 → 恰含被測 first-op（同 seed 對齊；`gen_freqdump` 用 page-number tie-break 則不追）。10-fold coverage：first-op 覆蓋 **2e_K10 10/10 vs 2f_top14/learned/frequency 0/10**。**報 targeted 的普適效益用 2d/LOSO learned（~−30%），勿用 2e_K10 絕對數。access-frequency leaf 只在有真實熱點（A skew、C not-found）時生效；page-type interior skeleton 才是普適 robust 贏面。** 三段機制 B→C_hit→C→A 見 REPORT §6.2.8 / overall_workloads.md「C_hit」。
 
 ### 2f — SLRU prefetch（整個 resident working set）
 

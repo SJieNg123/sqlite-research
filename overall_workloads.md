@@ -51,13 +51,33 @@ repo 現階段使用的 workload、每個模擬什麼情境、以及分布指紋
 
 **模擬：** 無熱點的 OLTP/批次掃描（逐筆檢查、隨機 sampling）。**uniform 讀把 first-query 機率攤到大量 leaf** → 小 leaf hotset 的**期望覆蓋率低**、leaf fault 不可避免、攤薄 targeted prefetch 效益（量 prefetch 的**下界**;所有頁在首查前皆 cold）。
 
-## Workload C — High-key Uniform Read
+## Workload C — Mixed Tail-boundary Lookup（~50% not-found）
 
 **規模：** 100,000 ops 全 `read`。**Key：** id ∈ [590000, 609999]（20,000 unique，每 id 平均 5 次）。**分佈：** 均勻。
 
 > **⚠️ key-range audit（重要）：** 初始 DB 最大 key 僅 **600000**，而 C 的 range 上界是 **609999** → **恰半數（9,999 / 20,000 unique key）超出初始資料範圍**。在 clean DB 上（未經 aging）每個 seed 的 op 流因此約 **50% hit（≤600000，真存在）+ 50% miss（>600000，not-found 高 key）**（seed 1..10 實測皆 50,005 hit / 49,995 miss）。所以 C **不是**「新加入資料馬上被讀」——在 clean DB 上半數是 **not-found 高 key lookup**。**hit 與 miss 走相同的 B+tree 右緣 interior 路徑**：miss 查詢一律下降到**最右葉**（600000 所在葉）再回報不存在，故該最右葉吸收全部 ~50k miss 流量、成為**壓倒性單一 hot leaf**；hit 查詢（真 key ∈ [590000,600000]）散落在頻率相近的多個真葉。seed 1 的 first op 是 `read 590000`（**hit**）；跨 10 seed 的 first-op hit/miss 為 5 hit / 5 miss（見 §learned C caveat 與 `results/loso/coverage.csv`）。這正是 C 上 learned first-op coverage 呈 6/10（miss first-op 5/5 覆蓋、hit 1/5）的機制根源。
 
-**模擬：** high-key / 檔尾 region 均勻點讀，其中半數為超出資料範圍的 not-found lookup。因 leaves 高度集中檔尾、且最右葉被 miss 流量灌成單一超熱 leaf，C 是 2f SLRU 最小 hot set（~1.7 MB）的對照點，且 2e_K10 在 C 上 first-q −83% / e2e_warm −75% 是全矩陣最佳（但須注意此優勢部分來自上述 key-range artifact）。
+**模擬：** existence check / 稀疏 ID lookup / tail-boundary 讀取，其中半數為超出資料範圍的 not-found lookup。因 leaves 高度集中檔尾、且最右葉被 miss 流量灌成單一超熱 leaf，C 是 2f SLRU 最小 hot set（~1.7 MB）的對照點，且 2e_K10 在 C 上 first-q −83% / e2e_warm −75% 是全矩陣最佳（**但此優勢主要來自上述 not-found 熱點 key-range artifact，非 uniform tail 讀取的普適性質——見下方 C_hit 控制**）。
+
+## Workload C_hit — Pure-hit Tail Control（C 的對照）
+
+**規模：** 100,000 ops 全 `read`。**Key：** id ∈ **[580001, 600000]**（20,000 unique，每 id ×5）。**分佈：** 均勻。**全部 key 存在**（max=600000=db max）→ **0 not-found**（manifest hit_ratio=1.0，`HIT_ONLY` 硬 assert 把關）。
+
+**用途：** C 的 pure-hit 控制——**同 20k key-space、同 tail-region locality、同 uniform ×5 結構，唯一差別是把 range 收進 DB 範圍**，移除 C 那 ~50% not-found 高 key 造成的最右葉超熱點。回答：「拿掉 not-found 集中後，frequency-aware prefetch 還有效嗎？」
+
+**結果（orig，10 seeds × 10 reps，`results/c_hit/`，跨 seed warm-process e2e、皆 robust）：**
+
+| strategy | e2e_warm | 這是什麼 |
+|---|---:|---|
+| 2d（interior only）| **−28.5%** [−34.9,−19.6] | interior skeleton |
+| 2f_top14（freq leaf, page tie-break）| **−30.6%** [−37.1,−22.4] | 真實 frequency |
+| learned_markov_14（LOSO held-out）| **−29.0%** [−36.1,−19.4] | 真實、無 leakage |
+| **2e_K10（freq leaf, insertion tie-break）**| **−69.6%** [−73.6,−64.2] | **tie-break artifact** |
+| 2f_slru | +76.5% | deliver trap |
+
+- **C 的 −75% 是 not-found 驅動**：pure hit 上穩健效益回落到 **interior skeleton ~−30%**；frequency leaf 相對 interior-only 只多 ~2 點（**uniform tail 無真實 leaf 熱點**）。
+- **`2e_K10` −70% 是 tie-break artifact**：C_hit 每葉 count 打平（~150），`gen_hotleaves` 的 `Counter.most_common` 用 **insertion-order tie-break → 最早出現的 K 葉 → 恰含被測 first-op 葉**。10-fold coverage（`results/loso/coverage_c_hit.csv`）：first-op 覆蓋 **2e_K10 10/10 vs 2f_top14/learned/frequency 0/10**。LOSO-held-out 無此對齊、給誠實 −30%。
+- **三段機制 B → C_hit → C → A**：B（global uniform，無熱點）→ C_hit（tail-local uniform，仍無熱點、interior 撐 −30%）→ C（mixed，not-found 最右葉成真實熱點 −75%）→ A（Zipfian，真實 skew −36%）。**access-frequency leaf 只在有真實熱點時生效；page-type interior skeleton 才是普適 robust 贏面。** 完整見 [`results/c_hit/FINDINGS.md`](results/c_hit/FINDINGS.md)。
 
 ## Workload D — Mixed Write-heavy Churn Generator
 

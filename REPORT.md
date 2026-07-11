@@ -13,7 +13,7 @@
 
 **方法。** 我們提出一套兩層 cold-start 框架：(1) page-type-aware physical layout reorder（binary 層重寫，將 interior page 集中至 file head）；(2) 基於 mincore 的 targeted madvise prefetch，以**兩個對等的 selection 槓桿**挑頁——**page-type-aware**（選 B+tree interior）與 **access-frequency-aware**（選 workload 最 hot 的 leaf）。整套設計不修改 SQLite internal，作為 application-side tool 部署。核心方法是把 prefetch 的 preprocessing **拆解到 OS-syscall 粒度**——冷 `open(db)`（~200 µs、per-layout 常數）與逐頁 `deliver`（隨 hotset 大小）——並以 **pread oracle vs async madvise hint** 兩種模式隔離「選對頁（selection）」與「載得及（delivery）」，再以 **standalone warmer**（另起 process、付冷 open；≈ cold 容器 / scale-from-zero）與 **warm-process / integrated**（app 已在跑、重用 handle、不付冷 open；≈ serverless keep-alive 容器 / edge 常駐 worker；本研究主張）兩個部署模型分別計入 critical-path e2e（本研究處理 empty OS page cache cold-start，區別於 Yi et al. [2026] 的 hotspot-shift buffer cold-start）。據我們所知，這是**首個在 SQLite OS-page-cache cold-start 上、把 prefetch preprocessing 拆解到 open / deliver 兩個 OS-syscall term、並以兩個部署模型對齊 critical path 的 cold-start evaluation methodology**——貢獻在於成本核算的**粒度與對齊**，而非「首次意識到 prefetch 有成本」（InnoDB buffer-pool dump/load、Yi+26 等已意識到，見 §2.3.2）。
 
-**核心發現（first-query 改善 ≠ end-to-end 加速）。** cache-dump 式策略（2f_slru，載整份 resident working set）first-query 最低（**−79 ~ −91%**，A/orig 523→108 µs、C/orig 1087→102 µs），但其 **~0.8–7 ms 的 deliver overhead** 反讓 end-to-end cold start **慢一個量級**——此 trade-off 在既有 prefetch literature 長期被忽略。相對地，targeted prefetch 以**極少 syscall** 取得 first-query **−22 ~ −83%**，而 e2e 勝負**取決於部署模型**：standalone 下 preprocessing 吃掉快 workload 的紅利，warm-process 下精準 prefetch 可把單一 workload e2e 降低達 75%（C 2e_K10，1087→268 µs）。為避免單一抽樣誤導，我們以 **10-seed workload sweep + bootstrap 95% CI** 校正 headline：warm-process e2e 下，**access-pattern targeted prefetch 跨 seed robust**——C 2e_K10 **−70% [−72, −69]**（10/10 seed）、A 2e_K10 **−36% [−50, −23]**、B 2d **−25% [−32, −16]**（95% CI 皆不跨 0）；但 **structural `layers_5` 在 A/B 落在雜訊內（tie / directional、CI 跨 0），不可恃**。一個三槓桿 ablation 進一步把 C 的 headline 歸因到 **access-frequency**（隨機選同型別、同張數的 leaf 僅 −2%，照頻率選 −40%），而 **page-type**（interior）則撐起無自然 hot leaf 的 uniform workload B——兩槓桿各司其職。
+**核心發現（first-query 改善 ≠ end-to-end 加速）。** cache-dump 式策略（2f_slru，載整份 resident working set）first-query 最低（**−79 ~ −91%**，A/orig 523→108 µs、C/orig 1087→102 µs），但其 **~0.8–7 ms 的 deliver overhead** 反讓 end-to-end cold start **慢一個量級**——此 trade-off 在既有 prefetch literature 長期被忽略。相對地，targeted prefetch 以**極少 syscall** 取得 first-query **−22 ~ −83%**，而 e2e 勝負**取決於部署模型**：standalone 下 preprocessing 吃掉快 workload 的紅利，warm-process 下 targeted prefetch 三 workload e2e 皆改善。以 **10-seed sweep + bootstrap 95% CI** 校正後，**穩健且普適的贏面是 page-type-aware 的 interior skeleton**——warm-process e2e 在 Zipfian A 上 2e_K10 **−36% [−50, −23]**、uniform B 上 2d **−25% [−32, −16]**、純 hit 的 tail 讀取上 ~**−30%**（pure-hit 控制 workload **C_hit**：interior-only 2d −28.5%、LOSO-held-out learned −29.0%，皆 robust、CI 不跨 0）。**access-frequency 的 *leaf* 選擇只在有真實熱點時才額外加分**：C 的更大 headline **−75%（1087→268 µs）源於它是 mixed tail-boundary workload——range [590000,609999] 超出 DB 最大 key 600000，~50% 是 not-found 高 key，全部落到最右葉形成一個真實但 key-range 造成的熱點**。把 range 收進 DB 範圍的 pure-hit 控制（C_hit）後，該熱點消失、效益回落到 interior skeleton 的 ~−30%。我們並揭露 `2e_K10` 在 leaf-count 打平的 workload 上會被一個 **insertion-order tie-break 額外灌水**（其 hotset 恰與被測 first query 對齊；同批的 LOSO-held-out learned/frequency baseline 不受此影響、給出誠實的 −30%，§6.2.8）。**structural `layers_5` 則在 A/B 落在雜訊內（tie / directional、CI 跨 0），不可恃**。總結：**page-type（interior skeleton）是普適的 robust 贏面；access-frequency leaf 選擇只在有真實 access 熱點（A 的 skew、C 的 not-found 集中）時才生效**——兩槓桿分工，且熱點的來源必須誠實界定。
 
 **穩健性與範圍。** 結論在五條 robustness 軸下穩定：50k write churn（**讀熱點平穩時** static t=0 hotset 不 decay；熱點非平穩時——YCSB read-latest——凍結的 frequency plan 會衰退而 structural coverage 仍穩，§6.2.7）、sub-working-set RAM pressure、多 process cadence re-warm、上述 10-seed sweep、與 DB 放大 10×（102 MB→~1 GiB）的 size-scaling（targeted 的 first-query 效益 18/18 cell size-robust，而 cache-dump 的 deliver 陷阱隨 DB 變大惡化，窄域 workload C 由贏轉輸）。**範圍界定：本研究所有量測均在單台 commodity x86 桌機（Ryzen 9950X）+ NVMe SSD、單一 Linux kernel 上進行——此為 edge / serverless 部署所用的同一類硬體，但本研究未在特定 FaaS / microVM runtime（Lambda、Firecracker、gVisor 等）內量測，而是 model 其 warm-process cold-data pattern；行動裝置 / IoT 為 SQLite 普及背景、非 evaluated platform，絕對數字與相對排序不應外推至 ARM/UFS/eMMC 等不同 storage stack，需另行驗證（詳見 §6.4）。** 完整數據見 §5 / [overall_results.md](https://github.com/wongzinc/sqlite-research-project-sharing/blob/main/overall_results.md)（全 cell `cold_pct`=0）。
 
@@ -84,11 +84,15 @@ open；**對應 scale-from-zero 的冷容器**）作為對照——在 standalon
   file 並修補所有 page-number reference 的可行性與正確性。實驗下structural
   prefetch(layers_5)在 A 取得 **first-query −27%**(523→382 µs);**e2e 取決於部署模型**——
   warm-process(integrated)下 e2e −14%、standalone(含冷 open)下反而 +30%(見 C3)。
-- **(C2) Access-pattern frugality**：基於 `mincore()` snapshot 的
-  access-history prefetch(2e_K10)用**極少 syscall** 取得 first-query
-  **−31 ~ −83%**;在 uniform random workload B 上與 blind-load 全部 interior 相當(皆約
-  **−44%**);在慢 workload **C 上 2e_K10 達 first-query −83%、warm-process e2e −75%(268 µs)**——
-  是全矩陣最有效益的 e2e。
+- **(C2) 兩個 selection 槓桿的分工——page-type 普適、access-frequency 需熱點**：基於 `mincore()`
+  snapshot 的 targeted prefetch 用**極少 syscall** 取得 first-query **−31 ~ −83%**。**穩健且普適的贏面是
+  page-type-aware 的 interior skeleton**：uniform workload B 上與 blind-load 全部 interior 相當(皆約
+  **−44%** first-q)、純 hit 的 tail workload **C_hit** 上 warm-process e2e ~**−30%**(interior-only 2d −28.5%、
+  LOSO learned −29.0%，皆 robust)。**access-frequency 的 leaf 選擇只在有真實 access 熱點時才額外加分**：C 上
+  2e_K10 warm-process e2e **−75%(268 µs)** 是全矩陣最大，但這**專屬於 C 的 mixed tail-boundary 結構**
+  ——C 的 range 有 ~50% 為超出 DB 範圍的 not-found 高 key，全部集中到最右葉形成真實但 key-range 造成的熱點；
+  pure-hit 控制 C_hit 移除該熱點後效益回落到 interior skeleton 的 ~−30%(§6.2.6)。故 C2 的貢獻不是「−75%」這個數字，
+  而是**把 targeted prefetch 的效益乾淨地拆成「普適的 interior skeleton」與「熱點相依的 leaf 加分」兩部分**。
 - **(C3) Preprocessing cost-accounting 框架（兩個部署模型）**：針對 SQLite cold-start read path 提出一套**把 prefetch preprocessing 拆解到 OS-syscall 粒度**的 evaluation methodology——將
   preprocessing 顯式拆成 **冷 open(db)(~200 µs,per-layout 常數)+ 逐頁 deliver(隨 hotset)**、以 pread-oracle/async 兩種模式隔離 selection 與 delivery、
   並以 standalone / warm-process 兩個部署模型對齊 critical-path e2e（區別於 [Yi+26] 的 buffer cold-start）。**據我們所知，這是首個在 SQLite OS-page-cache cold-start 上做到此粒度與兩模型對齊者**；貢獻在成本核算的**粒度與對齊**、而非首次意識到 prefetch 有成本（InnoDB dump/load、Yi+26 等已意識到，見 §2.3.2）。
@@ -423,7 +427,8 @@ file head前 400 KB，可被 sequential prefetch 一次涵蓋。*
 |---|---|---|
 | **A** | Zipfian point read（集中查少數熱門資料）| App 首頁、常開的聯絡人 |
 | **B** | Uniform random point read（uniform 隨機讀）| 隨機抽樣、爬蟲 |
-| **C** | High-key uniform point read（檔尾 region 均勻點讀；clean DB 上約半數為 not-found 高 key，見 §6.2.6 key-range audit）| 剛收到的訊息、剛拍的照片 |
+| **C** | Mixed tail-boundary lookup（檔尾 region 均勻點讀；range 超出 DB max key → ~50% not-found 高 key，見 §6.2.6 key-range audit）| existence check、稀疏 ID lookup、剛收訊息 |
+| **C_hit** | **Pure-hit tail control for C**（id∈[580001,600000]，同 20k key-space、tail locality，但全部存在、0 not-found）| §6.2.8：隔離 not-found 熱點以測 tail-read 的普適效益 |
 | **D** | Write-heavy churn generator | 模擬 DB 被持續 write（§6.2.1 churn 實驗）|
 | **YCSB D**（`YD`）| Read-latest：95% read（latest 分布）+ 5% insert，**移動熱點** | user timeline / 最新事件 |
 | **YCSB E**（`YE`）| Short-ranges：95% scan（zipfian）+ 5% insert，平穩熱點 | 訊息佇列尾端連續讀 |
@@ -807,6 +812,8 @@ first-query improvement上限(orig,vs baseline):
 
 **結論:同型別、同張數下,隨機 10 leaves 幾乎無效(−2%),照頻率挑的 10 leaves −40%——這 38 點全是 access-frequency 訊號、與 page-type 無關。** C 的 headline −81% = interior(−43%)疊加 hot leaf(−40%)。對照之下:**B(uniform、無 hot leaf)的 leaf_freq≈leaf_rand≈0,全靠 2d(interior, −36%)扛**;A 居中(leaf_freq −13% robust、leaf_rand 打平,主力仍是 2d −37%)。三 workload 跨 10 seed 皆 robust。
 
+> **⚠️ C 的 access-frequency 訊號來源（§6.2.8 深化）**:此處 C 上 `leaf_freq_K10 −40%` 的「頻率訊號」**幾乎全部來自 C 的 not-found 集中**——C 的 range 有 ~50% 超出 DB 範圍的高 key，全落到最右葉使其成為壓倒性單一 hot leaf。pure-hit 控制 **C_hit**（把 range 收進 DB 範圍）上，同樣的 `leaf_freq` 加分**幾乎消失**（frequency leaf 相對 interior-only 只多 ~2 點），代表 **C 的「access-frequency 有效」是這個 not-found 熱點的產物、非 uniform tail 讀取的普適性質**。故本 ablation 的「兩槓桿分工」在 C 上成立，但 access-frequency 槓桿的普適性受 §6.2.8 限定：**只在有真實 access 熱點時才生效**。
+
 layout 槓桿(orig→ta)只改 deliver 成本、不改上述 selection 故事:ta 把 interior collocate,卻也讓 2d/2e 的 interior 集合變大(C: 4→48 頁),warm e2e 反而略遜(C 2e_K10 orig −73% vs ta −65%),與 §6.1「type-aware layout 非淨贏」一致。全表見 [overall_results.md](https://github.com/wongzinc/sqlite-research-project-sharing/blob/main/overall_results.md) 「三槓桿 ablation」節。
 
 > **批次註記**:本節（§5.4.1）數字（C 2d −43%、2e_K10 −81% / e2e_warm −73% 等）出自**獨立的 10-seed ablation 批**（自身錨點、cross-seed mean + bootstrap CI），**不是** §5.4 的 canonical v2 single-instantiation 矩陣（C 2e_K10 first-q −83% / e2e_warm −75%）。兩批屬不同機器狀態群，**只比相對量（各槓桿的貢獻分解）、不逐格對絕對 µs**；勿把此處 −81% / −73% 讀成 canonical headline。
@@ -1112,13 +1119,41 @@ C（WS 僅 1.8 MB ≈ 量測下限）**無法以 cgroup 施壓 → 其 RAM-robus
 - **頻率派衰、結構派耐並反超**:YD 上 access-frequency `2e_K10_static` 收益從 −50% 衰到 −33%（erodes ~half、非歸零）,而 structural `layers_92_static` 幾乎不衰,且**從 ck1 起反超頻率派**（~250–278 vs ~310–420）。機制:頻率 hotset 綁定「哪些 key 熱」（非平穩下失效）,結構 skeleton 綁定「樹長什麼樣」（漂移緩慢）。**YE（zipfian 平穩）則 `2e_K10` 不衰、全程仍優**——證明 decay 是**非平穩性**的性質、非 aging 本身。
 - **維度並存（勿當矛盾）**:`layers_*` 在 cross-seed first-query *level* 上不可恃（§6.2.4 tie/directional）,卻在 aging *robustness* 軸上最耐久——兩個不同軸的結論並存。此結果把 §6.2.1 精確化為「**static t=0 hotset 是否 decay 由 hotspot 平穩性決定;read-latest / append-heavy workload 下頻率派衰、結構 skeleton 耐**」,並直接導出 §6.3 的 read-latest guidance。
 
+#### 6.2.8 C_hit control：把「not-found 熱點」與「真實 tail-read 效益」分離（C 的 −75% 誠實界定）
+
+§6.2.6 的 key-range audit 指出 C 的 range `[590000,609999]` 超出 DB 最大 key 600000 → **~50% 為 not-found 高 key**，全部沿右緣落到**最右葉**。這使「C 2e_K10 −75%」的歸因存疑：**拿掉這個非預期的 not-found 集中後，frequency-aware prefetch 還有效嗎？** 我們設計 pure-hit 控制 workload **C_hit**（`id ∈ [580001,600000]`，同 20k key-space、同 tail locality、每 key ×5 uniform，但**全部存在、0 not-found**），orig layout、**10 seeds × 10 reps**（`results/c_hit/`）。
+
+**跨 10 seed warm-process e2e（vs same-seed baseline，皆 robust、CI 不跨 0）：**
+
+| strategy | first-q | e2e_warm | 這是什麼 |
+|---|---:|---:|---|
+| 2d（interior only）| −36.6% | **−28.5%** [−34.9,−19.6] | interior skeleton |
+| 2f_top14（freq leaf, page tie-break）| −39.9% | **−30.6%** [−37.1,−22.4] | 真實 frequency |
+| learned_markov_14（LOSO held-out）| −38.2% | **−29.0%** [−36.1,−19.4] | 真實、無 leakage |
+| **2e_K10（freq leaf, insertion tie-break）**| −79.0% | **−69.6%** [−73.6,−64.2] | **tie-break artifact** |
+| 2f_slru | −88.8% | +76.5% | deliver trap |
+
+**兩個發現。** (1) **C 的 −75% 是 not-found 驅動的**：在 pure hit 上，穩健的效益回落到 **interior skeleton ~−30% e2e_warm**（2d −28.5%、LOSO learned −29.0%），frequency leaf 相對 interior-only 只多 ~2 點——**uniform tail 上沒有真實 leaf 熱點**。(2) **`2e_K10` 的 −70% 是 tie-break artifact**：C_hit 每葉 access 打平（~150 次），`gen_hotleaves` 用 `Counter.most_common` → **insertion-order tie-break → 最早出現的 K 個葉 → 恰含被測 first-op 葉**（同 seed 對齊）。已驗證 `2e_K10 leaves == most_common(10) == first-10-distinct-leaves-seen`（完全相同）。10-fold offline coverage（`results/loso/coverage_c_hit.csv`）：first-op leaf 覆蓋 **2e_K10 10/10 vs 2f_top14 / learned / frequency 0/10**——LOSO-held-out（訓練自其他 9 seed）無此對齊、給出誠實的 −30%。`gen_freqdump` 用 page-number tie-break（低 offset 葉）故不追 first-op。
+
+**三段機制（B → C_hit → C → A）：**
+
+| workload | leaf 熱點 | frequency leaf 是否加分 | 機制 |
+|---|---|---|---|
+| **B**（global uniform）| 無（count 低且散）| 否 | interior skeleton 撐全場 |
+| **C_hit**（tail-local uniform）| 無（count 打平）| 幾乎不（~2 點）| interior skeleton −30%；−70% 是 tie-break artifact |
+| **C**（mixed, 50% not-found）| **有**（最右葉吸收 ~50k miss）| 是（−75%）| 熱點是 key-range 造成的 not-found 集中 |
+| **A**（Zipfian）| **有**（真實 key skew）| 是（−36% robust）| 唯一 tie-break 無關的真實 leaf 熱點 |
+
+**結論。** **page-type（interior skeleton）是普適的 robust 贏面（A/B/C/C_hit 皆 ~−25 ~ −36% warm e2e）；access-frequency 的 *leaf* 選擇只在有真實 access 熱點時才生效**（A 的 skew、C 的 not-found 集中）。C 的 −75% 因此是 **C 這個 mixed / not-found workload 的 case、非 targeted prefetch 的普適結果**；且 `2e_K10` 的絕對數在 leaf-count 打平的 workload（C、C_hit）上被 insertion-order tie-break 灌水——報 targeted 的**普適**效益應以 **interior-only `2d` 或 LOSO `learned`（~−30%）** 為準，而非 `2e_K10`。完整分析見 [results/c_hit/FINDINGS.md](https://github.com/wongzinc/sqlite-research-project-sharing/blob/main/results/c_hit/FINDINGS.md)。
+
 ### 6.3 Practical recommendations
 
 對映到 edge / serverless 部署：**warm-process 欄 = keep-alive 容器 / 常駐 edge worker（本研究主張）**、**standalone 欄 = scale-from-zero 冷容器**；下列 workload 類型對應常見的 edge-SQLite 存取樣態（Zipfian 熱點讀、uniform 隨機讀、file-tail 新資料 / churn）。
 
 | scenario | 建議做法 | First-q improvement | End-to-end（warm-process / standalone）|
 |---|---|---|---|
-| **慢 workload(查file tail/churn,baseline 高)** | access-pattern:interior + 最 hot 的 ~10 leaf(2e_K10) | **−83%**(C) | **warm e2e −75%(268µs)** / std −54%，全矩陣最佳 |
+| **tail-region 讀取(檔尾資料,baseline 高)** | **interior skeleton(2d / layers_92)**;有真實 access 熱點時再加 hot leaves | −37~39%(C_hit) | **warm e2e ~−30%**(pure-hit C_hit robust:2d −28.5% / LOSO learned −29.0%)——interior skeleton 是這裡的普適贏面(§6.2.8) |
+| **mixed / existence-check(含大量 not-found 或高度集中查詢)** | access-pattern 2e_K10(interior + hot leaves) | **−83%**(C) | **warm e2e −75%(268µs)** / std −54%,全矩陣最佳——**但此效益專屬 C 的 not-found 集中(最右葉超熱)case、非普適**;`2e_K10` 絕對數另受 tie-break 灌水,報普適值請用 2d/learned(§6.2.8) |
 | uniform 隨機讀(uniform) | structural layers_5 / 2d | −42~43%(B) | **warm e2e −29~34%** / std ≈ 打平 |
 | **快 workload(熱門集中,baseline 已快)** | **access-pattern 2d / 2e_K10**(robust);避免單用 structural layers_5 | −22~26%(A) | **warm e2e:targeted 跨 seed −25~36%(robust);layers_5 −5% 落在雜訊內(tie)**。standalone 下 +27~29% 反而較慢 |
 | **read-latest / append-heavy(熱點跟寫入 frontier 移動,如 event/log store)** | **structural skeleton(layers_92 / 2d) 或週期性 hotset refresh**;避免單靠凍結的 access-frequency hotset | — | frozen 頻率 hotset 隨 aging **衰 ~half**、結構 skeleton 耐衰並反超(§6.2.7) |
@@ -1126,7 +1161,7 @@ C（WS 僅 1.8 MB ≈ 量測下限）**無法以 cgroup 施壓 → 其 RAM-robus
 | 多 process shared DB | shared cache + background warmer，cadence ≤ query 間隔 | cost固定、效益乘 process 數 | cadence=1s maintain first-q ~26µs |
 
 > 三條原則:(1)**2f SLRU 的 first-q 最低但 e2e 多半不具優勢**（deliver 太重）,不適合 cold-start critical path;
-> (2)**access-pattern targeted prefetch（2d/2e_K10）在 warm-process 下三個 workload 的 e2e 都有改善,且經 10-seed 驗證為 robust**（A −36% / B −25% / C −70%,CI 皆不跨 0;§6.2.4），既本研究主張的部署;
+> (2)**access-pattern targeted prefetch 在 warm-process 下三個 workload 的 e2e 都有改善,且經 10-seed 驗證為 robust**（A 2e_K10 −36% / B 2d −25% / C 2e_K10 −70%,CI 皆不跨 0;§6.2.4）——但**普適的贏面是 page-type interior skeleton**（pure-hit C_hit 上 2d/learned ~−30%）,**access-frequency 的 leaf 加分只在有真實熱點時才生效**（A 的 skew、C 的 not-found 集中）;C 的 −70% 是 mixed/not-found case、`2e_K10` 絕對數另受 tie-break 灌水（§6.2.8）;
 > (3)**structural `layers_5`(只載前 N 個 interior)的 e2e 效益不穩**——在 A/B 跨 seed 落在雜訊內(tie/directional),要用就搭 access-pattern,別單靠它。
 
 ### 6.4 Limitations

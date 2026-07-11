@@ -376,6 +376,22 @@ hotset 內容≡`2f_slru`（checksum 同），只差 warmer pread **遞送順序
 - **Jaccard**（hotset 相似度、離線分析、非性能）：區分兩個 frequency 對象——**同一訓練資料** `J(learned_markov, frequency_train)=1.0`（traces 2–10 塌縮到 marginal frequency；此 3 層固定深度 tree 的觀測性質、非普遍宣稱）；**held-out 量測種子** `J(learned_markov, 2f_topN_test)` A/B N14 0.47/0.56、**C 1.0**（out-of-sample ranking 位移，C 因 leaf score 全平仍 =1.0）。兩者不矛盾。
 - **Workload E 未支援**（scan 非 3-page episode，`gen_pageseq` fail-loud）。
 
+### C_hit control — pure-hit tail（隔離 not-found 熱點，`results/c_hit/`，orig，10 seeds × 10 reps）
+
+C_hit（`id∈[580001,600000]`、同 20k key-space、tail locality、uniform ×5，但**全部存在、0 not-found**）移除 C 的 ~50% not-found 最右葉超熱點。跨 seed warm-process e2e（vs same-seed baseline，皆 robust）：
+
+| strategy | first-q | e2e_warm | 這是什麼 |
+|---|--:|--:|---|
+| 2d（interior only）| −36.6% | **−28.5%** [−34.9,−19.6] | interior skeleton |
+| 2f_top14（freq, page tie-break）| −39.9% | **−30.6%** [−37.1,−22.4] | 真實 frequency |
+| learned_markov_14（LOSO）| −38.2% | **−29.0%** [−36.1,−19.4] | 真實、無 leakage |
+| **2e_K10（freq, insertion tie-break）**| −79.0% | **−69.6%** [−73.6,−64.2] | **tie-break artifact** |
+| 2f_slru | −88.8% | +76.5% | deliver trap |
+
+- **C 的 −75% 是 not-found 驅動**：pure hit 上穩健效益回落到 **interior skeleton ~−30%**；frequency leaf 對 interior-only 只多 ~2 點（uniform tail 無真實 leaf 熱點）。
+- **`2e_K10` −70% 是 tie-break artifact**：leaf count 打平（~150）→ `gen_hotleaves` 的 `Counter.most_common` insertion-order tie-break → 最早出現的 K 葉 → 恰含被測 first-op（`gen_freqdump` 用 page-number tie-break 則不追）。10-fold coverage `results/loso/coverage_c_hit.csv`：first-op 覆蓋 **2e_K10 10/10 vs 2f_top14/learned/frequency 0/10**（LOSO-held-out 無對齊 → 誠實 −30%）。
+- **三段機制 B→C_hit→C→A**：page-type interior skeleton 普適 robust；access-frequency leaf 只在有真實熱點（A skew、C not-found 集中）時生效。報普適值用 2d/learned（~−30%），非 2e_K10。完整 [`results/c_hit/FINDINGS.md`](results/c_hit/FINDINGS.md)。
+
 ## RAM-pressure（cgroup MemoryMax=20M / unlimited 比值,async first-q）
 
 > 來源 [`results/ram20m/`](results/ram20m/summary.csv)(20M cgroup)÷ **同期(06-22)unconfined** baseline。比值近 1.0 → 壓力幾乎不影響。
