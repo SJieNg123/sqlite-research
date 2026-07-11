@@ -15,18 +15,19 @@ SQLite 冷啟動後第一筆 query 特別慢:OS page cache 是空的,走訪 B+tr
 
 ## 核心發現(摘要)
 
-baseline cold first-query @orig:A 529 / B 760 / C 1096 µs。
+baseline cold first-query @orig（canonical v2）:A 523 / B 749 / C 1087 µs。
 
-- **first-query 變快 ≠ cold-start 真的變快(本研究主軸)**:載整份 working set 的 `2f_slru` first-query 最低(−76~89%),但它要付 ~0.8–7 ms 的 deliver 成本,反讓 end-to-end cold start **慢一個量級**——這個 trade-off 過去的 prefetch 研究長期忽略。
-- **「小而準」勝過「大而全」**:targeted prefetch 只用極少 syscall 就拿 first-query −22~81%;在 app 已在跑、handle 已開的 **warm-process** 部署下三個 workload 的 e2e 都改善。最佳是 C 上的 `2e_K10`(interior + 10 個 hot leaf,共 ~14 頁),把 cold-start 從 1096 µs 壓到 291 µs(**−73%**)。
-- **贏在「選對頁」不是「載很多頁」**:三槓桿 ablation 顯示 C 的效益來自 **access-frequency**(隨機挑同型別 10 個 leaf 只 −2%、照頻率挑 −40%);uniform 的 B 沒有自然 hot leaf,全靠 **page-type**(interior)。N 也不是越多越好——N=1 反而比 baseline 慢(U 型曲線)。
-- **跨 seed 才算數**:用 10 個 random seed 校正單一抽樣偏差——access-pattern targeted 的 warm e2e(A `2e_K10` −36%、B `2d` −25%、C `2e_K10` −70%)跨 seed **robust**(95% CI 不跨 0);但 structural `layers_5` 在 A/B 落在雜訊內(tie),不可恃。
+- **first-query 變快 ≠ cold-start 真的變快(本研究主軸)**:載整份 working set 的 `2f_slru` first-query 最低(−79~91%),但它要付 ~0.8–7 ms 的 deliver 成本,反讓 end-to-end cold start **慢一個量級**——這個 trade-off 過去的 prefetch 研究長期忽略。
+- **普適 robust 的贏面是 interior skeleton**:targeted prefetch 只用極少 syscall 就拿 first-query −22~83%;warm-process 部署下三個 workload 的 e2e 都改善。**穩健且普適的那根是 page-type 的 `2d`(interior skeleton)——pure-hit workload 上 ~−25~30% warm e2e**(A 2d −25% / B 2d −25% / pure-hit 控制 C_hit 2d −28%)。access-frequency 的 hot leaf **只是條件式增量**:唯有真實熱點時才加分(A 的 Zipfian skew 把 `2e_K10` 從 −25% 推到 −36%)。
+- **贏在「interior 骨架」而非「照頻率挑 leaf」**:tie-break 修正後的三槓桿 ablation 顯示 **page-type(interior `2d`)才是 robust 的那根(−36%)**;access-frequency 的 leaf-only 只是 tie(且 leaf 不搭 interior 導航路徑幾乎無效),隨機 leaf 甚至淨變慢。在 C_mixed 上 `2e_K10` 與 footprint-matched 純頻率 `2f_top14` **統計不可分**。(舊的「照頻率挑 leaf −40%、access-frequency 主導」是 first-op leakage 造成的,已修正。)
+- **C_mixed 的大效益是 key-range artifact,非普適**:C 的 range 有 ~50% 超出 DB 範圍的 not-found 高 key,全匯聚到最右葉形成強熱點;`2e_K10` 跨 seed 為 **−55% 雙峰**(首查是 not-found probe 的 seed ~−70%、是真 hit 的 seed 回落到 interior skeleton ~−31%),**非**通用結果。
+- **跨 seed 才算數**:用 10 個 random seed 校正單一抽樣偏差——robust 的 access-pattern 贏面是(A `2e_K10` −36%、B `2d` −25%、pure-hit C_hit `2d` −28%)跨 seed **robust**(95% CI 不跨 0);C `2e_K10` −55% 為 not-found 雙峰、magnitude 不穩;structural `layers_5` 在 A/B 落在雜訊內(tie),不可恃。
 - **結論在五條 robustness 軸下穩定**:50k write churn、sub-working-set RAM pressure、多 process cadence re-warm、10-seed sweep、DB 放大 10×(102 MB→~1 GiB)。RAM 壓力下小 hotset(≤2 MB)的 targeted 全程 100% delivery、first-q 不受影響,只有 `2f_slru`(整份 WS)在 cap 低於 working set 時崩潰。
 - **type-aware layout 非淨贏**:把 interior 搬到 file head 雖降 first-q,卻推高 baseline(A +31% / B +4%)又讓 hotset 變大,實測沒有任何一格贏過原始 layout——**預設用原始 layout(1a)+ access-pattern prefetch** 即可。
 - **多 process 免費放大**:`PRAGMA mmap_size` 開 `MAP_SHARED` 後,一個 process prefetch,所有共用同一 DB 的 process 都受惠。
 - **範圍界定**:所有量測在單台 commodity x86(Ryzen 9950X)+ NVMe SSD、單一 Linux kernel——**edge/serverless 部署的同一類硬體**,但未在特定 FaaS/microVM runtime 內量測(model 其 warm-process cold-data pattern);行動裝置 / IoT 是 motivating 背景、非評估平台,絕對數字不外推到 ARM/UFS/eMMC。
 
-完整數字與每個 workload 的最佳組合見 [overall_results.md](overall_results.md)。
+完整數字與各 workload 的**條件式建議做法**（沒有單一「最佳組合」——預設 orig + `2d` interior skeleton，有已驗證的穩定 skew 才加少量 top-K leaf）見 [overall_results.md](overall_results.md)。
 
 ## Repo 結構
 

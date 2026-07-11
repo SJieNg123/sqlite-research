@@ -57,7 +57,7 @@ repo 現階段使用的 workload、每個模擬什麼情境、以及分布指紋
 
 > **⚠️ key-range audit（重要）：** 初始 DB 最大 key 僅 **600000**，而 C 的 range 上界是 **609999** → **恰半數（9,999 / 20,000 unique key）超出初始資料範圍**。在 clean DB 上（未經 aging）每個 seed 的 op 流因此約 **50% hit（≤600000，真存在）+ 50% miss（>600000，not-found 高 key）**（seed 1..10 實測皆 50,005 hit / 49,995 miss）。所以 C **不是**「新加入資料馬上被讀」——在 clean DB 上半數是 **not-found 高 key lookup**。**hit 與 miss 走相同的 B+tree 右緣 interior 路徑**：miss 查詢一律下降到**最右葉**（600000 所在葉）再回報不存在，故該最右葉吸收全部 ~50k miss 流量、成為**壓倒性單一 hot leaf**；hit 查詢（真 key ∈ [590000,600000]）散落在頻率相近的多個真葉。seed 1 的 first op 是 `read 590000`（**hit**）；跨 10 seed 的 first-op hit/miss 為 5 hit / 5 miss（見 §learned C caveat 與 `results/loso/coverage.csv`）。這正是 C 上 learned first-op coverage 呈 6/10（miss first-op 5/5 覆蓋、hit 1/5）的機制根源。
 
-**模擬：** existence check / 稀疏 ID lookup / tail-boundary 讀取，其中半數為超出資料範圍的 not-found lookup。因 leaves 高度集中檔尾、且最右葉被 miss 流量灌成單一超熱 leaf，C 是 2f SLRU 最小 hot set（~1.7 MB）的對照點，且 2e_K10 在 C 上 first-q −83% / e2e_warm −75% 是全矩陣最佳（**但此優勢主要來自上述 not-found 熱點 key-range artifact，非 uniform tail 讀取的普適性質——見下方 C_hit 控制**）。
+**模擬：** existence check / 稀疏 ID lookup / tail-boundary 讀取，其中半數為超出資料範圍的 not-found lookup。因 leaves 高度集中檔尾、且最右葉被 miss 流量灌成單一超熱 leaf，C 是 2f SLRU 最小 hot set（~1.7 MB）的對照點，且 2e_K10 在 C 上 first-q −83% / e2e_warm −75%（seed-1 單一 workload）看似全矩陣最佳（**但此優勢主要來自上述 not-found 熱點 key-range artifact——跨 seed 為 −55% 雙峰、且與 footprint-matched `2f_top14` 統計不可分，非 uniform tail 讀取的普適性質；見下方 C_hit 控制**）。
 
 ## Workload C_hit — Pure-hit Tail Control（C 的對照）
 

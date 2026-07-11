@@ -142,7 +142,7 @@
 | ta | 2e_K500 | 189 | 78% | 100 | 1079 | 850 | 190 |
 | ta | 2f_slru | 102 | 88% | 100 | 1229 | 1000 | 102 |
 
-**讀法**:① first-query 最低一律是 **2f_slru**(載整個 working set),但其 deliver(A/B ~7ms、C ~0.76ms)使 `e2e` 多半輸——除 C 外兩個 e2e 模型都超 baseline。② **layers_5 / 2d / 2e_K10** 用極少 syscall:`e2e_warm`(= deliver+fq,warm-process/integrated,本研究主張)在三個 workload 都改善(A −11~14%、B −29~34%、**C × 2e_K10 −75% / 268µs**);`e2e_std`(= open+deliver+fq,standalone warmer)則在快 workload 因 ~230µs 冷 open 而變差。③ 兩個 e2e 模型唯一差是冷 open(db):**median ~232µs、跨 72 cell 的 open_us_median stdev ~10µs、p95 ~235µs**,逐 strategy 與逐 layout 皆 ~230µs → **strategy/layout 無關的 common-mode 固定成本**,非 prefetch 獨有稅。把 baseline 也放上 standalone 基準(`baseline+open`)後 open 兩邊相消、`e2e_std` 排序重現 `e2e_warm` verdict(如 A layers_5 對 base+open **−10%**、對照 e2e_warm −14%);快 workload 在 standalone 變差是「prefetch 省下的 first-query 不足以額外 cover 它自己那次 open」,而非 open 偏袒 baseline。詳見 REPORT §5.5.1–§5.5.2。④ `oracle` 欄是同步 pread 的可達下界。
+**讀法**:① first-query 最低一律是 **2f_slru**(載整個 working set),但其 deliver(A/B ~7ms、C ~0.76ms)使 `e2e` 多半輸——除 C 外兩個 e2e 模型都超 baseline。② **layers_5 / 2d / 2e_K10** 用極少 syscall:`e2e_warm`(= deliver+fq,warm-process/integrated,本研究主張)在三個 workload 都改善(A −11~14%、B −29~34%、**C × 2e_K10 −75% / 268µs**;此為 seed-1 單一 workload——C 跨 seed 為 −55% 雙峰、且與 footprint-matched `2f_top14` 統計不可分,見「C_hit」節);`e2e_std`(= open+deliver+fq,standalone warmer)則在快 workload 因 ~230µs 冷 open 而變差。③ 兩個 e2e 模型唯一差是冷 open(db):**median ~232µs、跨 72 cell 的 open_us_median stdev ~10µs、p95 ~235µs**,逐 strategy 與逐 layout 皆 ~230µs → **strategy/layout 無關的 common-mode 固定成本**,非 prefetch 獨有稅。把 baseline 也放上 standalone 基準(`baseline+open`)後 open 兩邊相消、`e2e_std` 排序重現 `e2e_warm` verdict(如 A layers_5 對 base+open **−10%**、對照 e2e_warm −14%);快 workload 在 standalone 變差是「prefetch 省下的 first-query 不足以額外 cover 它自己那次 open」,而非 open 偏袒 baseline。詳見 REPORT §5.5.1–§5.5.2。④ `oracle` 欄是同步 pread 的可達下界。
 <!-- MASTER-RESULTS-END -->
 
 ---
@@ -268,7 +268,7 @@
 
 ## 三槓桿 ablation（S1：勝利來自哪個 selection 槓桿）
 
-> 來源 [`results/ablation/`](results/ablation/) + [`results/ablation_k500/`](results/ablation_k500/);跨-seed CI 由 [`tools/stats_uncertainty.py`](tools/stats_uncertainty.py) 產 [`results/ablation/uncertainty.csv`](results/ablation/uncertainty.csv)、表由 [`tools/ablation_table.py`](tools/ablation_table.py) 產。
+> 來源 A/B 列 [`results/ablation/`](results/ablation/) + [`results/ablation_k500/`](results/ablation_k500/)（pre-fix、方向性對照）；**C/orig 列 canonical 為 tie-break 修正後的 [`results/ablation_comp_v2/`](results/ablation_comp_v2/)**（見 RESULT_PROVENANCE.md）。跨-seed CI 由 [`tools/stats_uncertainty.py`](tools/stats_uncertainty.py) 產。
 > 把 2e_K 的 hotset 拆成兩個 selection 槓桿並加對照組,**同 layout、同一批跑、10-seed bootstrap 95% CI**。集合上 `2e_K = 2d ∪ leaf_freq_K`,故為 exact 分解。
 > - **2d** = 只載 interior（page-type 槓桿 (ii)）
 > - **leaf_freq_K** = 只載 top-K 熱 leaf（access-frequency 槓桿 (iii)，= 2e_K 扣 interior）
@@ -323,13 +323,13 @@
 1. **C_mixed（tie-break 修正後，`ablation_comp_v2`）**:`leaf_rand_K10` +7%(對照,淨變慢)、`leaf_freq_K10` **−3% e2e_warm（tie）**——**修正後 access-frequency leaf-only 不再是 robust 訊號**（其舊 −40% 幾乎全是 first-op leakage）。robust 的那根是 **page-type `2d`（−36%）**;`2e_K10 −55%` 雙峰且**與 footprint-matched 純頻率 `2f_top14 −55%` 統計不可分**。**pre-fix 的「page-type-aware 命名對不上 headline / 38 點全是 access-frequency」結論已撤回。**
 2. **B(uniform)**:無熱 leaf → `leaf_freq ≈ leaf_rand ≈ 0`,改善全由 **2d(interior, page-type, −36%)** 提供;2e_K10 ≈ 2d。
 3. **A(zipfian)**:居中——leaf_freq_K10 −13%(robust、真有頻率訊號)但主力仍是 2d(−37%);**K=500 的 leaf-only 在 orig 反而 +21%(載 500 散落 leaf 的 deliver 成本壓過紅利)**,且所有 K500 的 `e2e_warm` 皆轉正(+39~114%,deliver ~0.8 ms 吃掉一切)——**access-frequency 的價值在於「小而準」(K=10),不在「多」**。
-4. **layout 槓桿(orig→ta)**:只改 deliver 成本、不改 selection 故事;ta collocate interior 卻使 2d/2e 的 interior 集合變大(C 4→48 頁),warm e2e 反略遜(C 2e_K10 orig −73% vs ta −65%),呼應 §6.1「type-aware layout 非淨贏」。
+4. **layout 槓桿(orig→ta)**:只改 deliver 成本、不改 selection 故事;ta collocate interior 卻使 2d/2e 的 interior 集合變大(C 4→48 頁),warm e2e 反略遜(C 2e_K10 orig **−55%(tie-break 修正後,`ablation_comp_v2`)** vs ta **−65%(pre-fix,未重跑)**),呼應 §6.1「type-aware layout 非淨贏」。
 
-→ 命名校正:本框架是 **type-aware(interior)＋ access-frequency-aware(hot leaf) 的複合 targeting**;page-type 扛 B/A 主力、access-frequency 解鎖 C headline。圖見 [figures/out/17_lever_ablation.png](figures/out/17_lever_ablation.png)。
+→ 校正後定位:**page-type(interior skeleton) 是普適 robust 的那根槓桿**（B/A/C_hit 主力）;access-frequency 的 leaf-only 加分**只在有真實熱點時才成立**（A 的 Zipfian skew）。C_mixed 的大效益**並非 access-frequency「解鎖」**，而是 ~50% not-found 高 key 匯聚最右葉的 key-range 熱點所致，且 `2e_K10` 與 footprint-matched `2f_top14` 統計不可分。圖見 [figures/out/17_lever_ablation.png](figures/out/17_lever_ablation.png)。
 
 ## 競爭性 baseline（RR1 / S4：targeted vs 調校過的 ranked dump）
 
-> 來源 [`results/competitive/`](results/competitive/)；`2f_topN` 由 [`strategies/access/runs/gen_freqdump.py`](strategies/access/runs/gen_freqdump.py) 產（replay 每筆 read 的 B+tree path 計次、按頻率排序 resident WS 取前 N，**不用 page-type**），CI 由 `tools/stats_uncertainty.py` 出。
+> 來源 A/B 及 C 的 `2f_top100/500` [`results/competitive/`](results/competitive/)；**C/orig 的 `2e_K10`/`2f_top14`/`2f_top28` canonical 為 tie-break 修正後同批 [`results/ablation_comp_v2/`](results/ablation_comp_v2/)**（見 RESULT_PROVENANCE.md）。`2f_topN` 由 [`strategies/access/runs/gen_freqdump.py`](strategies/access/runs/gen_freqdump.py) 產（replay 每筆 read 的 B+tree path 計次、按頻率排序 resident WS 取前 N，**不用 page-type**），CI 由 `tools/stats_uncertainty.py` 出。
 > 問題：§5.5 的「targeted > dump」是「機制贏」還是只是「dump 少一點」？對照 `2f_topN`（tuned ranked partial dump）掃 footprint {14,28,100,500,full}，同 e2e accounting、10-seed CI。
 
 跨 10 seed mean Δ% vs 同 seed baseline [95% CI]（async、orig；皆 robust）：
@@ -773,7 +773,7 @@ orig 欄取自已 commit 的 [`results/stats/uncertainty.csv`](results/stats/unc
 | C | 2e_K500 | −79% [−80,−78] 10/10 robust | −80% [−80,−79] 10/10 robust | ✓ |
 | C | 2f_slru | −88% [−88,−87] 10/10 robust | −87% [−87,−87] 10/10 robust | ✓ |
 
-**18/18 方向一致**,且 1gb 全部 `robust`。**prefetch 的冷啟動 first-query 優勢完全 size-robust**:符號全部一致、CI 都不跨 0;`2e_K500/A` 甚至從 orig 的 `directional`(CI [−59,+49] 跨 0)在 1gb 收成 `robust`——**大 DB 讓效應更乾淨**。小 hotset 的 `2d`/`2e_K10` 在 1gb 改善幅度更大(A 2d −35%→−55%、B 2e_K10 −36%→−55%),CI 仍緊。
+**18/18 方向一致**,且 1gb 全部 `robust`。**prefetch 的冷啟動 first-query 優勢完全 size-robust**:符號全部一致、CI 都不跨 0;`2e_K500/A` 甚至從 orig 的 `directional`(CI [−59,+49] 跨 0)在 1gb 收成 `robust`——**大 DB 讓效應更乾淨**。小 hotset 的 `2d`/`2e_K10` 在 1gb 改善幅度更大(A 2d −35%→−55%、B 2e_K10 −36%→−55%),CI 仍緊。（**註**:本表 `C 2e_K10` 為 1gb size-sweep 的 **pre-fix** first-query 值;C 2e_K10 現知為 not-found 雙峰、absolute 量級受 tie-break 影響（§6.2.8），但「小 hotset 的 first-query 優勢跨尺寸 size-robust」這個相對結論不受影響。）
 
 ### warm-process e2e（async)— 本研究主張的部署指標
 
