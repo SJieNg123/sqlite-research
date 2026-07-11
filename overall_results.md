@@ -361,7 +361,7 @@
 > † C 列為 **tie-break 修正後同批** `results/ablation_comp_v2`（2e_K10 + 2f_top14/28 背靠背）；A/B 列為 `results/competitive`（其 hotset 未受 tie-break 影響，見 precedence 表）。
 2. **broad A/B**：tuned `2f_topN`（純頻率）在 matched footprint 下 e2e_warm **追平** `2e_K10`（CI 重疊）→ **page-type 非必要**，與 §5.4.1 ablation 一致。
 3. **narrow C（修正後翻轉）**：`2e_K10` **−55%[−67,−42]** vs matched `2f_top14` **−55%[−67,−43]**——**CI 幾乎完全重疊、統計不可分**。舊表的「2e_K10 −72% robustly 勝 2f_top14 −57%」是 **first-op leakage** 造成的假象（§6.2.8）；修正後**沒有證據 type-aware `2e_K10` 勝過 footprint-matched 純頻率排名**。
-4. **結論（修正後）**：`2e_K10` 與 tuned dump 在 A/B/C **全面相當**（無一格 robustly 勝）→ 機制歸因＝「**小 footprint + frequency ranking**」；page-type 的價值在**保證載入 interior skeleton**（robust、且是 leaf prefetch 生效的前提），**不是**在 C 上勝過純頻率。⚠ [figures/out/18_competitive_baseline.png] 為 pre-fix、待重生。
+4. **結論（修正後）**：`2e_K10` 與 tuned dump 在 A/B/C **全面相當**（無一格 robustly 勝）→ 機制歸因＝「**小 footprint + frequency ranking**」；page-type 的價值在**保證載入 interior skeleton**（robust、且是 leaf prefetch 生效的前提），**不是**在 C 上勝過純頻率。圖見 [figures/out/18_competitive_baseline.png]（tie-break 修正後：C ★ 落在 2f_topN curve 上）。
 
 ## Prior-art baselines v2（在同一 harness 重現 libprefetch / learned 核心）
 

@@ -820,7 +820,7 @@ layout 槓桿(orig→ta)只改 deliver 成本、不改上述 selection 故事(§
 
 ![三槓桿 ablation（tie-break 修正後）](figures/out/17_lever_ablation.png)
 
-*圖 17（⚠ 此圖為 **pre-fix** 資料、待重生）:三槓桿 ablation。修正後的正確結論見上表——**leaf_freq 修正後掉到 tie（其 pre-fix 的大值是 first-op leakage）、page-type(2d) 才是 robust 的那根**;leaf_rand 淨變慢。*
+*圖 17（tie-break 修正後、orig-only；C 取自 `results/ablation_comp_v2`）:三槓桿 ablation。**C 上 leaf_freq（綠）修正後掉到 tie（其 pre-fix 的 −40% 是 first-op leakage）、page-type `2d`（藍）才是 robust 的那根、leaf_rand（灰）淨變慢**;合併 2e_K10（黑）−55% 雙峰。A 的 leaf_freq 有真實（但小）Zipfian 訊號、B 幾乎為 0。*
 
 > **命名校正(回應 R2 W4 / CONSENSUS-2 #9)**:本框架其實同時用了**兩個** selection 槓桿——**page-type 感知**(選 interior,扛 uniform B 與 A 的主力)與 **access-frequency 感知**(選 hot leaf,解鎖 C 的 headline)。單用「page-type-aware」命名會低估後者;準確說法是 **type-aware(interior)＋ access-frequency-aware(hot leaf)的複合 targeting**。
 
@@ -849,7 +849,7 @@ e2e_warm Δ% vs baseline（async、orig、跨 10 seed mean [95% CI]，footprint 
 
 ![競爭性 baseline：tuned ranked dump vs targeted](figures/out/18_competitive_baseline.png)
 
-*圖 18（⚠ C 的 `2e_K10` ★ 為 **pre-fix**、待重生）：competitive baseline（10-seed mean Δ%、bootstrap 95% CI）。x = dump footprint（頁、log）；`2f_topN`（線）= 純頻率 ranked partial dump，`2e_K10`（★）= page-type＋frequency targeted。**右（e2e_warm）**：footprint 一大、deliver 成本就吃掉一切——full dump（~4400 頁）在 A/B 爆到 +700~800%；小而排序的 dump 才在 0 線下。**★ 落在 A/B 的 partial-dump curve 上（page-type 非必要）；C 圖上的紅★偏低是 pre-fix first-op leakage，tie-break 修正後 C `2e_K10 −55%` 與 `2f_top14 −55%` 統計不可分（正文 §5.4.2）**。*
+*圖 18（tie-break 修正後；C 的 `2e_K10`/`2f_top14/28` 取自 `results/ablation_comp_v2`）：competitive baseline（10-seed mean Δ%、bootstrap 95% CI）。x = dump footprint（頁、log）；`2f_topN`（線）= 純頻率 ranked partial dump，`2e_K10`（★）= page-type＋frequency targeted。**右（e2e_warm）**：footprint 一大、deliver 成本就吃掉一切——full dump（~4400 頁）在 A/B 爆到 +700~800%；小而排序的 dump 才在 0 線下。**★ 在 A/B/C 都落在對應的 partial-dump curve 上——type-aware `2e_K10` 沒有勝過 footprint-matched 純頻率排名（含修正後的 C）**。*
 
 ### 5.5 The preprocessing trade-off （本研究的核心觀察）
 
