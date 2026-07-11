@@ -784,14 +784,13 @@ first-query improvement上限(orig,vs baseline):
 |---|---:|---:|---:|---:|---:|---:|---:|
 | 載全部 interior（layers_92）| 669 | −38% | 233 | 202 | 1101 (+1%) | 868 (−20%) | −21% [−22,−19] 10/10 · robust |
 | 只載真正用過的 interior（2d）| 664 | −39% | 234 | 71 | 969 (−11%) | 735 (−32%) | −36% [−39,−33] 10/10 · robust |
-| **+ 最 hot 的 10 個 leaf node（2e_K10）**| **186** | **−83%** | 234 | 83 | **501 (−54%)** | **268 (−75%)** | **−70%** [−72,−69] 10/10 · **robust** |
+| **+ 最 hot 的 10 個 leaf node（2e_K10）**| **186**※ | **−83%** | 234 | 83 | **501 (−54%)** | **268 (−75%)**※ | **−55%** [−67,−43] · robust·**雙峰**（§6.2.8）|
 
 > **觀察**:C 上「只載 interior」(2d/layers_92) first-q −38~39%、`e2e_warm` 已 −20~32%;
 > **真正解鎖的是加載 top-10 hot leaves(2e_K10)**，把 first-q 壓到 186 µs(−83%)、
 > **`e2e_warm` 268 µs(−75%)/ `e2e_std` 501 µs(−54%)**，全矩陣最佳 e2e。三者 deliver 都小
-> (~70–200 µs)、冷 open ~220 µs,所以 e2e 由 first-q 決定，而 2e_K10 的少量 hot leaf 是 C 上最有效益的選擇。
-> **此 −75% 跨 seed 統計上最穩健**:經 **10-seed** 驗證為 warm e2e **−70%(CI [−72, −69])、10/10 seed 皆改善**(§6.2.4)。
-> **但其量級專屬 C 的 mixed / not-found 結構**（~50% not-found 高 key 集中到最右葉成真實熱點）——pure-hit 控制 **C_hit** 移除該熱點後,tail-read 的普適 targeted 效益回落到 interior skeleton 的 **~−30% e2e_warm**,且此處 `2e_K10` 的絕對量另受 leaf-count-tied tie-break 灌水（**§6.2.8**）。
+> (~70–200 µs)、冷 open ~220 µs,所以 e2e 由 first-q 決定。**※ 此 186/268 µs 是 `results/main` seed 1 的 single-instantiation**;跨 seed（修正 tie-break 後）為 **−55% [−67,−43] 雙峰**——首查是 not-found probe 的 seed ~−70%（真實最右葉熱點）、是真 hit 的 seed ~−31%（interior skeleton）。**舊的 −70% [−72,−69] tight/robust 是 first-op leakage 把 hit-seed 也灌到 −70% 的假象**（§6.2.8 已修正）。
+> **此 −75% 的量級專屬 C 的 mixed / not-found 結構**（~50% not-found 高 key 集中到最右葉成真實熱點）——pure-hit 控制 **C_hit** 移除該熱點後,tail-read 的普適 targeted 效益是 interior skeleton 的 **~−28% e2e_warm**,修正後 `2e_K10` 在 C_hit 亦回落到 −27%（**§6.2.8**）。
 
 #### 5.4.1 三槓桿 ablation：C 的勝利來自 access-frequency，不是 page-type（S1）
 
@@ -1073,7 +1072,7 @@ C（WS 僅 1.8 MB ≈ 量測下限）**無法以 cgroup 施壓 → 其 RAM-robus
 | A 2e_K10 | −7% | **−36%** | [−50, −23] | 10/10 | robust |
 | A 2d | −8% | **−25%** | [−29, −20] | 10/10 | robust |
 | B 2d | −31% | −25% | [−32, −16] | 9/10 | robust |
-| B 2e_K10 | −29% | −25% | [−30, −16] | 9/10 | robust |
+| B 2e_K10 | −29% | −25% | [−32, −15] | 9/10 | robust |
 | **A layers_5** | −9% | **−5%** | [−16, +4] | 6/10 | **tie** |
 | **B layers_5** | −34% | **−1%** | [−12, +7] | 8/10 | directional |
 
