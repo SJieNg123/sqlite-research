@@ -91,7 +91,7 @@ open；**對應 scale-from-zero 的冷容器**）作為對照——在 standalon
   LOSO learned −29.0%，皆 robust)。**access-frequency 的 leaf 選擇只在有真實 access 熱點時才額外加分**：C 上
   2e_K10 warm-process e2e **−75%(268 µs)** 是全矩陣最大，但這**專屬於 C 的 mixed tail-boundary 結構**
   ——C 的 range 有 ~50% 為超出 DB 範圍的 not-found 高 key，全部集中到最右葉形成真實但 key-range 造成的熱點；
-  pure-hit 控制 C_hit 移除該熱點後效益回落到 interior skeleton 的 ~−30%(§6.2.6)。故 C2 的貢獻不是「−75%」這個數字，
+  pure-hit 控制 C_hit 移除該熱點後效益回落到 interior skeleton 的 ~−30%(§6.2.8)。故 C2 的貢獻不是「−75%」這個數字，
   而是**把 targeted prefetch 的效益乾淨地拆成「普適的 interior skeleton」與「熱點相依的 leaf 加分」兩部分**。
 - **(C3) Preprocessing cost-accounting 框架（兩個部署模型）**：針對 SQLite cold-start read path 提出一套**把 prefetch preprocessing 拆解到 OS-syscall 粒度**的 evaluation methodology——將
   preprocessing 顯式拆成 **冷 open(db)(~200 µs,per-layout 常數)+ 逐頁 deliver(隨 hotset)**、以 pread-oracle/async 兩種模式隔離 selection 與 delivery、
@@ -712,7 +712,7 @@ prefetch cost」的關鍵。
 | 1 | Prefetch 普遍能改善 cold-start | first-query 普遍改善（−22~89%）；**e2e 取決於部署模型**——standalone warmer（多扣一次冷 open）在快 workload 會輸，但 **warm-process（handle 已開,≈static）下便宜 prefetch 連快 A 都贏(−7~9%)** | **部分出乎意料**：勝負由「成本邊界」決定（§5.5）|
 | 2 | 載越多 page（整份 working set，2f）效益越好 | 2f first-q 最低，但 deliver ~0.8–7 ms 使 **e2e 多半輸**（A/B 慢一個量級；只有 C deliver 小才打平/小贏） | **出乎意料**（§5.5）|
 | 3 | layers_N 有「N=5 universal sweet spot」 | 形狀依 (workload, layout) 而異：A/Z N≥5 plateau、**C 要 N=92**、N=1 反而變慢 | **部分不符**（§5.3）|
-| 4 | 慢 workload 上 access-pattern + 少量 hot leaf 最有效益 | C 上 2e_K10 **first-q −83%、e2e_warm −75%（standalone −54%）**，全矩陣最佳 e2e | **符合**（§5.4）|
+| 4 | 慢 workload 上 access-pattern + 少量 hot leaf 最有效益 | C 上 2e_K10 **first-q −83%、e2e_warm −75%（standalone −54%）**，全矩陣最佳 e2e | **部分符合**（§5.4；但 hot-leaf 增益專屬 C 的 not-found 熱點——pure-hit C_hit 上普適效益回落到 interior skeleton ~−30%，§6.2.8）|
 | 5 | RAM 壓力會吃掉 prefetch 效益 | cap 壓到 working set 以下(6–16 MB)：小 hotset targeted first-q 不受影響（delivery 全程 100%），唯 2f_slru（整份 WS）崩回 baseline | **部分符合（依 hotset 大小分歧）**（§6.2.2）|
 
 ### 5.1 Per-workload best methods (overview)
@@ -789,8 +789,9 @@ first-query improvement上限(orig,vs baseline):
 > **觀察**:C 上「只載 interior」(2d/layers_92) first-q −38~39%、`e2e_warm` 已 −20~32%;
 > **真正解鎖的是加載 top-10 hot leaves(2e_K10)**，把 first-q 壓到 186 µs(−83%)、
 > **`e2e_warm` 268 µs(−75%)/ `e2e_std` 501 µs(−54%)**，全矩陣最佳 e2e。三者 deliver 都小
-> (~70–200 µs)、冷 open ~220 µs,所以 e2e 由 first-q 決定，而 2e_K10 的少量 hot leaf 是最有效益的選擇。
-> **此 −75% 是全研究最穩健的勝負**:經 **10-seed** 驗證為 warm e2e **−70%(CI [−72, −69])、10/10 seed 皆改善**(§6.2.4)。
+> (~70–200 µs)、冷 open ~220 µs,所以 e2e 由 first-q 決定，而 2e_K10 的少量 hot leaf 是 C 上最有效益的選擇。
+> **此 −75% 跨 seed 統計上最穩健**:經 **10-seed** 驗證為 warm e2e **−70%(CI [−72, −69])、10/10 seed 皆改善**(§6.2.4)。
+> **但其量級專屬 C 的 mixed / not-found 結構**（~50% not-found 高 key 集中到最右葉成真實熱點）——pure-hit 控制 **C_hit** 移除該熱點後,tail-read 的普適 targeted 效益回落到 interior skeleton 的 **~−30% e2e_warm**,且此處 `2e_K10` 的絕對量另受 leaf-count-tied tie-break 灌水（**§6.2.8**）。
 
 #### 5.4.1 三槓桿 ablation：C 的勝利來自 access-frequency，不是 page-type（S1）
 
