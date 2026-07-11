@@ -78,7 +78,15 @@ for k, c in keycnt.items():
     pn = page_for_key(k)
     if pn is not None:
         leafcnt[pn] += c
-top_leaves = set(pn for pn, _ in leafcnt.most_common(TOPK))
+# Deterministic, trace-order-INDEPENDENT ranking: frequency descending, then
+# page_number ascending. (The old `Counter.most_common(TOPK)` broke ties by
+# insertion order = first-seen-leaf order, which on tied-count workloads -- C /
+# C_hit, every leaf ~equally hot -- trivially selected the earliest-seen leaves,
+# i.e. the measured first-op's leaf: a first-op leakage through tie-breaking.
+# Sorting by (-count, pageno) matches gen_freqdump and is invariant to trace order;
+# a shuffle of the workload lines yields the identical hotset -- see
+# test_gen_hotleaves_tiebreak.py.)
+top_leaves = set(pn for pn, _c in sorted(leafcnt.items(), key=lambda kv: (-kv[1], kv[0]))[:TOPK])
 _total = sum(leafcnt.values())
 _cov = sum(leafcnt[pn] for pn in top_leaves)
 print(f"top-{TOPK} hot leaves cover {_cov}/{_total} = "
