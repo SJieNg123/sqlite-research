@@ -16,7 +16,7 @@ paper submodule carries a copy under `paper/figures/`. Provenance authority:
 | 1 | `fig:layout-distribution` | `figures/01_page_distribution.py` | `figures/01_page_distribution.png` | `pipeline/preparation/layout_rewriter/runs/classify_{before,vacuum,after}.csv` | static page-type placement, 3 layouts | interior-page offsets | absolute (structural, batch-independent) | current-valid (byte-identical) |
 | 13 | `fig:firstq-bars` | `figures/13_strategy_firstq_bars.py` | `figures/13_strategy_firstq_bars.png` | `results/unified_v2/matrix/summary.csv` + `results/tiebreak_fix/master_summary.csv` | A/B/C × orig × {layers_5,2d,2e_K10,2e_K500,2f_slru}, async | **paired first-query reduction %** vs same-batch baseline | **relative** (per-cell same-batch) | **regenerated** (was v1 `results/main`) |
 | 14 | `fig:e2e-stacked` | `figures/14_strategy_endtoend_stacked.py` | `figures/14_strategy_endtoend_stacked.png` | `results/unified_v2/matrix/summary.csv` | A/B/C × orig × {baseline,layers_5,2d,2f_slru}, async | first_query + deliver + open stack; warm % vs same-batch baseline | **absolute (single batch)** | **regenerated** (was v1 `results/main`) |
-| 17 | `fig:ablation` | `figures/17_lever_ablation.py` | `figures/17_lever_ablation.png` | `results/ablation_comp_v2/uncertainty.csv` (C/orig) + `results/ablation/uncertainty.csv` (A/B) | A/B/C × orig × {2d,leaf_rand_K10,leaf_freq_K10,2e_K10} | Δ% vs baseline (first-query and e2e_warm), 10-seed bootstrap 95% CI | **relative** | **regenerated** (paper copy was content-stale; see below) |
+| 17 | `fig:ablation` | `figures/17_lever_ablation.py` | `figures/17_lever_ablation.png` | `results/ablation_comp_v2/uncertainty.csv` **only** | **C_mixed × orig** × {2d,leaf_rand_K10,leaf_freq_K10,2e_K10} | Δ% vs same-batch baseline (first-query and e2e_warm), 10-seed bootstrap 95% CI | **relative** | **corrected same-batch ablation** (Phase 3b: scoped to C_mixed; no longer reads `results/ablation`) |
 | 16 | `fig:ram` | `figures/16_ram_pressure_sweep.py` | `figures/16_ram_pressure_sweep.png` | `results/ram_pressure/cap_*/summary.csv` | RAM-pressure sweep, seed 1, orig | delivery % + first-query vs cgroup cap | absolute (single RAM-axis batch) | current-valid (byte-identical) |
 
 ## Per-cell canonical source rule (Figures 13 & 14)
@@ -74,17 +74,17 @@ C: layers_5  +3   2d -32   2f_slru   -12
 
 ## Figure 17 currency note
 
-Root script `figures/17_lever_ablation.py` was updated to post-fix data in commit
-`30b7e86`, but the **paper submodule copy** `paper/figures/17_lever_ablation.png`
-was never re-copied and remained an older render (a 2×2 orig+ta layout showing
-the *pre-fix* C/orig values: leaf_freq ≈ −32%, 2e_K10 ≈ −73%). Phase 3
-regenerated it from the current script (orig-only A/B/C, corrected C: leaf_freq
-≈ −3% tie, 2e_K10 ≈ −55%, from `ablation_comp_v2`) and copied it into the paper.
-A/B bars use `results/ablation` (independent pre-fix batch); this is
-tie-break-unaffected for A/B (B uniform → leaf_freq ≈ leaf_rand ≈ 0; A genuine
-skew → distinct frequencies, few ties), analogous to the A/B competitive batch
-(RESULT_PROVENANCE §4.8); C/orig is overridden by the corrected
-`ablation_comp_v2`.
+History: the paper submodule copy was long content-stale (a 2×2 orig+ta render
+showing the *pre-fix* C/orig values: leaf_freq ≈ −32%, 2e_K10 ≈ −73%). Phase 3
+first replaced it with an A/B/C orig render, but that still drew the A/B bars from
+the pre-fix `results/ablation` batch, which no canonical provenance blesses.
+**Phase 3b scopes the figure to C_mixed only**, reading the single canonical
+corrected source `results/ablation_comp_v2/uncertainty.csv` (C × orig): 2d −43%
+first-query / −36% warm e2e (robust); leaf_freq −11% / −3% (warm-e2e tie);
+leaf_rand −1% / +7% (control); 2e_K10 −63% / −55%. The figure no longer reads
+`results/ablation`, and the A/B "tie-break-unaffected" ablation claim is removed
+(the A/B levers are characterized by the cross-seed sweep, `tab:seeds`, not by a
+separate ablation figure).
 
 ## Cross-batch safety
 
@@ -92,7 +92,8 @@ No paper figure places absolute µs from two different machine-state batches in 
 single directly comparable chart:
 - Fig 13 is fully relative (per-cell same-batch normalization).
 - Fig 14 is single-batch absolute (`unified_v2`, unaffected arms only).
-- Fig 17 plots relative Δ% only (per-cell paired), CI from each cell's own batch.
+- Fig 17 is single-source (`ablation_comp_v2`, C_mixed × orig), relative Δ% with
+  that batch's own bootstrap CI.
 - Figs 1, 16, 18 are single-source / structural / qualitative.
 
 ## Scripts not referenced by the paper (informational)

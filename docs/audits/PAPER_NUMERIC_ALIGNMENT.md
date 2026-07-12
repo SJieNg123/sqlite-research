@@ -219,12 +219,15 @@ Full traceability: [`docs/figures/FIGURE_SOURCE_MAP.md`](../figures/FIGURE_SOURC
   **C\_mixed (~50% not-found)** (no "churn-heavy"). Warm % from same-batch
   baseline: A `2f_slru` +1300%, B +879%, C −12%. Caption/prose updated; pending
   note removed.
-- **`figures/17_lever_ablation.png`** — **regenerated** (Phase 3): the paper
-  submodule copy was content-stale (a 2×2 render showing pre-fix C leaf_freq
-  ≈ −32% / 2e_K10 ≈ −73%). Now the corrected orig-only render from the current
-  script (`ablation_comp_v2` for C: leaf_freq −3% tie, 2e_K10 −55%). A/B from the
-  independent `results/ablation` batch (tie-break-unaffected). Caption unchanged
-  (already matched the corrected content).
+- **`figures/17_lever_ablation.png`** — **regenerated and scoped to C_mixed**
+  (Phase 3 fixed a content-stale paper copy; **Phase 3b** then removed the A/B
+  panels). Now a **C_mixed-only** corrected same-batch ablation from the single
+  canonical source `results/ablation_comp_v2` (2d −43%/−36%; leaf_freq
+  −11%/−3% tie; leaf_rand −1%/+7% control; 2e_K10 −63%/−55%), two panels
+  (first-query and warm e2e). The script no longer reads `results/ablation`, and
+  the earlier "A/B pre-fix ablation is tie-break-unaffected/canonical" claim is
+  **withdrawn** — the A/B levers are characterized by the cross-seed sweep
+  (`tab:seeds`), not by this figure. Caption/prose updated to match.
 - `18_capability_matrix.png` (qualitative), `01_page_distribution.png`
   (structural), `16_ram_pressure_sweep.png` (RAM axis) — verified byte-identical
   to the committed copies; current-valid, not regenerated.
