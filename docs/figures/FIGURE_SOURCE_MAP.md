@@ -107,3 +107,22 @@ single directly comparable chart:
 
 Only paper-visible, demonstrably-stale figures (13, 14, 17) were regenerated; no
 decorative variants were added.
+
+## Phase 4 freeze — checksums and determinism (2026-07-12)
+
+All 6 paper-visible figures re-run from clean state; two consecutive runs give
+identical md5 (deterministic), and each `paper/figures/*.png` copy is
+byte-identical to its `figures/out/*.png` root output.
+
+| Fig | Script | root/paper md5 | dimensions | status |
+|---|---|---|---|---|
+| 1  | `01_page_distribution.py`        | `8a9abac422…` | 1035×703  | current-valid |
+| 13 | `13_strategy_firstq_bars.py`     | `1090edc11f…` | 1935×643  | regenerated (Phase 3) |
+| 14 | `14_strategy_endtoend_stacked.py`| `8534509086…` | 1783×763  | regenerated (Phase 3) |
+| 16 | `16_ram_pressure_sweep.py`       | `0b5fbb7243…` | 1656×1248 | current-valid (seed-1 RAM axis; `cap_unlimited`, no `results/main`) |
+| 17 | `17_lever_ablation.py`           | `e8c25599d1…` | 1485×614  | regenerated (Phase 3b, C_mixed-only, ablation_comp_v2) |
+| 18 | `18_capability_matrix.py`        | `b81d89226a…` | 1198×697  | current-valid (qualitative) |
+
+Env: `/home/u03/.cache/coldstart-venv/bin/python` (matplotlib 3.10.9, numpy 2.4.6).
+No paper-visible figure script reads a legacy/non-canonical result source; the
+unused `13b`/`13c`/`18_competitive_baseline` scripts are documented above.

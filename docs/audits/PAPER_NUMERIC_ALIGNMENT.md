@@ -382,3 +382,18 @@ Text/scope-only pass; no numbers rest on a superseded source after this.
 8. **Novelty** — conclusion "This work is the first" → **"To our knowledge, this
    is the first … (pending fuller literature verification)"**; contribution
    "for the first time" → "to our knowledge for the first time".
+
+## Phase 4 freeze (2026-07-12)
+
+Paper-wide canonical freeze completed. Every quantitative claim is inventoried in
+[`PAPER_CLAIM_MANIFEST.csv`](PAPER_CLAIM_MANIFEST.csv) (128 claims) and machine-
+verified by [`tools/verify_paper_atomicity.py`](../../tools/verify_paper_atomicity.py)
+— 111 recomputed from canonical CSVs + 17 scope-checked, **0 FAIL**. Full audit:
+[`PAPER_FINAL_CANONICAL_AUDIT.md`](PAPER_FINAL_CANONICAL_AUDIT.md).
+
+One residual atomic violation was found and fixed: `tab:seeds` B `2e_K10`
+single-workload printed **−29%** (superseded unified_v2); B 2e_K10 is a tie-break
+changed cell, so the atomic-correct value is **−30%** from `tiebreak_fix`. Fixed.
+
+All figure/numeric pending items from earlier phases are now resolved; no
+paper-visible stale figure or number remains.
