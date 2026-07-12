@@ -54,7 +54,7 @@ Classification key: **A** canonical-current, **C** v1-stale, **D** pre-fix-stale
 | N14 | main.tex:520–524 | entire A/C body (480,487,490,291,7134,…) | `tab:e2e-ac` single-inst e2e | C | unified_v2 for unaffected rows; impact rows (C 2e_K10, A 2e_K500) moved to `tab:corrected-arms` from `tiebreak_fix` (Phase 2.5b) | rebuilt + split | fixed |
 | N15 | main.tex:524 | C 2f_slru verdict −9% | cross-seed | E | ablation_comp_v2 C 2f_slru e2e_warm | −7% | fixed |
 | N16 | main.tex:531 | 7134 vs 529; +1248%; +1285%; 402 µs; −19%(−9%) | §5.2 prose | C/G | unified_v2 (A/C single-inst) + ablation_comp_v2 | 7324 vs 523; +1300%; +1343%; 415 µs; −12%(−7%) | fixed |
-| N17 | main.tex:534 | 1087 → 268 µs, −75% | C 2e_K10 single-inst, labeled | A | unified_v2 C 2e_K10 warm (267.7); tiebreak paired −75.2% | retained (canonical) | verified |
+| N17 | main.tex (tab:corrected-arms + §5.2 prose) | 1071 → 265 µs, −75% | C 2e_K10 single-inst, labeled | A | `tiebreak_fix/master_summary.csv` (baseline 1070.68; 2e_K10 warm 265.44; paired −75.2%) | reported in `tab:corrected-arms` (Phase 2.5b) | verified |
 | N18 | main.tex:544 | +1248%(A)/+843%(B); −7 to −9 (A); −73 (C) | fig:e2e-stacked prose | C/G | unified_v2 single-inst | +1300%/+879%; −11 to −14 (A); −75 (C) | fixed + pending note |
 | N19 | main.tex:539 | (narrative caption) | fig:e2e-stacked caption | A | — | pending note added | fixed (note) / figure pending |
 | N20 | main.tex:596,610 | +1248% (×2) | reconciliation to single-inst | G | unified_v2 A 2f_slru warm | +1300% | fixed |
@@ -64,8 +64,8 @@ Classification key: **A** canonical-current, **C** v1-stale, **D** pre-fix-stale
 | N24 | main.tex:569–572 | `tab:ablation` (2d −43/−36; leaf_rand −1/+7; leaf_freq −11/−3; 2e_K10 −63/−55) | corrected ablation C | A | ablation_comp_v2 | (matches) | verified, unchanged |
 | N25 | main.tex:592 | C_hit 2e_K10 ≈−27; 2d −28.5; 2f_top14 −30.6 | pure-hit control | A | c_hit_v2 (−27.24) / c_hit (−28.54, −30.61) | (matches) | verified, unchanged |
 | N26 | main.tex:604–605 | C 2e_K10 −55[−67,−42]; 2f_top14 −55[−67,−43] | competitive C indistinguishable | A | ablation_comp_v2 (−54.5 / −55.25) | (matches) | verified, unchanged |
-| N27 | main.tex:616 | 452/523; 509/701; 268/319; 658; 187/187 | layout comparison (single-inst) | A | unified_v2 orig vs ta | (matches) | verified, unchanged |
-| N28 | main.tex:507 | open 221 µs median, sd 17, p95 231, 810 reps | open-cost stats | A | (raw per-rep; unified_v2 open medians 226–236, ≈200) | retained (defensible; not v1) | verified |
+| N27 | main.tex:628 | 452/523; 509/701; 265/317; 658; 187/187 | layout comparison (single-inst) | A | A/B `unified_v2` orig vs ta; **C 2e_K10 pair from `tiebreak_fix` (265/317, Phase 2.5b)** | (matches) | verified |
+| N28 | main.tex:509 | open cost | open-cost stats | F→resolved | `unified_v2/matrix/raw.csv` (median 231.6) | **Phase 2.5b/2.6**: unreproducible 221/17/231/810 triple removed; §5.2 states ≈230 µs canonical median; `tab:overhead` 193–222 marked independent batch | fixed |
 | N29 | main.tex:660,662,649,658 | cadence 26/29 µs; size 1GiB −70/−68; RAM 98→500 µs | robustness axes (indep. batches) | A | aging_v2 / size / cadence / RAM batches | not v1; within-axis | verified, unchanged |
 
 ## Canonical headline table
@@ -81,9 +81,10 @@ Classification key: **A** canonical-current, **C** v1-stale, **D** pre-fix-stale
 | competitive C | 2e_K10 **−54.5%** [−66.6,−42.2] ≈ 2f_top14 **−55.2%** [−66.8,−43.2] → **statistically indistinguishable** | cross-seed, C orig | `ablation_comp_v2` |
 | corrected ablation C | 2d **−36%** robust; leaf_freq_K10 **−3%** (tie); leaf_rand_K10 **+7%** (worse); 2e_K10 **−55%** bimodal | cross-seed, C orig | `ablation_comp_v2` |
 | C_hit | 2e_K10 **−27.2%** [−34.6,−17.7]; 2d **−28.5%** [−34.9,−19.6]; 2f_top14 **−30.6%** [−37.1,−22.4]; learned **−29.0%** [−36.1,−19.4] | orig-only, 10×10 | `c_hit_v2` (2e); `c_hit` (rest) |
-| layout best warm e2e (single-inst) | A 452/523 · B 509/701 · C_mixed 268/319 (orig/ta) | single-instantiation | `unified_v2` |
+| C_mixed 2e_K10 (single-inst) | 1071 → 265 µs, −75% | seed-1 single-instantiation, labeled | `tiebreak_fix/master_summary.csv` |
+| layout best warm e2e (single-inst) | A 452/523 · B 509/701 (orig/ta) `unified_v2`; C_mixed 265/317 (orig/ta) `tiebreak_fix` | single-instantiation, per-workload same-batch | `unified_v2` (A/B) + `tiebreak_fix` (C) |
 | 2f_slru delivery | 0.8 to 7 ms (A/B ≈7 ms; C ≈0.76 ms) | preprocessing | `unified_v2` deliver_us |
-| open cost | ≈ 200 µs (median ≈221) per layout | constant | raw / `unified_v2` open_us |
+| open cost | ≈ 230 µs (canonical per-rep median 231.6, `unified_v2`); `tab:overhead`'s 193–222 is an independent overhead batch | constant, common-mode | `unified_v2/matrix/raw.csv` open_us |
 | LibPrefetch | Δdeliver 10–16× ordering; "consistent with" | mechanism | `baselines_v2` lp |
 | aging | YD static-freq decays; YE/structural stable | orig, 11 checkpoints | `aging_v2` |
 
@@ -185,11 +186,12 @@ dependency added; no CSV modified.
   (−79~91, 25–30%, 0.8–7 ms, A −25→−36, C_hit −27~30); untouched.
 - **`tab:ablation`, `tab:competitive` C 2e_K10/2f_top14, C_hit prose,
   layout comparison** (N24–N27): verified against source CSVs, already canonical.
-- **C 2e_K10 single-inst 1087→268 −75%** (N17): correctly labeled
-  single-instantiation with the corrected cross-seed −55% in the same paragraph;
-  retained.
-- **Open-cost 221 µs / robustness-axis numbers** (N28–N29): not v1 artifacts,
-  each within its own batch; retained.
+- **C 2e_K10 single-inst 1071→265 −75%** (N17): reported from `tiebreak_fix` in
+  `tab:corrected-arms`, labeled single-instantiation with the corrected cross-seed
+  −55% in the same paragraph. *(Phase 2.5b changed the value/source from the
+  earlier `1087→268` unified_v2 snapshot; the old snapshot is no longer used.)*
+- **Robustness-axis numbers** (N29): not v1 artifacts, each within its own batch;
+  retained. *(Open-cost is no longer a "retained" item — see below.)*
 - **A/B competitive columns + 2f_top500** (N22): no canonical corrected
   replacement exists; retained under an explicit independent-batch caption note.
 
@@ -298,9 +300,11 @@ The three Phase 2.5a provenance blockers below are **RESOLVED in Phase 2.5b**
   236.8, 5th–95th 223–237 µs** — a different count and centre; `tab:overhead`'s
   per-strategy 193–222 is from yet another batch. Statistical basis (the 810
   count) is therefore unclear. Per the "口徑不明" branch, the precise triple is
-  **removed** from `:507` and replaced with *"approximately 200 to 235 µs within
-  the canonical batch … strategy-independent common-mode term."* No pending note
-  remains.
+  **removed**. *(Phase 2.6 finalized the wording:* §5.2 now states the canonical
+  per-rep median **≈230 µs** (`unified_v2`), and `tab:overhead`'s caption marks
+  its per-strategy 193–222 µs as an **independent overhead-decomposition batch**,
+  distinct from the canonical open median — the two batches are not merged into a
+  single range.* No pending note remains.
   - Reproduction command: `python3` over `results/unified_v2/matrix/raw.csv`
     filtering `warmup==0 && strategy!='baseline' && open_us>0`, `statistics`
     module. Output above.
@@ -319,3 +323,41 @@ The three Phase 2.5a provenance blockers below are **RESOLVED in Phase 2.5b**
 - **RESULT_PROVENANCE.md modified**: yes — §4.8 scope addenda only (two new
   canonical-class rows + rationale). No §4.2 freeze row altered; no CSV/result
   touched.
+
+## Phase 2.6 corrections (residual narrative & scope cleanup)
+
+Text/scope-only pass; no numbers rest on a superseded source after this.
+
+1. **Workload setup** — `tab:workloads` and §7 prose corrected: C relabelled
+   **C\_mixed** (mixed tail-boundary, ~50% not-found); removed the
+   "recently-ingested event data / log-stream" scenario and the "full-table scan"
+   scenario for B; the blanket "all draw from the full 600k range" now split
+   (A/B full range; C\_mixed high-key tail, upper half beyond max id). Added
+   **C\_hit** (orig-only pure-hit control) and **YD/YE** (read-latest /
+   short-ranges) workload definitions.
+2. **Skeleton range** — §6.2 "2d −25% to −36% across A/B/pure-hit" → **−25% to
+   −30%** (A −25, B −25, C\_hit −28.5); the −36% is explicitly attributed to A's
+   `2e_K10` skew bonus and C\_mixed's not-found-inflated `2d`, not the general
+   skeleton.
+3. **Aging** — added a **"Static-plan staleness under a moving hotspot"**
+   robustness subsection from `results/aging_v2/aging_ci.csv`: under YD
+   (non-stationary) the frozen frequency plan decays (**−50%→−33%** ck0→ck10)
+   while the structural plan holds (**−53%→−53%**); under stationary YE both stay
+   flat. The 50k-churn "no decay / recomputation unnecessary" claim is now scoped
+   to a **stationary read hotspot**.
+4. **Size scaling** — the pre-fix C `2e_K10` −70/−68 figures are marked
+   **diagnostic only** (corrected leaf-selector magnitude not re-validated across
+   sizes); the size claim now rests on the tie-break-unaffected `2d` and the
+   deliver-cost trend.
+5. **Recommendation** — §6.4 prose: default = **`1a` + `2d`**; `2e_K10` only with
+   independently validated stable skew; moving hotspot → structural coverage /
+   refresh (matching `tab:guidance`).
+6. **Open cost** — §5.2 states canonical per-rep median **≈230 µs**
+   (`unified_v2`); `tab:overhead` caption marks its 193–222 µs as an independent
+   overhead-decomposition batch (not merged into one canonical range).
+7. **Competitive caption** — notes A/B come from a pre-fix independent batch and
+   the corrected rerun reproduces A/B `2e_K10` within noise (A −37.9 vs −38.2; B
+   −25.2 vs −23.8); relative-only, no cross-batch absolute comparison.
+8. **Novelty** — conclusion "This work is the first" → **"To our knowledge, this
+   is the first … (pending fuller literature verification)"**; contribution
+   "for the first time" → "to our knowledge for the first time".
