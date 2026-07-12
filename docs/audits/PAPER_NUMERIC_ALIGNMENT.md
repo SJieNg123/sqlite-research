@@ -87,7 +87,15 @@ Classification key: **A** canonical-current, **C** v1-stale, **D** pre-fix-stale
 | LibPrefetch | Δdeliver 10–16× ordering; "consistent with" | mechanism | `baselines_v2` lp |
 | aging | YD static-freq decays; YE/structural stable | orig, 11 checkpoints | `aging_v2` |
 
-## Rebuilt `tab:e2e-ac` (single-instantiation, `unified_v2`; orig, async)
+## Historical Phase 2.5a snapshot — SUPERSEDED by Phase 2.5b (not current guidance)
+
+> **⚠ This table is a historical record of the Phase 2.5a `tab:e2e-ac` rebuild,
+> which still included the tie-break-impact cells (C `2e_K10`, A `2e_K500`) sourced
+> from `unified_v2` on a "materially identical" rationale. That rationale was
+> RETRACTED in Phase 2.5b: those two rows were removed from the absolute table and
+> moved to `tab:corrected-arms` (from `tiebreak_fix`). The current paper table
+> lists only baseline / layers_5 / 2d / 2f_slru. Do not use the `2e_K10` / `2e_K500`
+> rows below as canonical.**
 
 Baseline A = 523 µs, C = 1087 µs. Parenthetical = paired % vs same-workload
 same-batch baseline.
@@ -194,23 +202,32 @@ dependency added; no CSV modified.
 - **A/B competitive columns + 2f_top500** (N22): no canonical corrected
   replacement exists; retained under an explicit independent-batch caption note.
 
-## Figure-internal stale numbers pending Phase 3
+## Figure-internal stale numbers — RESOLVED in Phase 3
 
-- **`figures/13_strategy_firstq_bars.png`** — bars are labeled with v1 values:
-  baselines **529/760/1096**, `2f_slru` **127/128/123**, C `2e_K10` **211**, etc.
-  Cannot be regenerated in Phase 2.5 (no re-run / no figure regeneration).
-  Caption (`main.tex:479`) and referencing prose (`:483`) updated to canonical
-  values **with an explicit note that the image itself still shows the
-  pre-canonical batch**.
-- **`figures/14_strategy_endtoend_stacked.png`** — bars labeled with v1
-  single-instantiation e2e: A `2f_slru` **+1248%**, B **+843%**, C `2e_K10`
-  **−73%**, A `2e_K10`/`2d`/`layers_5` **−7/−8/−9%**, etc.; the C panel is also
-  **mistitled "churn-heavy"** (C is file-tail / C_mixed). Caption (`:539`) and
-  prose (`:544`) updated to canonical with a pending note. **Both figures must be
-  regenerated from the canonical batches in Phase 3.**
-- `figures/17_lever_ablation.png` and `18_capability_matrix.png` were already
-  regenerated with post-fix data (RESULT_PROVENANCE §4.7); `01`, `16` are
-  structural/other-axis and not affected by the v1→v2 swap.
+Full traceability: [`docs/figures/FIGURE_SOURCE_MAP.md`](../figures/FIGURE_SOURCE_MAP.md).
+
+- **`figures/13_strategy_firstq_bars.png`** — **regenerated** (Phase 3). Redesigned
+  as a *paired first-query reduction* chart: each bar is normalized to its own
+  same-batch baseline, per-cell canonical source (`unified_v2` unaffected;
+  `tiebreak_fix` for impact-set cells, hatched). No absolute µs; no v1 values.
+  Caption/prose (`fig:firstq-bars`) rewritten to the relative metric; pending
+  note removed.
+- **`figures/14_strategy_endtoend_stacked.png`** — **regenerated** (Phase 3).
+  Single-batch absolute stack (`unified_v2`) restricted to the tie-break-unaffected
+  arms (baseline, layers_5, 2d, 2f_slru); corrected hotspot arms are *excluded*
+  and reported in `tab:corrected-arms`. C panel correctly titled
+  **C\_mixed (~50% not-found)** (no "churn-heavy"). Warm % from same-batch
+  baseline: A `2f_slru` +1300%, B +879%, C −12%. Caption/prose updated; pending
+  note removed.
+- **`figures/17_lever_ablation.png`** — **regenerated** (Phase 3): the paper
+  submodule copy was content-stale (a 2×2 render showing pre-fix C leaf_freq
+  ≈ −32% / 2e_K10 ≈ −73%). Now the corrected orig-only render from the current
+  script (`ablation_comp_v2` for C: leaf_freq −3% tie, 2e_K10 −55%). A/B from the
+  independent `results/ablation` batch (tie-break-unaffected). Caption unchanged
+  (already matched the corrected content).
+- `18_capability_matrix.png` (qualitative), `01_page_distribution.png`
+  (structural), `16_ram_pressure_sweep.png` (RAM axis) — verified byte-identical
+  to the committed copies; current-valid, not regenerated.
 
 ## Validation
 
@@ -233,11 +250,13 @@ dependency added; no CSV modified.
 
 ## Unresolved numeric issues
 
-1. **Figures 13 and 14 remain v1 internally** (image pixels), and figure 14's C
-   panel is mistitled "churn-heavy". These are the only remaining paper-visible
-   stale numbers; they are **out of scope** (no figure regeneration) and are
-   explicitly deferred to Phase 3. Text/captions no longer claim the figures are
-   canonical. *(Unchanged by Phase 2.5b.)*
+1. ~~Figures 13 and 14 remain v1 internally; figure 14's C panel mistitled
+   "churn-heavy"~~ → **RESOLVED in Phase 3**: figures 13, 14 (and the
+   content-stale paper copy of 17) regenerated from canonical sources; C panels
+   correctly labelled C\_mixed; captions/prose updated; pending notes removed.
+   See the "Figure-internal stale numbers — RESOLVED in Phase 3" section above
+   and [`docs/figures/FIGURE_SOURCE_MAP.md`](../figures/FIGURE_SOURCE_MAP.md).
+   **No paper-visible stale figure remains.**
 
 The three Phase 2.5a provenance blockers below are **RESOLVED in Phase 2.5b**
 (see next section):
