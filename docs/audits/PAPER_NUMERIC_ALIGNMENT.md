@@ -76,7 +76,6 @@ Classification key: **A** canonical-current, **C** v1-stale, **D** pre-fix-stale
 | 2f_slru first-query | A **108** / B **107** / C **102** µs; **−79% to −91%** (A −79, B −86, C −91) | single-inst, orig async | `unified_v2` 2f_slru |
 | interior skeleton (2d) warm e2e | ≈ **−25%** (A, B cross-seed); C_hit **−28.5%** [−34.9,−19.6] | cross-seed; C_hit orig-only | `tiebreak`/`seeds`; `c_hit` |
 | A genuine-skew leaf bonus | 2d ≈ **−25%** → 2e_K10 ≈ **−36%** [−50,−23] | cross-seed, A orig | `tab:seeds` (Phase 2) |
-| C_mixed 2e_K10 (single-inst) | 1087 → **268 µs**, **−75%** | seed-1 single-instantiation only | `unified_v2` 267.7 / `tiebreak` paired −75.2% |
 | C_mixed 2e_K10 (cross-seed) | **−54.5%** (≈−55%) [−66.6,−42.2] | bimodal: miss-first ≈−70%, hit-first ≈−31% | `ablation_comp_v2` |
 | competitive C | 2e_K10 **−54.5%** [−66.6,−42.2] ≈ 2f_top14 **−55.2%** [−66.8,−43.2] → **statistically indistinguishable** | cross-seed, C orig | `ablation_comp_v2` |
 | corrected ablation C | 2d **−36%** robust; leaf_freq_K10 **−3%** (tie); leaf_rand_K10 **+7%** (worse); 2e_K10 **−55%** bimodal | cross-seed, C orig | `ablation_comp_v2` |
