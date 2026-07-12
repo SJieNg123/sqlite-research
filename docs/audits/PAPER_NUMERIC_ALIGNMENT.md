@@ -51,7 +51,7 @@ Classification key: **A** canonical-current, **C** v1-stale, **D** pre-fix-stale
 | N11 | main.tex:483 | 123–128; 529–1096; C 2e_K10 211 (−81%) | fig prose | C | unified_v2 / tiebreak | 102–108; 523–1087; C 2e_K10 184 (−83%) | fixed + pending note |
 | N12 | main.tex:487 | −76% to −89% | 2f_slru first-q reduction span | C | unified_v2 | −79% to −91% | fixed |
 | N13 | main.tex:516,519 | baseline 529 / 1096 | `tab:e2e-ac` header + baseline row | C | unified_v2 | 523 / 1087 | fixed |
-| N14 | main.tex:520–524 | entire A/C body (480,487,490,291,7134,…) | `tab:e2e-ac` single-inst e2e | C | unified_v2 (C 2e_K10, A 2e_K500 ≡ tiebreak, materially identical) | rebuilt (see table) | fixed |
+| N14 | main.tex:520–524 | entire A/C body (480,487,490,291,7134,…) | `tab:e2e-ac` single-inst e2e | C | unified_v2 for unaffected rows; impact rows (C 2e_K10, A 2e_K500) moved to `tab:corrected-arms` from `tiebreak_fix` (Phase 2.5b) | rebuilt + split | fixed |
 | N15 | main.tex:524 | C 2f_slru verdict −9% | cross-seed | E | ablation_comp_v2 C 2f_slru e2e_warm | −7% | fixed |
 | N16 | main.tex:531 | 7134 vs 529; +1248%; +1285%; 402 µs; −19%(−9%) | §5.2 prose | C/G | unified_v2 (A/C single-inst) + ablation_comp_v2 | 7324 vs 523; +1300%; +1343%; 415 µs; −12%(−7%) | fixed |
 | N17 | main.tex:534 | 1087 → 268 µs, −75% | C 2e_K10 single-inst, labeled | A | unified_v2 C 2e_K10 warm (267.7); tiebreak paired −75.2% | retained (canonical) | verified |
@@ -149,13 +149,15 @@ dependency added; no CSV modified.
 
 ## Cross-batch table decisions
 
-1. **`tab:e2e-ac`** — kept as a single-batch (`unified_v2`) absolute-µs table.
-   The two tie-break-set cells (C `2e_K10`, A `2e_K500`) are materially
-   identical at single-instantiation to their `tiebreak_fix` values, so no
-   cross-batch mixing of absolute µs is introduced; the corrected cross-seed
-   direction is carried in the verdict column and cited to §6.2/§6.3. This
-   satisfies the atomic rule (baseline, strategy, and `2f_slru` anchor all from
-   the same `unified_v2` batch).
+1. **`tab:e2e-ac`** — kept as a single-batch (`unified_v2`) absolute-µs table
+   containing **only tie-break-unaffected strategies** (baseline, `layers_5`,
+   `2d`, `2f_slru`). **[RETRACTED / superseded by Phase 2.5b — see below.]** The
+   Phase 2.5a version left the two impact-set cells (C `2e_K10`, A `2e_K500`) in
+   this table sourced from `unified_v2` on a "materially identical" rationale.
+   That exception is **withdrawn**: canonical supersession is not waived by
+   numerical closeness. Phase 2.5b removes those two rows from the `unified_v2`
+   table entirely and reports them from their own corrected batch in a separate
+   relative table (`tab:corrected-arms`).
 2. **`tab:competitive`** — genuinely cross-batch and cannot be made single-batch
    (A/B cross-seed competitive exists only in the prior-art `results/competitive`
    batch; `baselines_v2` is single-seed with no CI). Resolution per STEP 10:
@@ -232,19 +234,88 @@ dependency added; no CSV modified.
 
 1. **Figures 13 and 14 remain v1 internally** (image pixels), and figure 14's C
    panel is mistitled "churn-heavy". These are the only remaining paper-visible
-   stale numbers; they are **out of scope for Phase 2.5** (no figure
-   regeneration) and are explicitly deferred to Phase 3. Text/captions no longer
-   claim the figures are canonical.
-2. **A/B cross-seed competitive numbers** (`tab:competitive`, +762%/+730%,
-   2e_K10/2f_top14/2f_top500 on A/B) have **no canonical corrected source** —
-   they exist only in the prior-art `results/competitive` batch (`baselines_v2`
-   is single-seed). `2f_slru` and the `2f_topN` dumps are frequency- or
-   dump-based; `2f_slru` (a full dump) is not affected by the leaf tie-break, so
-   its A/B values are sound; the A/B `2f_topN` values are retained under the
-   independent-batch caption note but were not independently re-verified against
-   a corrected A/B rerun (none exists). Flagged for a future A/B competitive
-   rerun if the competitive table is promoted to a headline claim.
-3. **Open-cost 221 µs** (`:507`) is a raw-per-rep statistic ("810 reps") that is
-   not reproducible from the summary CSVs alone (summary open medians cluster at
-   226–236 µs); the "≈200 µs" headline is safe, but the exact 221/17/231 triple
-   should be re-derived from `raw.csv` before camera-ready.
+   stale numbers; they are **out of scope** (no figure regeneration) and are
+   explicitly deferred to Phase 3. Text/captions no longer claim the figures are
+   canonical. *(Unchanged by Phase 2.5b.)*
+
+The three Phase 2.5a provenance blockers below are **RESOLVED in Phase 2.5b**
+(see next section):
+
+2. ~~A/B cross-seed competitive numbers have no canonical source~~ → **resolved**:
+   `results/competitive` added to `RESULT_PROVENANCE.md` §4.8 as an independent,
+   relative-only source, with evidence it is tie-break-unaffected for A/B.
+3. ~~Open-cost 221/17/231/810 triple not reproducible~~ → **resolved**: the exact
+   triple is removed from the paper; replaced with the reproducible approximate
+   envelope (≈200–235 µs, common-mode).
+4. ~~`tab:e2e-ac` used superseded `unified_v2` cells for C `2e_K10` / A
+   `2e_K500`~~ → **resolved**: those rows removed; corrected arms reported from
+   `tiebreak_fix` in `tab:corrected-arms`.
+
+## Phase 2.5b corrections
+
+### tab:e2e-ac atomic fix
+- Removed the two impact-set rows from the `unified_v2` absolute table: the
+  `2e_K10` row (its C cell is superseded) and the `2e_K500` row (its A cell is
+  superseded). The table now lists only tie-break-unaffected strategies:
+  **baseline, `layers_5`, `2d`, `2f_slru`** — every absolute µs from one batch.
+- Added **`tab:corrected-arms`** (relative table) reporting the corrected hotspot
+  arms from `results/tiebreak_fix/master_summary.csv`, each paired with its own
+  same-batch baseline: A `2e_K500` (512 → 1079 µs, **+111%**), C\_mixed `2e_K10`
+  (1071 → 265 µs, **−75%**). Caption forbids column-wise absolute comparison with
+  `tab:e2e-ac`.
+- **Retracted** the "materially identical, therefore keep in unified_v2" caption
+  exception; new caption states the impact arms are reported separately so every
+  µs in `tab:e2e-ac` is single-batch.
+
+### Corrected C single-instantiation value
+- Prose (§5.2) now reads **1071 → 265 µs (−75%)** sourced from `tiebreak_fix`
+  (same-batch baseline 1070.68, `2e_K10` warm 265.44, paired −75.2%), replacing
+  the `unified_v2`-batch snapshot `1087 → 268`. All `1087→268` current-value
+  occurrences removed; the residual `268` (layout comparison `tab`/`:616`) is a
+  different arm/statistic (best-warm layout comparison) and unaffected.
+
+### A 2e_K500
+- Retained as a supported point in `tab:corrected-arms` (illustrates leaf-budget
+  over-provisioning: +111% regression on A), sourced from `tiebreak_fix`. Its
+  first-query −64% in `tab:ceiling` is a relative reduction that reads identically
+  from the corrected batch (tiebreak paired −64.3%).
+
+### tab:seeds single-workload consistency
+- The rebuilt `tab:e2e-ac` exposed that `tab:seeds`' *single-workload* column
+  still held old `results/main` single-inst values (A `2d` −8, A `2e_K10` −7, A
+  `layers_5` −9, B `2d` −31, C `2d` −31) that contradicted the new `unified_v2`
+  table. Aligned the column to `unified_v2`: **A `2d` −14, A `2e_K10` −11, A
+  `layers_5` −14, B `2d` −32, C `2d` −32** (C `2e_K10` single stays −75 from
+  `tiebreak`). Narrative "single-instantiation estimate of −7%" → **−11%**. The
+  *cross-seed* column is unchanged (its frequency arms C/B `2e_K10` already match
+  `tiebreak` exactly; `2d`/`layers_5` cross-seed are the tie-break-unaffected
+  `results/seeds` arms now blessed in §4.8).
+
+### Open-cost
+- The exact `221 µs / sd 17 / p95 231 / 810 reps` triple is **not reproducible**
+  from the canonical batch. `results/unified_v2/matrix/raw.csv` (non-warmup,
+  non-baseline, `open_us>0`) gives **n=1440, median 231.6, sd 9.9 (CV 4%), p95
+  236.8, 5th–95th 223–237 µs** — a different count and centre; `tab:overhead`'s
+  per-strategy 193–222 is from yet another batch. Statistical basis (the 810
+  count) is therefore unclear. Per the "口徑不明" branch, the precise triple is
+  **removed** from `:507` and replaced with *"approximately 200 to 235 µs within
+  the canonical batch … strategy-independent common-mode term."* No pending note
+  remains.
+  - Reproduction command: `python3` over `results/unified_v2/matrix/raw.csv`
+    filtering `warmup==0 && strategy!='baseline' && open_us>0`, `statistics`
+    module. Output above.
+
+### A/B competitive provenance (RESULT_PROVENANCE.md §4.8)
+- **Option A (provenance-valid).** `results/competitive` is a complete 10-seed
+  batch (per-seed paired vs same-seed baseline, bootstrap 95% CI, `2f_slru`
+  anchor, `sweep.log` reproducible; arms `2e_K10`, `2f_top14/28/100/500`,
+  `2f_slru`). Added as a new canonical class in §4.8 for the **A/B within-batch
+  competitive comparison**, relative-only, with C superseded by
+  `ablation_comp_v2`. Evidence it is tie-break-unaffected for A/B: the corrected
+  `tiebreak_fix` rerun reproduces A/B `2e_K10` within noise (A −38.2 vs −37.9; B
+  −23.8 vs −25.2) and `2f_slru` is a ranking-free full dump. Also blessed
+  `results/seeds` (tie-break-unaffected `2d`/`layers_N` arms) for the `tab:seeds`
+  cross-seed column.
+- **RESULT_PROVENANCE.md modified**: yes — §4.8 scope addenda only (two new
+  canonical-class rows + rationale). No §4.2 freeze row altered; no CSV/result
+  touched.

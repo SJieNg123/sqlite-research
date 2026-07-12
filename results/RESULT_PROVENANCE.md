@@ -110,6 +110,30 @@ Prohibited:
 | Old ablation conclusion ("38 pts all access-frequency; page-type irrelevant") | pre-fix `results/ablation` | leaky `leaf_freq_K10` (−40% → tie) | `results/ablation_comp_v2` (page-type is the robust lever) |
 | Pre-fix figures fig17 / fig18 | `figures/out/17_lever_ablation.png`, `18_competitive_baseline.png` | plotted leaky data | **already regenerated** with post-fix data (commits `30b7e86`, `9d8f5fe`) |
 
+## 4.8 Phase 2.5b scope addenda (precise-scope supplements; no reruns)
+
+These rows extend the canonical source table for two result classes that the
+frozen §4.2 left implicit. They add scope only — no experiment was rerun, no CSV
+changed.
+
+| Result class | Canonical source | Exact scope | Limitations |
+|---|---|---|---|
+| **A/B cross-seed competitive robustness** | `results/competitive/uncertainty.csv` (per-seed `seed{01..10}/`) | A/B × orig × {`2e_K10`, `2f_top14`, `2f_top28`, `2f_top100`, `2f_top500`, `2f_slru`}; seeds 1–10; per-seed paired improvement vs same-seed baseline; bootstrap 95% CI; `2f_slru` same-batch anchor | **Independent machine-state batch — relative paired improvements only; no cross-batch absolute µs comparison.** Canonical for the *within-batch competitive comparison* (targeted vs footprint-matched dump), **not** a substitute for the standalone A/B `2e_K10` cross-seed (that remains a separate reading). **C rows superseded by `results/ablation_comp_v2`** (§4.2). |
+| **Cross-seed robustness — tie-break-unaffected arms** | `results/seeds/seed{01..10}/summary.csv` | A/B/C × orig × {`2d`, `layers_5`, `layers_92`}; seeds 1–10; per-seed paired vs same-seed baseline | **Independent batch, relative only.** Valid because `de4490f` changed only the *frequency-ranked leaf* tie-break; page-type (`2d`) and offset (`layers_N`) selection do not rank leaves by frequency and are therefore unaffected. Frequency arms (`2e_K*`, `2f_top*`, `leaf_freq`) in `results/seeds` are **superseded** by `results/tiebreak_fix/uncertainty.csv`. |
+
+**Why the pre-fix competitive batch is admissible for A/B (not C).** The first-op
+tie-break leak inflates a strategy only when the measured first query coincides
+with a leaked, tied-frequency leaf. Workload C's ~50% not-found probes create an
+extreme rightmost-leaf hotspot that the leak rode, so C `2e_K10` was inflated
+(hence the `results/ablation_comp_v2` supersession). Workloads A (genuine Zipfian
+skew, distinct frequencies → few ties) and B (uniform, no hot set) do not have
+that mechanism: the corrected `results/tiebreak_fix` rerun reproduces the
+pre-fix A/B `2e_K10` cross-seed to within measurement noise (A: pre-fix
+$-38.2\%$ vs corrected $-37.9\%$; B: $-23.8\%$ vs $-25.2\%$), and `2f_slru` is a
+full working-set dump with no frequency ranking, so it is tie-break-independent
+by construction. The A/B competitive rows are therefore used as an independent,
+relative-only robustness comparison, with C sourced from the corrected rerun.
+
 ## Pending narrative audit (for Phase 1)
 
 Provenance is frozen; the numeric corrections and the two reversed conclusions
