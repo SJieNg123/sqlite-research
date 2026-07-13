@@ -215,11 +215,27 @@ or headline number changed.** Paper edits are confined to `main.tex` prose.
   measured OpenWhisk result), and an OpenWhisk-pending limitation row. No source
   value was altered to make the verifier pass; verifier still exits 0.
 
+## Pre-OpenWhisk editorial cleanup (Phase 4.1b)
+
+Editorial and scope-of-portability pass; **no result, figure, CSV, or headline
+number changed.** `main.tex` prose edits only: fixed the ``warm containe''→``warm
+container'' typo; added the missing abstract comma ("To our knowledge, this is");
+labeled the Write-churn workload as \emph{C\_mixed}; and rewrote the cross-platform
+limitations paragraph. The prior claim that "the relative ordering of strategies
+are portable across platforms" is **removed**; the paper now states only that the
+cost-accounting methodology is intended to transfer to same warm-process/cold-data
+platforms, and frames strategy-ordering portability as an untested empirical
+question that the OpenWhisk validation will test. The duplicate FaaS next-step
+sentences were merged so "immediate next" appears once in Limitations. Manifest
+(now 132 claims) gains an `ordering-portability-untested` row and updates the
+`openwhisk-pending` row wording; no numeric source changed; verifier still exits 0.
+
 ## Remaining limitations
 - **OpenWhisk / FaaS runtime not yet evaluated.** The paper measures the
   local-storage tier on commodity x86 + NVMe and explicitly frames direct FaaS
-  runtime validation as the immediate next experimental step; no OpenWhisk code or
-  result exists yet.
+  runtime validation as the immediate next experiment; no OpenWhisk code or
+  result exists yet. Whether the locally observed strategy ordering carries over
+  to a FaaS runtime is stated as an untested empirical question, not a claim.
 - **Literature novelty review pending internally.** The "to our knowledge … first"
   claim is hedged; a full novelty review has not been run. This is retained in the
   internal audit only and is **no longer stated as a TODO in the paper text**.

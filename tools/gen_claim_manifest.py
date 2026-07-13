@@ -297,10 +297,14 @@ DOC = [
      "qualitative_compare", "n/a", "n/a", "n/a",
      "mechanism / deployment-compatibility claim only; does NOT imply a measured OpenWhisk/production-FaaS deployment result",
      "deployment-compatibility-not-measured"),
-    ("706", "limitation: direct validation inside a FaaS runtime is not included in the current evaluation; an OpenWhisk deployment is the immediate next experimental step",
+    ("706", "limitation: direct FaaS-runtime validation is not included in the current evaluation; an OpenWhisk deployment is the immediate next experiment for testing whether the locally observed strategy ordering carries over",
      "qualitative_compare", "n/a", "n/a", "n/a",
-     "current-state limitation; no FaaS-runtime / OpenWhisk result exists yet",
+     "current-state limitation; no FaaS-runtime / OpenWhisk result exists yet; 'immediate next' now stated once in Limitations",
      "openwhisk-pending"),
+    ("706", "cross-platform scope: the cost-accounting methodology is intended to transfer to platforms sharing the same warm-process, cold-data model; whether the relative ordering of strategies carries over is an untested empirical question that the OpenWhisk validation will test",
+     "qualitative_compare", "n/a", "n/a", "n/a",
+     "the prior 'relative ordering of strategies are portable across platforms' claim was REMOVED; ordering portability is NOT asserted as established",
+     "ordering-portability-untested"),
 ]
 for line, quote, kind, w, s, metric, raw, atomic in DOC:
     add(line, quote, kind, w, "orig", s, metric, "n/a", "n/a", "n/a", "(see quote)",
