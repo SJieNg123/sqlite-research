@@ -397,3 +397,32 @@ changed cell, so the atomic-correct value is **−30%** from `tiebreak_fix`. Fix
 
 All figure/numeric pending items from earlier phases are now resolved; no
 paper-visible stale figure or number remains.
+
+## Phase 4.1 — Pre-OpenWhisk scope cleanup (2026-07-13)
+
+Submission-wording and churn-provenance scoping pass. **No result, figure, CSV, or
+headline number changed**; edits are `main.tex` prose plus the manifest/audit docs.
+
+- Internal novelty TODO removed from the paper (conclusion parenthetical "(a
+  positioning we flag as pending fuller literature verification)" deleted); the
+  hedged "To our knowledge … first" wording is retained. The literature-review
+  limitation is kept in internal audit docs only, not as a paper TODO.
+- "Deployable" claims scoped to design/mechanism compatibility (Contribution 3
+  title → "deployment-compatible"; intro/conclusion/Contribution-3 bodies reworded
+  to "compatible with / operates within the execution constraints of FaaS
+  environments"). No completed production-FaaS/OpenWhisk deployment is claimed.
+- Limitation sentence added: direct FaaS-runtime validation is not in the current
+  evaluation; an OpenWhisk deployment is the immediate next experimental step.
+- Write-churn paragraph scoped: batch predates the trace-order-independent
+  tie-break fix; the ~82–89 µs / ~580 µs levels are labeled **pre-fix diagnostic**
+  (not a corrected 2e_K10 magnitude); the only retained conclusion is within-batch
+  checkpoint flatness under a stationary read hotspot, distinguished from the
+  moving-hotspot YD vs stationary YE aging axis. "recomputation is unnecessary for
+  at least 50k write mutations" → "no plan refresh was needed to preserve the
+  within-batch trend over 50k mutations." Historical values unchanged.
+- Manifest regenerated (now **131 claims**): churn row re-scoped (within-batch
+  flatness / pre-fix diagnostic; forbidden = corrected selector magnitude) and
+  three claims added (hedged-novelty; FaaS deployment-compatibility, status = not a
+  measured OpenWhisk result; OpenWhisk-pending limitation). Verifier still exits 0
+  (111 recomputed + 20 scope-checked, 0 FAIL). Manifest line endings normalized to
+  LF (git diff --check clean). No source value altered to force a pass.

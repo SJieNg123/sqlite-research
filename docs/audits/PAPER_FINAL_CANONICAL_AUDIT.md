@@ -172,15 +172,61 @@ produce differently-named outputs; documented UNUSED in FIGURE_SOURCE_MAP.
   (0); `\begin`/`\end` balanced; 0 duplicate labels; 0 dangling refs; 0 missing
   citations; all 6 `\includegraphics` targets present.
 
+## Pre-OpenWhisk scope cleanup (Phase 4.1)
+
+Submission-wording and churn-provenance scoping pass; **no result, figure, CSV,
+or headline number changed.** Paper edits are confined to `main.tex` prose.
+
+- **Internal novelty TODO removed from paper.** The conclusion parenthetical
+  "(a positioning we flag as pending fuller literature verification)" was deleted.
+  The hedged "To our knowledge, this is the first work …" wording is retained;
+  the literature-review limitation is now recorded only in internal audit docs,
+  not as a TODO/reviewer-note in the paper text.
+- **"Deployable" claims scoped to design/mechanism compatibility.** Contribution 3
+  title → "Non-intrusive, deployment-compatible toolchain"; its "directly
+  deployable in production FaaS environments" → "compatible with the execution
+  restrictions of production FaaS environments without requiring platform
+  modification or privileged access." Intro summary "deployable solution that
+  works within the constraints of production FaaS" → "application-layer design
+  that operates within the execution constraints of restricted FaaS environments
+  without privileged platform changes." Conclusion "deployable in production FaaS
+  and edge environments" → "designed to operate within the execution constraints
+  of FaaS and edge environments." No claim of a measured production-FaaS/OpenWhisk
+  deployment remains. (Challenge 3's "not deployable in production FaaS settings"
+  describes prior invasive designs' constraint and is retained.)
+- **OpenWhisk runtime validation is the immediate next experiment.** A limitation
+  sentence was added: "Direct validation inside a FaaS runtime is not included in
+  the current evaluation; an OpenWhisk deployment is the immediate next
+  experimental step."
+- **Churn batch scoped as pre-fix diagnostic.** The Write-churn paragraph now
+  states the batch predates the trace-order-independent tie-break correction; the
+  absolute ~82–89 µs / ~580 µs levels are labeled pre-fix diagnostic values (not a
+  corrected 2e_K10 magnitude); the only retained conclusion is within-batch
+  checkpoint flatness under a **stationary** read hotspot, explicitly distinguished
+  from the moving-hotspot YD vs stationary YE aging axis. The strong wording
+  "recomputation is unnecessary for at least 50k write mutations" was replaced with
+  "Under this stationary-read-hotspot configuration, no plan refresh was needed to
+  preserve the within-batch trend over 50k mutations." Historical values unchanged;
+  not promoted to a corrected magnitude.
+- **Manifest** (`PAPER_CLAIM_MANIFEST.csv`, now 131 claims): the churn claim row is
+  re-scoped to within-batch flatness / pre-fix diagnostic (forbidden conclusion =
+  corrected selector magnitude); three claims added — a hedged-novelty row (no
+  internal pending-note), a FaaS deployment-compatibility row (status: not a
+  measured OpenWhisk result), and an OpenWhisk-pending limitation row. No source
+  value was altered to make the verifier pass; verifier still exits 0.
+
 ## Remaining limitations
 - **OpenWhisk / FaaS runtime not yet evaluated.** The paper measures the
-  local-storage tier on commodity x86 + NVMe and explicitly frames FaaS
-  deployment as future/pending; no OpenWhisk code or result exists.
-- **Literature novelty review pending.** The "to our knowledge … first" claim is
-  hedged and flagged pending fuller verification; no full novelty review run.
-- **Intentionally seed-1 axes** (retained, scoped as such): RAM-pressure sweep
-  and the single-instantiation layout/overhead comparisons; the size-scaling
-  2e_K10 magnitude is retained only as a labeled pre-fix diagnostic.
+  local-storage tier on commodity x86 + NVMe and explicitly frames direct FaaS
+  runtime validation as the immediate next experimental step; no OpenWhisk code or
+  result exists yet.
+- **Literature novelty review pending internally.** The "to our knowledge … first"
+  claim is hedged; a full novelty review has not been run. This is retained in the
+  internal audit only and is **no longer stated as a TODO in the paper text**.
+- **Intentionally seed-1 / single-axis limitations** (retained, scoped as such):
+  RAM-pressure sweep and the single-instantiation layout/overhead comparisons; the
+  size-scaling 2e_K10 magnitude is retained only as a labeled pre-fix diagnostic;
+  the churn batch is likewise a labeled pre-fix within-batch-flatness axis.
 
 ## Decision
 **PASS.** Every quantitative claim maps to a canonical source; every relative
@@ -193,3 +239,10 @@ scan is clean; and no CSV/result was modified and no benchmark/OpenWhisk ran.
 One residual atomic violation (tab:seeds B 2e_K10 single −29→−30) was found and
 fixed. The paper's text, numbers, tables, and figures are frozen against the
 canonical result set.
+
+**Phase 4.1 (pre-OpenWhisk scope cleanup) preserves this PASS.** It changed only
+submission wording and churn-provenance scoping in `main.tex`, plus the manifest
+and audit docs; it altered no result, figure, CSV, or headline number, the atomic
+verifier still exits 0 (131 claims, 0 FAIL), and static/`git diff --check`
+validation remains clean. OpenWhisk validation is not started and is recorded as
+the immediate next experimental step.

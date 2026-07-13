@@ -277,9 +277,10 @@ DOC = [
      "libprefetch", "n/a", "VanDeBogart+09 (cited)", "cited"),
     ("89,93,147,173", "related-work cited magnitudes (trillion DBs, 76-87%, 79% TLB)",
      "workload_property", "n/a", "n/a", "n/a", "cited prior work", "cited"),
-    ("672,277,712", "hotset no decay under 50k mutations (stationary read hotspot only)",
-     "qualitative_compare", "D", "2e_K10", "first_query", "churn axis (results/churn)",
-     "stationary-scoped"),
+    ("672,277", "churn 50k mutations: within-batch checkpoint flatness under a stationary read hotspot; C 2e_K10 ~82-89us vs ~580us baseline are PRE-FIX diagnostic absolute values, not a corrected 2e_K10 magnitude; allowed conclusion = checkpoint flatness only",
+     "qualitative_compare", "D", "2e_K10", "first_query",
+     "churn batch predates the trace-order-independent tie-break fix; within-batch flatness only; NOT a corrected selector effect magnitude",
+     "prefix-diagnostic-within-batch"),
     ("676", "cadence 1s/5s -> 26/29 us; 30s/never -> 281-305 us", "abs_latency", "n/a",
      "shared_cadence", "first_query", "results/cadence (multiprocess axis)", "other-axis"),
     ("663,668", "RAM sweep: targeted <=2MB 100% delivery; 2f_slru collapses (seed-1)",
@@ -288,6 +289,18 @@ DOC = [
     ("678", "size 1GiB: 2f_slru -9->+139, 2e_K500 -31->+35; 2e_K10 -70/-68 PRE-FIX diagnostic",
      "rel_improvement", "C", "2f_slru/2e_K500/2e_K10", "e2e_warm",
      "results size batch; 2e_K10 magnitude pre-fix", "diagnostic-labeled"),
+    ("720", "novelty: to our knowledge first to quantify first-query vs end-to-end trade-off in SQLite serverless cold starts at OS-syscall granularity (hedged; internal pending-literature parenthetical removed from paper)",
+     "qualitative_compare", "n/a", "n/a", "n/a",
+     "hedged novelty claim; no measured superiority; literature-review limitation retained in internal audit docs only, not stated as a TODO in paper text",
+     "hedged-novelty"),
+    ("125,129,720", "FaaS deployment-compatibility: application-layer only, standard OS interfaces, no root / no kernel / no SQLite modification, therefore compatible with FaaS execution constraints",
+     "qualitative_compare", "n/a", "n/a", "n/a",
+     "mechanism / deployment-compatibility claim only; does NOT imply a measured OpenWhisk/production-FaaS deployment result",
+     "deployment-compatibility-not-measured"),
+    ("706", "limitation: direct validation inside a FaaS runtime is not included in the current evaluation; an OpenWhisk deployment is the immediate next experimental step",
+     "qualitative_compare", "n/a", "n/a", "n/a",
+     "current-state limitation; no FaaS-runtime / OpenWhisk result exists yet",
+     "openwhisk-pending"),
 ]
 for line, quote, kind, w, s, metric, raw, atomic in DOC:
     add(line, quote, kind, w, "orig", s, metric, "n/a", "n/a", "n/a", "(see quote)",
@@ -296,7 +309,7 @@ for line, quote, kind, w, s, metric, raw, atomic in DOC:
 
 
 with open(OUT, "w", newline="") as f:
-    wcsv = csv.DictWriter(f, fieldnames=COLS)
+    wcsv = csv.DictWriter(f, fieldnames=COLS, lineterminator="\n")
     wcsv.writeheader()
     for r in rows:
         wcsv.writerow(r)
