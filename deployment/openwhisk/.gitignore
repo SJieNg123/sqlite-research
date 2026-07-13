@@ -1,0 +1,11 @@
+# Real, machine-specific artifact manifest (has device/inode); regenerate on each
+# workstation with build_artifact_manifest.py. Only the example is committed.
+config/artifacts.json
+
+# Real captured environments and any run output (created off-repo or in a temp dir).
+config/environment.txt
+config/run_config.json
+
+# Python caches
+__pycache__/
+*.pyc

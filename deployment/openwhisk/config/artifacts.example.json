@@ -1,0 +1,176 @@
+{
+  "schema_version": 1,
+  "generated_utc": "2026-07-13T23:23:39Z",
+  "repository_commit": "108acc24a30c9212271412be4b94cc3ef22fe6ef",
+  "database": {
+    "path": "pipeline/preparation/layout_rewriter/runs/test.db",
+    "sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+    "byte_size": 107851776,
+    "page_size": 4096,
+    "page_count": 26331,
+    "row_count": 600000,
+    "max_key": 600000,
+    "device": null,
+    "inode": null
+  },
+  "interior_page_list": {
+    "path": "deployment/openwhisk/config/plans/interior_pages.csv",
+    "sha256": "37ed5e4682d1771c735edc93133bb8ecb77d772a992721b180a9cabaae28745e",
+    "count": 92,
+    "offsets": [
+      4096,
+      8192,
+      12288,
+      2756608,
+      2760704,
+      5185536,
+      6500352,
+      6504448,
+      6713344,
+      6717440,
+      7639040,
+      9785344,
+      11911168,
+      12574720,
+      13033472,
+      14057472,
+      16232448,
+      18341888,
+      18640896,
+      19243008,
+      20467712,
+      22654976,
+      22925312,
+      24014848,
+      24788992,
+      26906624,
+      27557888,
+      29044736,
+      29302784,
+      31215616,
+      32595968,
+      33378304,
+      34693120,
+      35520512,
+      37588992,
+      39772160,
+      39956480,
+      41885696,
+      43520000,
+      44060672,
+      45264896,
+      46215168,
+      48361472,
+      49864704,
+      50143232,
+      50610176,
+      50724864,
+      52723712,
+      54849536,
+      56004608,
+      57032704,
+      58871808,
+      59383808,
+      61681664,
+      61714432,
+      63877120,
+      64241664,
+      66011136,
+      67018752,
+      67805184,
+      68009984,
+      69967872,
+      71888896,
+      71942144,
+      74014720,
+      76177408,
+      77217792,
+      77668352,
+      78401536,
+      80433152,
+      82440192,
+      82554880,
+      83333120,
+      84697088,
+      86839296,
+      87740416,
+      88977408,
+      91181056,
+      93126656,
+      93327360,
+      93769728,
+      94375936,
+      95035392,
+      95571968,
+      97816576,
+      98676736,
+      99971072,
+      100560896,
+      102232064,
+      104083456,
+      104366080,
+      106520576
+    ]
+  },
+  "strategy_plans": {
+    "2d": {
+      "path": "deployment/openwhisk/config/plans/interior_pages.csv",
+      "sha256": "37ed5e4682d1771c735edc93133bb8ecb77d772a992721b180a9cabaae28745e",
+      "kind": "interior_skeleton"
+    },
+    "baseline": {
+      "path": null,
+      "sha256": null,
+      "kind": "no_prefetch"
+    }
+  },
+  "workload_traces": {
+    "A": {
+      "stem": "a",
+      "seeds": {
+        "1": {
+          "path": "workloads/workload_a_1.txt",
+          "sha256": "d8ff6a5dba14b93b65331a9f44060d89f7720322aa4f12d36859f1138efb47a2"
+        },
+        "2": {
+          "path": "workloads/workload_a_2.txt",
+          "sha256": "0019113e0af86800b44933a654956ad8394c128726cf3ec49443124fbcb11cd8"
+        },
+        "3": {
+          "path": "workloads/workload_a_3.txt",
+          "sha256": "66dd03bed8dcddd96ba7457c99e98130432a37f7115efa107bc1411e208af834"
+        },
+        "4": {
+          "path": "workloads/workload_a_4.txt",
+          "sha256": "5157436e352b282000d4376810b10d9c0bf6c0f6798f863b31cd04255502078e"
+        },
+        "5": {
+          "path": "workloads/workload_a_5.txt",
+          "sha256": "c17ffbe1c9963eff601c6572b99beceb84c451cb72f7f4ce41c6aa222f206a7d"
+        },
+        "6": {
+          "path": "workloads/workload_a_6.txt",
+          "sha256": "b295254c4ec83509d5e366a0ddb281c9f1554b48f4cb676db072d33217ef819d"
+        },
+        "7": {
+          "path": "workloads/workload_a_7.txt",
+          "sha256": "a50949036c173891173d15422ca44d85e28aa68a24d1a65887b02c117ebcd9d3"
+        },
+        "8": {
+          "path": "workloads/workload_a_8.txt",
+          "sha256": "e19e563f5ab01703142cf2357f4fa5c74ddf366345876531911920efd624f377"
+        },
+        "9": {
+          "path": "workloads/workload_a_9.txt",
+          "sha256": "9d0f501d1d54fb476ebc3d0b3d46655cea1861990c769d251b3bca2d4879e174"
+        },
+        "10": {
+          "path": "workloads/workload_a_10.txt",
+          "sha256": "15bf3d743ac3c84851765ccb5dbe3efdb1c109d0453a6604a5ff788d60786ab4"
+        }
+      }
+    }
+  },
+  "expected_relevant_page_count": 92,
+  "notes": "Interior skeleton (2d) plan derived from the canonical page classifier; every mandatory interior page listed once. Paths are repository-relative and resolved at runtime against OW_ARTIFACT_ROOT."
+}

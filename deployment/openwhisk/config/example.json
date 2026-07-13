@@ -1,0 +1,29 @@
+{
+  "_comment": "Example run configuration for the OpenWhisk cold-start preflight. Copy to run_config.json on the workstation and fill placeholders. No credentials belong in this file.",
+  "run_id": "REPLACE_WITH_RUN_ID",
+  "action_name": "sqlite-coldstart",
+  "namespace_placeholder": "REPLACE_OR_USE_WSK_PROPS",
+  "artifact_manifest": "deployment/openwhisk/config/artifacts.json",
+  "artifact_manifest_sha256": "REPLACE_WITH_GENERATED_MANIFEST_HASH",
+  "action": {
+    "memory_mb": 512,
+    "timeout_ms": 60000,
+    "concurrency": 1,
+    "image": "REPLACE_WITH_CUSTOM_ACTION_IMAGE_DIGEST_OR_NAME"
+  },
+  "invocation_plan": {
+    "workloads": ["A"],
+    "strategies": ["baseline", "2d"],
+    "seeds": [1],
+    "first_operation_id": 0,
+    "diagnostic_mode": false,
+    "cold_reset": true,
+    "repetitions_per_cell": 10,
+    "sequential": true
+  },
+  "notes": [
+    "Phase 5A implements baseline and 2d only.",
+    "concurrency MUST be 1 and the client MUST invoke sequentially to preserve warm-process session identity.",
+    "One action version per measured batch; a redeploy starts a new warm-process session group."
+  ]
+}
