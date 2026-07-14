@@ -1,0 +1,6 @@
+# Bulky, regenerable provenance — kept on disk, integrity recorded as sha256 in each
+# workloads/workload_<key>_1.txt.manifest.json (raw_load_sha256 / raw_run_sha256).
+# The committed artifact is the final trace itself (workloads/workload_yc_1.txt).
+raw/
+*.jsonl
+verification/*.keys.gz

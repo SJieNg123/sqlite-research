@@ -98,6 +98,10 @@ WORKLOADS = {
     "C": _base_workload("c"),
     "C_hit": _base_workload("c_hit"),  # pure-hit tail control for C (all keys exist, no not-found artifact)
     "Z": _base_workload("z"),   # low-key Zipfian (robustness)
+    # Real-YCSB headline (from workload_fixed/, NOT gen_workload.py): 100% read, zipfian,
+    # insertorder=hashed, recordcount=600000, ops=80000; string keys mapped to dense rowid
+    # 1..600000 (notfound=0). Provenance: workloads/workload_yc_1.txt.manifest.json.
+    "YC": _base_workload("yc"),
     # YCSB core D/E: write-containing (insert stream ages the DB). Run via the
     # churn/aging path, NOT the read-only `run` matrix (it forces --readonly).
     "YD": _base_workload("yd"),  # read-latest: 95% read (latest) + 5% insert

@@ -1,0 +1,10 @@
+# YCSB environment (bootstrapped 2026-07-14T17:22:01Z)
+ycsb_version: 0.17.0 (Maven Central jars; bin/ycsb wrapper NOT used — py2-only)
+main_class: site.ycsb.Client   db_binding: site.ycsb.BasicDB (verbose trace dump, no IO)
+java: openjdk version "17.0.19" 2026-04-21
+jars_dir: ~/ycsb-tools/jars   classpath: ~/ycsb-tools/jars/*
+jar_sha256:
+  e1c64d09bfc642715428c2e53ec129b0a98a0e634ee32bf0ae77e5b4eebb3cda  core-0.17.0.jar
+  8e68b9608ab107690350b904eab24087785f69218e5c6acd860d28116eded708  HdrHistogram-2.1.4.jar
+  5d45b7904857c3e4ad36b3bcc57be2d2c5f308c69b5f6a58bd86aa7d48a25ef6  htrace-core4-4.1.0-incubating.jar
+ycsb_workload_prop_files: workload_fixed/ycsb_workloads/workload{a..f} (raw GitHub @ tag 0.17.0)

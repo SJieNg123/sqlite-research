@@ -1,0 +1,57 @@
+{
+  "label": "YC-hashed",
+  "trace": "/home/u03/sqlite-research-project-sharing/workloads/workload_yc_1.txt",
+  "n_ops": 80000,
+  "op_mix_actual": {
+    "read": 80000
+  },
+  "target_ops": 80000,
+  "unique_key_ratio": 0.645988,
+  "measured_skew": {
+    "top1_key_share": 0.037112,
+    "top1pct_keys_share": 0.27275,
+    "distinct_keys": 51679
+  },
+  "notfound_rate": 0.0,
+  "notfound_count": 0,
+  "db_max_key": 600000,
+  "hit_only_declared": false,
+  "insert_count": 0,
+  "generated_min_key": 4,
+  "generated_max_key": 599978,
+  "first_op": "read 492193",
+  "first_op_is_read": true,
+  "hotset_jaccard_series": {
+    "status": "ok",
+    "segments": 10,
+    "series": [
+      0.525,
+      0.6267,
+      0.6712,
+      0.6575,
+      0.5714,
+      0.5641,
+      0.5062,
+      0.6712,
+      0.5844
+    ],
+    "mean": 0.5975
+  },
+  "parse_losses": 0,
+  "rightmost_leaf_share": {
+    "status": "deferred: needs key->page map (run phase)"
+  },
+  "props": "workload=workloadc,requestdistribution=zipfian,insertorder=hashed,recordcount=600000,operationcount=80000,zeropadding=19,fieldcount=1,fieldlength=1",
+  "db_page_stats": {
+    "status": "ok",
+    "page_size": 4096,
+    "page_count": 26331,
+    "table_interior_pages": 51,
+    "table_leaf_pages": 19983,
+    "btree_depth": 3,
+    "leaf_fill_factor": 0.9694,
+    "skeleton_bytes": 208896
+  },
+  "verdict": "PASS",
+  "violations": []
+}
