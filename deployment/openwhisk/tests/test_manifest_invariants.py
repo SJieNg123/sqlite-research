@@ -105,12 +105,15 @@ class TestOracleSingleSource(unittest.TestCase):
         with open(EXAMPLE) as f:
             m = json.load(f)
         db = os.path.join(REPO, m["database"]["path"])
+        if not os.path.exists(db):
+            self.skipTest("canonical DB absent")
         import sqlite3
         conn = sqlite3.connect(db)
         try:
             for seed, byop in m["first_query_oracle"]["A"].items():
                 for fop, entry in byop.items():
-                    hit, digest = oracle.digest_row(oracle.run_read(conn, entry["key"]))
+                    hit_raw, payload = oracle.run_read_payload(conn, entry["key"])
+                    hit, digest = oracle.digest_payload(hit_raw, payload)
                     self.assertEqual(hit, entry["expected_hit"])
                     self.assertEqual(digest, entry["expected_digest"])
         finally:

@@ -35,13 +35,26 @@ A *warm process* is one long-lived container process, identified by
 `invocation_counter` increments once per invocation; `warm_session_id` groups a
 session.
 
-The **primary (warm) mode** implements a genuine warm SQLite handle, mirroring
-`benchmark_harness.c`: the connection is opened **once at process init** and
-reused; `PRAGMA cache_size = 0` (the OS page cache is the only data cache); the
-read statement is compiled once (via sqlite3's statement cache) and only *stepped*
-at the measured query; the timing boundary wraps that step alone. Warm mode pays
-**no** `open_us` on the critical path — and it is a real reused handle, not a
-fresh open with `open_us` merely excluded.
+The **primary (warm) mode** implements a genuine warm SQLite handle via a ctypes
+bridge to the system `libsqlite3` (`action/sqlite_bridge.py`), mirroring
+`benchmark_harness.c` at the C-API level rather than relying on Python's sqlite3
+statement cache: `sqlite3_open_v2` (read-only) is called **once at process
+init**, `PRAGMA cache_size = 0` is set (the OS page cache is the only data
+cache), and the canonical statement `SELECT payload FROM items WHERE id=?1` is
+compiled once with `sqlite3_prepare_v2` — which compiles **without stepping**, so
+no B-tree data page is faulted at init. Each query is `sqlite3_reset` /
+`sqlite3_clear_bindings` / `sqlite3_bind_int64` / `sqlite3_step`, and the timing
+boundary wraps `sqlite3_step` alone. Warm mode pays **no** `open_us` on the
+critical path — a real reused `sqlite3*` + `sqlite3_stmt*`, not a fresh open with
+`open_us` merely excluded. The returned value is the payload blob and the oracle
+digests it (`sha256(payload)`).
+
+Before each cold reset the action calls `sqlite3_db_release_memory` to release
+reclaimable pager heap so SQLite-held page copies do not defeat the OS eviction,
+and it captures `sqlite3_db_status(CACHE_HIT/MISS)` around the query: with
+`cache_size = 0`, repeated cold queries show pager **misses**, proving the SQLite
+pager cache is not serving the query and the measured latency reflects the OS
+page-cache state.
 
 `mmap_size` departs from the C-harness default (file size) and is set to **0**
 (pager `pread` path). A persistent SQLite mmap pins the pages it traverses, which
@@ -109,21 +122,57 @@ advisory so residency behaviour can be observed.
 ## 5. Strategy validity
 
 - `baseline`: `selected_page_count == 0`, `delivered_page_count == 0`.
-- `2d`: `selected_page_count == 92`, all interior, `selected_leaf_count == 0`;
-  `delivered_page_count` is the accepted `MADV_WILLNEED` count and is recorded.
-- `resident_interiors_after_prefetch` is a separate observed field (delivery may
-  be partial); it is never conflated with syscall acceptance.
+- `2d`: `selected_page_count == 92`, `selected_interior_count == 92`,
+  `selected_leaf_count == 0`, `delivered_page_count == 92`.
+- These exact invariants are checked as `delivery_valid`, which is a required
+  conjunct of `measured_valid`; an incomplete 2d delivery is never measured-valid.
+- `resident_interiors_after_prefetch` is a separate observed effectiveness field
+  (delivery may be partial); it is never conflated with syscall acceptance.
 
-## 6. Atomic keys
+## 6. Pair identity, schedule, and atomic keys
+
+Every measured request carries a pair/identity tuple that the action echoes
+verbatim: `pair_id`, `repetition_id`, `schedule_position`, `schedule_seed`,
+`run_config_sha256`, `expected_action_image_digest`, `handle_mode`. Measured mode
+requires: non-empty `pair_id`; non-negative `repetition_id`; positive
+`schedule_position`; 64-hex `run_config_sha256`; a non-empty immutable action
+image digest that **exactly matches** the observed running image
+(`OW_ACTION_IMAGE_DIGEST`).
+
+`client/build_schedule.py` emits, for each
+`(workload, seed, first_operation, handle_mode, repetition_id, target)`, exactly
+one `pair_id` with exactly two arms — one baseline, one target — whose AB/BA
+order is a deterministic function of `schedule_seed` (reproducible, no RNG). The
+full schedule is persisted before any invocation. A warmup-only diagnostic
+invocation is emitted first and the driver injects one on every new
+`process_uuid`; warmup invocations are never measured.
 
 - **Observation key** (one measured cell, INCLUDES strategy):
-  `(warm_session_id, workload, seed, first_operation_id, strategy)`.
-- **Pairing-block key** (block within which a strategy pairs to its baseline,
-  EXCLUDES strategy): `(warm_session_id, workload, seed, first_operation_id)`.
-- Full atomic comparison unit for absolute values:
-  `(OpenWhisk environment, action image digest, process session, workload, seed,
-  first_operation, strategy)`. `action_image_digest` is carried in each response
-  (or the frozen run config).
+  `(run_config_sha256, artifact_manifest_sha256, action_image_digest,
+  warm_session_id, workload, seed, first_operation_id, handle_mode, pair_id,
+  strategy)`.
+- **Formal pair key** (a strategy pairs to its baseline within this block,
+  EXCLUDES strategy): `(run_config_sha256, artifact_manifest_sha256,
+  action_image_digest, warm_session_id, workload, seed, first_operation_id,
+  handle_mode, pair_id)`.
+
+For every `pair_id` the summarizer requires **exactly one baseline and exactly
+one target**; it reports duplicate arms, missing arms, and **session-break** pairs
+(the two arms carried different `warm_session_id` — the whole pair is invalidated
+and neither arm is paired elsewhere).
+
+## 6b. Metrics and aggregation
+
+- `first_query_us` — always.
+- `e2e_warm_us = deliver_us + first_query_us` — only when `handle_mode == warm`.
+- `e2e_standalone_us = open_us + deliver_us + first_query_us` — only when
+  `handle_mode == standalone`.
+
+Aggregation: (1) compute each pair's effect; (2) average repetitions **within
+each seed**; (3) average the per-seed estimates across seeds with **equal
+weight**. Unequal valid repetition counts never reweight a seed. Never mix
+workloads, handle modes, first-operation ids, strategies, or artifact/image/
+run-config identities.
 
 ## 7. Relative comparison + aggregation
 
@@ -137,10 +186,18 @@ advisory so residency behaviour can be observed.
 
 ## 8. Retention (exclusion) rules
 
-Retain only if all hold: process identity present; `invocation_counter` strictly
-increasing within the session; DB device/inode/sha256 unchanged; manifest hash
-matched; `cold_threshold_passed`; `oracle_passed`; no action/SQLite error.
-Otherwise `valid = false` with an `exclusion_reason`.
+`collect.classify` retains a row only if all hold: the response is a dict; the
+request/response identity fields match (`request_id`, workload, strategy, seed,
+first_operation_id, handle_mode, pair_id); `diagnostic_mode` is False (diagnostic
+rows are never valid for performance); `cold_reset_requested`,
+`cold_threshold_passed`, `oracle_passed`, `delivery_valid`, and `measured_valid`
+are all True; the response's `artifact_manifest_sha256`, `action_image_digest`,
+and `run_config_sha256` equal the run config; process identity present;
+`invocation_counter` a positive int strictly increasing within its session; no
+action/SQLite/platform error and a successful activation status. Otherwise
+`valid = false` with an `exclusion_reason`. Invoke/activation exceptions are
+recorded as invalid rows without aborting the run, and duplicate request ids are
+rejected.
 
 ## 9. Session-change handling and separate batch
 

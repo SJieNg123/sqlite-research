@@ -17,18 +17,31 @@ import sqlite3
 import time
 
 try:
-    from . import residency, oracle
+    from . import residency, oracle, sqlite_bridge
     from .session import Session, validate_request_semantics
 except ImportError:  # pragma: no cover - OpenWhisk flat layout
     import residency
     import oracle
+    import sqlite_bridge
     from session import Session, validate_request_semantics
 
 SUPPORTED_STRATEGIES = ("baseline", "2d")
 HANDLE_MODES = ("warm", "standalone")
 REQUIRED_REQUEST_FIELDS = ("request_id", "workload", "strategy", "seed",
                            "first_operation_id", "diagnostic_mode", "cold_reset",
-                           "expected_artifact_manifest_hash")
+                           "expected_artifact_manifest_hash", "pair_id",
+                           "repetition_id", "schedule_position", "schedule_seed",
+                           "run_config_sha256", "expected_action_image_digest")
+# request identity fields echoed verbatim in the response
+ECHO_FIELDS = ("pair_id", "repetition_id", "schedule_position", "schedule_seed",
+               "run_config_sha256", "expected_action_image_digest", "handle_mode")
+# exact per-strategy delivery invariants required for measured validity
+DELIVERY_INVARIANTS = {
+    "baseline": {"selected_page_count": 0, "selected_interior_count": 0,
+                 "selected_leaf_count": 0, "delivered_page_count": 0},
+    "2d": {"selected_page_count": 92, "selected_interior_count": 92,
+           "selected_leaf_count": 0, "delivered_page_count": 92},
+}
 _SESSION = None
 
 
@@ -56,7 +69,8 @@ def validate_request_schema(request):
     problems = []
     if request["strategy"] not in SUPPORTED_STRATEGIES:
         problems.append("strategy must be one of %s" % (SUPPORTED_STRATEGIES,))
-    if not isinstance(request["first_operation_id"], int) or request["first_operation_id"] < 0:
+    if not isinstance(request["first_operation_id"], int) or isinstance(
+            request["first_operation_id"], bool) or request["first_operation_id"] < 0:
         problems.append("first_operation_id must be a non-negative int")
     hm = request.get("handle_mode", "warm")
     if hm not in HANDLE_MODES:
@@ -87,38 +101,40 @@ def select_offsets(strategy, session):
 
 
 def _run_query(session, key, handle_mode):
-    """Execute the exact first query and return
-    (row, open_us, query_us, sqlite_error). Warm mode reuses the process handle
-    (no open cost on the critical path); standalone opens a fresh connection with
-    the canonical pragmas and pays open_us."""
-    err = None
+    """Execute the exact canonical query via the ctypes bridge and return
+    (hit, payload, open_us, query_us, sqlite_error, cache_hit, cache_miss).
+    Warm mode reuses the process handle + prepared statement (no open cost on the
+    critical path); standalone opens a fresh read-only handle (prepare included)
+    and pays open_us. The query timing is the sqlite3_step boundary only."""
+    p = session.pragmas()
     if handle_mode == "warm":
-        conn = session.open_warm_handle()
+        wdb = session.open_warm_handle()
         open_us = 0.0
-        tq = time.monotonic_ns()
         try:
-            row = oracle.run_read(conn, key)
-        except sqlite3.Error as e:  # pragma: no cover
-            return None, open_us, (time.monotonic_ns() - tq) / 1000.0, str(e)
-        return row, open_us, (time.monotonic_ns() - tq) / 1000.0, err
-    # standalone: fresh connection, measured open cost, same pragmas
-    pragmas = session.manifest.get("sqlite_pragmas", {"cache_size": 0,
-                                                      "mmap_size": session.manifest["database"]["byte_size"]})
+            wdb.cache_hit_miss(reset=True)   # zero the counters around this query
+            hit, payload, q_us = wdb.query(key)
+            ch, cm = wdb.cache_hit_miss(reset=True)
+        except sqlite_bridge.SqliteError as e:
+            return 0, None, open_us, 0.0, str(e), None, None
+        return hit, payload, open_us, q_us, None, ch, cm
+    # standalone: fresh handle, measured open cost (open_v2 + prepare_v2)
     t0 = time.monotonic_ns()
-    conn = sqlite3.connect(session.db_path)
-    conn.execute("PRAGMA cache_size = %d" % int(pragmas.get("cache_size", 0)))
-    conn.execute("PRAGMA mmap_size = %d" % int(pragmas.get("mmap_size",
-                                                           session.manifest["database"]["byte_size"])))
-    open_us = (time.monotonic_ns() - t0) / 1000.0
-    tq = time.monotonic_ns()
     try:
-        row = oracle.run_read(conn, key)
-    except sqlite3.Error as e:  # pragma: no cover
-        conn.close()
-        return None, open_us, (time.monotonic_ns() - tq) / 1000.0, str(e)
-    q_us = (time.monotonic_ns() - tq) / 1000.0
-    conn.close()
-    return row, open_us, q_us, err
+        wdb = sqlite_bridge.WarmDb(session.db_path,
+                                   cache_size=int(p.get("cache_size", 0)),
+                                   mmap_size=int(p.get("mmap_size", 0)))
+    except sqlite_bridge.SqliteError as e:
+        return 0, None, 0.0, 0.0, str(e), None, None
+    open_us = (time.monotonic_ns() - t0) / 1000.0
+    try:
+        wdb.cache_hit_miss(reset=True)
+        hit, payload, q_us = wdb.query(key)
+        ch, cm = wdb.cache_hit_miss(reset=True)
+    except sqlite_bridge.SqliteError as e:
+        wdb.close()
+        return 0, None, open_us, 0.0, str(e), None, None
+    wdb.close()
+    return hit, payload, open_us, q_us, None, ch, cm
 
 
 def _envelope(session, request, stage, message, base=None):
@@ -169,6 +185,10 @@ def handle(request, session):
         resp.update({"workload": workload, "strategy": strategy, "seed": seed,
                      "first_operation_id": first_op, "handle_mode": handle_mode,
                      "diagnostic_mode": diagnostic})
+        # echo pair/schedule/run-config/image identity verbatim
+        for f in ("pair_id", "repetition_id", "schedule_position", "schedule_seed",
+                  "run_config_sha256", "expected_action_image_digest"):
+            resp[f] = request.get(f)
 
         if strategy not in SUPPORTED_STRATEGIES:
             return _envelope(session, request, "request",
@@ -206,6 +226,10 @@ def handle(request, session):
         # ---- stage: cold reset + efficacy verification ----
         try:
             if cold_reset_requested:
+                # release reclaimable pager heap so SQLite-held page copies do not
+                # defeat the OS cold reset (documented mechanism).
+                if session.warmdb is not None:
+                    resp["sqlite_released_bytes"] = session.warmdb.release_memory()
                 t0 = time.monotonic_ns()
                 diag = residency.cold_reset_and_verify(session.db_path,
                                                        session.interior_offsets)
@@ -264,27 +288,34 @@ def handle(request, session):
             return _envelope(session, request, "deliver",
                              "delivery failed: %s" % e, resp)
 
-        # ---- stage: query (warm or standalone) ----
+        # ---- stage: query (warm or standalone) via canonical bridge ----
         try:
-            row, open_us, q_us, sqlite_err = _run_query(session, key, handle_mode)
+            hit, payload, open_us, q_us, sqlite_err, ch, cm = _run_query(
+                session, key, handle_mode)
         except Exception as e:  # pragma: no cover
             return _envelope(session, request, "query", "query failed: %s" % e, resp)
         resp["open_us"] = open_us
         resp["first_query_us"] = q_us
         resp["sqlite_error"] = sqlite_err
-        hit, digest = oracle.digest_row(row)
+        resp["sqlite_cache_hit"] = ch
+        resp["sqlite_cache_miss"] = cm
+        hit, digest = oracle.digest_payload(hit, payload)
         resp["query_hit"] = hit
         resp["result_digest"] = digest
 
-        # ---- stage: correctness oracle ----
+        # ---- stage: correctness oracle + strategy delivery validity ----
         oracle_ok = (hit == oc["expected_hit"] and digest == oc["expected_digest"]
                      and sqlite_err is None)
         resp["oracle_passed"] = oracle_ok
+        inv = DELIVERY_INVARIANTS[strategy]
+        delivery_ok = all(resp.get(k) == v for k, v in inv.items())
+        resp["delivery_valid"] = delivery_ok
         resp["handler_total_us"] = (time.monotonic_ns() - t_handler) / 1000.0
         if diagnostic:
             resp["measured_valid"] = None
         else:
-            resp["measured_valid"] = bool(diag["cold_threshold_passed"] and oracle_ok)
+            resp["measured_valid"] = bool(diag["cold_threshold_passed"] and oracle_ok
+                                          and delivery_ok and sqlite_err is None)
         return resp
     finally:
         session.critical_lock.release()

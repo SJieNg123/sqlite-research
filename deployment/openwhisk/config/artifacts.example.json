@@ -1,9 +1,15 @@
 {
   "schema_version": 2,
-  "generated_utc": "2026-07-14T10:27:40Z",
-  "repository_commit": "7fd270095165ed534d50cce0d0253b7739c7e1c8",
+  "generated_utc": "2026-07-14T17:33:00Z",
+  "repository_commit": "b01e3c173cddf5203fa308eeb42fe5c924dd1a77",
   "os_page_size_expected": 4096,
   "sqlite_page_size_expected": 4096,
+  "runtime": {
+    "sqlite_library_version": "3.46.1",
+    "python_version": "3.13.7"
+  },
+  "action_image_digest": null,
+  "canonical_query": "SELECT payload FROM items WHERE id=?1",
   "database": {
     "path": "pipeline/preparation/layout_rewriter/runs/test.db",
     "sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
@@ -199,70 +205,70 @@
         "0": {
           "key": 155,
           "expected_hit": 1,
-          "expected_digest": "a3a2e6f0be2188496f34d4a340c45a57daaa6ab995369487f51a9d670776a81a"
+          "expected_digest": "c77ce1cb432c5d1aa676c1d6c821c55fa19381236217c32f0d7f2ecff39e4b31"
         }
       },
       "2": {
         "0": {
           "key": 20648,
           "expected_hit": 1,
-          "expected_digest": "b5999fb587a0d9bfdc9c0831ed8a15069949b8338f959d49515d6a371e8981e2"
+          "expected_digest": "6b0d8353112542073eae34001eab923814459f1a5aac126808e9ba19daaba7af"
         }
       },
       "3": {
         "0": {
           "key": 47539,
           "expected_hit": 1,
-          "expected_digest": "81415b7a6790bd506ad0c7d2cd3bde2a4cff949d5218b4fb23b407a921bca49a"
+          "expected_digest": "b44040d37599058c75871278dab95797e59a2095be382be0806c65148e62aab1"
         }
       },
       "4": {
         "0": {
           "key": 85483,
           "expected_hit": 1,
-          "expected_digest": "8a904d11e9537a36c6a1e5a8a79058981ab19c085884799fa6f962eba43fbfe3"
+          "expected_digest": "0ad034936e0cf5753e85d5dcfb52aa58f10b5de6567326a66587839edf6f67c5"
         }
       },
       "5": {
         "0": {
           "key": 46074,
           "expected_hit": 1,
-          "expected_digest": "87f39bf5faedda672f195185dda9f1633af0bafb1a3600b6da81c34cf91ccf60"
+          "expected_digest": "f21f80086e7855bc4afff453adb47f05dd85fd6bd33ba6cda87d3498840f7144"
         }
       },
       "6": {
         "0": {
           "key": 94520,
           "expected_hit": 1,
-          "expected_digest": "13b00d80e2a7e6d4b6806048477ceaa6c30ba30f98bfc6af332cefef53377ccf"
+          "expected_digest": "b62b57c23dd4686d4b3eb8caea2d05384befdc18109da61b28a8c9911232ae02"
         }
       },
       "7": {
         "0": {
           "key": 51017,
           "expected_hit": 1,
-          "expected_digest": "8b3cc2e345ba622e71ea35e654061df75a42f2c9a9c3fea68cbbbe797a9c14f9"
+          "expected_digest": "0f970abeb85309884011b869d4f14e125beb6be3bc45a17eed97e85cb5bd943e"
         }
       },
       "8": {
         "0": {
           "key": 976,
           "expected_hit": 1,
-          "expected_digest": "8e51fa468ad9bb4c2ce06acf5c50d02748920ad7a2fd9b5d3ca7152775d45774"
+          "expected_digest": "ea77aebd4eef8eb056c9ec2b0ee15c59d19101c6cdb2609d23821f42310a9731"
         }
       },
       "9": {
         "0": {
           "key": 1340,
           "expected_hit": 1,
-          "expected_digest": "10c775d255444cb610507eb9b03b74e177e8cf96e63bd5e27083732f72bc12c5"
+          "expected_digest": "73aab63dfe2452536a9d81b3e3751148e6d062962387894e3f943db97421ba47"
         }
       },
       "10": {
         "0": {
           "key": 56699,
           "expected_hit": 1,
-          "expected_digest": "246875c135fff5e3626ef6f9102c54a24501c74fe3d498cea9f3cbfc6c0fcb9b"
+          "expected_digest": "0d289113a13c63d39bc8db53ae1455811b8ab112939e29a00ad9c5b2a7bbe9c3"
         }
       }
     }

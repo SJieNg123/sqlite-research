@@ -94,6 +94,18 @@ mode.
 An action update or redeploy **invalidates existing warm-process sessions**
 (new `process_uuid`); treat every redeploy as a new session group / batch.
 
+**Inode policy.** The action pins `(device, inode, sha256)` at init and fails
+measured mode if any changes.
+- *Image-baked mode*: the DB is copied into the image; its inode is stable for
+  the life of the image. Regenerate `artifacts.json` during the image build,
+  after the DB is placed at its final path, so device/inode match the running
+  container.
+- *Mounted-volume mode*: the DB lives on a persistent volume at a fixed path;
+  ensure the mount yields a stable inode across restarts and regenerate
+  `artifacts.json` on the workstation after mounting. In both modes regenerate the
+  real manifest only after checkout of the final commit and after the DB is in its
+  final action filesystem namespace.
+
 ## Configuration placeholders
 
 Copy `config/example.json` to `config/run_config.json` and fill:

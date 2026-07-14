@@ -1,34 +1,33 @@
 """Single source of truth for the first-query result oracle.
 
-Both the action (`main.py`) and the manifest generator
-(`build_artifact_manifest.py`) import this module so the expected/observed
-result digest is computed by identical code. The digest is a stable, order-fixed
-hash of the returned row; a not-found lookup has its own sentinel. This lets the
-correctness oracle assert the *exact* expected hit/not-found and digest per
-first operation rather than hard-coding ``query_hit == 1``.
+The canonical query (matching ``benchmark_harness.c``) is
+``SELECT payload FROM items WHERE id=?1`` and the returned value is the payload
+blob. The oracle digest is ``sha256(payload)``; a not-found lookup has its own
+sentinel. Both the action (via the ctypes ``sqlite_bridge``) and the manifest
+generator (via Python ``sqlite3``) import this so the expected/observed digest is
+computed by identical code, and correctness is the exact expected hit/not-found +
+digest, never a hard-coded ``query_hit == 1``.
 """
 import hashlib
 
-READ_SQL = "SELECT id,k1,k2,payload FROM items WHERE id=?"
-FIELD_SEP = b"\x1f"
+# Canonical statement text (payload only), mirroring the C harness.
+SELECT_SQL = "SELECT payload FROM items WHERE id=?1"
 NOTFOUND = "NOTFOUND"
 
 
-def digest_row(row):
-    """Return (hit, digest). row is a tuple of columns or None.
-    hit == 1 and a sha256 hex digest for a found row; hit == 0 and the NOTFOUND
-    sentinel otherwise."""
-    if row is None:
+def digest_payload(hit, payload):
+    """Return (hit, digest) from a (hit, payload_bytes|None) pair."""
+    if not hit or payload is None:
         return 0, NOTFOUND
-    h = hashlib.sha256()
-    for col in row:
-        h.update(col if isinstance(col, (bytes, bytearray)) else str(col).encode())
-        h.update(FIELD_SEP)
-    return 1, h.hexdigest()
+    if isinstance(payload, str):
+        payload = payload.encode()
+    return 1, hashlib.sha256(payload).hexdigest()
 
 
-def run_read(conn, key):
-    """Execute the canonical read against an open connection and return the row.
-    Statement reuse is handled by sqlite3's internal statement cache; the SQL
-    text is constant so the compiled statement is reused across invocations."""
-    return conn.execute(READ_SQL, (key,)).fetchone()
+def run_read_payload(conn, key):
+    """Offline helper (manifest generator) using Python sqlite3: return
+    (hit, payload_bytes|None) for the canonical query."""
+    row = conn.execute("SELECT payload FROM items WHERE id=?", (key,)).fetchone()
+    if row is None:
+        return 0, None
+    return 1, row[0]

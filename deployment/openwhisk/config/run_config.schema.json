@@ -1,0 +1,47 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "OpenWhisk cold-start run configuration",
+  "type": "object",
+  "required": ["run_id", "action_name", "artifact_manifest_sha256",
+               "action_image_digest", "run_config_sha256", "schedule_seed",
+               "action", "invocation_plan"],
+  "additionalProperties": true,
+  "properties": {
+    "run_id": {"type": "string", "minLength": 1},
+    "action_name": {"type": "string", "minLength": 1},
+    "artifact_manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "action_image_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$",
+      "description": "IMMUTABLE image digest, never a mutable tag"},
+    "run_config_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$",
+      "description": "sha256 of this run config with this field blanked"},
+    "schedule_seed": {"type": "integer"},
+    "action": {
+      "type": "object",
+      "required": ["memory_mb", "timeout_ms", "concurrency", "image"],
+      "properties": {
+        "memory_mb": {"type": "integer", "minimum": 128},
+        "timeout_ms": {"type": "integer", "minimum": 1000},
+        "concurrency": {"const": 1,
+          "description": "MUST be 1 to preserve warm-process session identity"},
+        "image": {"type": "string", "pattern": "@sha256:[0-9a-f]{64}$"}
+      }
+    },
+    "invocation_plan": {
+      "type": "object",
+      "required": ["workloads", "strategies", "seeds", "handle_modes",
+                   "first_operation_ids", "repetitions_per_cell", "sequential"],
+      "properties": {
+        "workloads": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+        "strategies": {"type": "array",
+          "items": {"enum": ["baseline", "2d"]}, "minItems": 1},
+        "seeds": {"type": "array", "items": {"type": "integer"}, "minItems": 1},
+        "handle_modes": {"type": "array",
+          "items": {"enum": ["warm", "standalone"]}, "minItems": 1},
+        "first_operation_ids": {"type": "array", "items": {"type": "integer"}},
+        "repetitions_per_cell": {"type": "integer", "minimum": 1},
+        "sequential": {"const": true,
+          "description": "client MUST invoke sequentially (concurrency 1)"}
+      }
+    }
+  }
+}

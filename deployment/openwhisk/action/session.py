@@ -17,16 +17,18 @@ open cost.
 import hashlib
 import json
 import os
+import platform
 import re
-import sqlite3
+import subprocess
 import threading
 import time
 import uuid
 
 try:
-    from . import oracle
+    from . import oracle, sqlite_bridge
 except ImportError:  # pragma: no cover - OpenWhisk flat layout
     import oracle
+    import sqlite_bridge
 
 _HEX64 = re.compile(r"^[0-9a-f]{64}$")
 _PAGE = 4096
@@ -65,12 +67,20 @@ class Session:
         self.db_sha256 = None
         self.validated = False
         self.validation_reasons = ("not_validated",)
-        # canonical warm handle (opened by open_warm_handle after validation)
-        self.conn = None
         self.os_page_size = os.sysconf("SC_PAGE_SIZE") if hasattr(os, "sysconf") else _PAGE
         # plan offsets cached at process init (off the invocation critical path)
         self.interior_offsets = list(self.manifest["interior_page_list"]["offsets"])
         self.interior_offset_set = set(self.interior_offsets)
+        # runtime + image identity, captured once
+        try:
+            self.sqlite_library_version = sqlite_bridge.libversion()
+        except Exception:  # pragma: no cover
+            self.sqlite_library_version = None
+        self.python_version = platform.python_version()
+        # observed immutable image digest injected by the deployment (env);
+        # measured mode requires it to equal the request's expected digest.
+        self.observed_action_image_digest = os.environ.get("OW_ACTION_IMAGE_DIGEST")
+        self.warmdb = None
 
     def _abspath(self, rel):
         return rel if os.path.isabs(rel) else os.path.join(self.root, rel)
@@ -140,6 +150,15 @@ class Session:
         # plan structural invariants (aligned / unique / within DB / count / ==offsets)
         r += self._validate_plan_invariants(page_size, page_count)
 
+        # every supported workload trace must match its manifest hash
+        for wl, wentry in m.get("workload_traces", {}).items():
+            for seed, tentry in wentry.get("seeds", {}).items():
+                tp = self._abspath(tentry["path"])
+                if not os.path.exists(tp):
+                    r.append("missing trace %s/%s" % (wl, seed))
+                elif sha256_file(tp) != tentry["sha256"]:
+                    r.append("trace sha256 mismatch %s/%s" % (wl, seed))
+
         self.validated = not r
         self.validation_reasons = tuple(r) if r else ()
         return self.validation_reasons
@@ -177,33 +196,29 @@ class Session:
         return r
 
     # ------------------------------------------------------------- warm handle
+    def pragmas(self):
+        return self.manifest.get("sqlite_pragmas",
+                                 {"cache_size": 0, "mmap_size": 0})
+
     def open_warm_handle(self):
-        """Open the canonical warm SQLite handle once. Requires prior successful
-        validation. Applies cache_size=0 + mmap_size (canonical pragmas) and warms
-        the read statement (compile only, no data). Safe to call repeatedly."""
+        """Open the canonical warm SQLite handle once via the ctypes bridge
+        (sqlite3_open_v2 read-only + sqlite3_prepare_v2). prepare_v2 compiles the
+        SELECT without stepping, so no data page is faulted at init and the cold
+        gate can still reach zero. Requires prior successful validation."""
         if not self.validated:
             raise RuntimeError("refusing warm handle before successful validation")
-        if self.conn is not None:
-            return self.conn
-        pragmas = self.manifest.get("sqlite_pragmas", {"cache_size": 0,
-                                                       "mmap_size": self.manifest["database"]["byte_size"]})
-        conn = sqlite3.connect(self.db_path, check_same_thread=False)
-        conn.execute("PRAGMA cache_size = %d" % int(pragmas.get("cache_size", 0)))
-        conn.execute("PRAGMA mmap_size = %d" % int(pragmas.get("mmap_size",
-                                                               self.manifest["database"]["byte_size"])))
-        # Warm the *statement compilation* only (parse + plan), without stepping
-        # the read against real data -- mirroring benchmark_harness.c, which
-        # prepares once but first steps at the measured op. EXPLAIN QUERY PLAN
-        # compiles the read without a B-tree data descent, so no interior/leaf
-        # page is faulted at init and the cold gate can still reach zero.
-        conn.execute("EXPLAIN QUERY PLAN " + oracle.READ_SQL, (0,)).fetchall()
-        self.conn = conn
-        return conn
+        if self.warmdb is not None:
+            return self.warmdb
+        p = self.pragmas()
+        self.warmdb = sqlite_bridge.WarmDb(self.db_path,
+                                           cache_size=int(p.get("cache_size", 0)),
+                                           mmap_size=int(p.get("mmap_size", 0)))
+        return self.warmdb
 
     def close_warm_handle(self):
-        if self.conn is not None:
-            self.conn.close()
-            self.conn = None
+        if self.warmdb is not None:
+            self.warmdb.close()
+            self.warmdb = None
 
     # ----------------------------------------------------------------- helpers
     def next_invocation(self):
@@ -229,7 +244,6 @@ class Session:
             return None, None
 
     def identity_fields(self):
-        img = self.manifest.get("action_image_digest") or os.environ.get("OW_ACTION_IMAGE_DIGEST")
         return {
             "process_uuid": self.process_uuid,
             "pid": self.pid,
@@ -238,7 +252,11 @@ class Session:
             "db_inode": self.db_inode,
             "db_sha256": self.db_sha256,
             "artifact_manifest_sha256": self.artifact_manifest_sha256,
-            "action_image_digest": img,
+            "action_image_digest": self.observed_action_image_digest,
+            "repository_commit": self.manifest.get("repository_commit"),
+            "sqlite_library_version": self.sqlite_library_version,
+            "python_version": self.python_version,
+            "canonical_query": self.manifest.get("canonical_query", oracle.SELECT_SQL),
         }
 
 
@@ -247,18 +265,26 @@ def valid_hash_format(h):
     return bool(h) and bool(_HEX64.match(h))
 
 
+def _is_pos_int(x):
+    return isinstance(x, int) and not isinstance(x, bool) and x > 0
+
+
+def _is_nonneg_int(x):
+    return isinstance(x, int) and not isinstance(x, bool) and x >= 0
+
+
 def validate_request_semantics(request, session):
-    """Semantic validation against the manifest (workload/seed/first_op known,
-    booleans well-typed, hash format). Returns () or a tuple of reasons."""
+    """Semantic validation against the manifest and pair/identity contract.
+    Format checks apply always; the stronger measured-mode identity requirements
+    apply unless diagnostic_mode is True. Returns () or a tuple of reasons."""
     r = []
     wl = request.get("workload")
     seed = request.get("seed")
     fop = request.get("first_operation_id")
     if wl not in session.manifest["workload_traces"]:
         r.append("unknown workload: %r" % wl)
-    else:
-        if str(seed) not in session.manifest["workload_traces"][wl]["seeds"]:
-            r.append("unknown seed for workload: %r" % seed)
+    elif str(seed) not in session.manifest["workload_traces"][wl]["seeds"]:
+        r.append("unknown seed for workload: %r" % seed)
     if fop not in session.manifest.get("supported_first_operation_ids", [0]):
         r.append("unsupported first_operation_id: %r" % fop)
     for b in ("diagnostic_mode", "cold_reset"):
@@ -268,4 +294,22 @@ def validate_request_semantics(request, session):
         r.append("empty request_id")
     if not valid_hash_format(request.get("expected_artifact_manifest_hash", "")):
         r.append("expected_artifact_manifest_hash must be 64-hex")
+
+    # ---- pair / schedule / run-config / image identity (measured mode) ----
+    if not request.get("diagnostic_mode"):
+        if not request.get("pair_id"):
+            r.append("empty pair_id")
+        if not _is_nonneg_int(request.get("repetition_id")):
+            r.append("repetition_id must be a non-negative int")
+        if not _is_pos_int(request.get("schedule_position")):
+            r.append("schedule_position must be a positive int")
+        if not valid_hash_format(request.get("run_config_sha256", "")):
+            r.append("run_config_sha256 must be 64-hex")
+        exp_img = request.get("expected_action_image_digest")
+        if not exp_img:
+            r.append("empty expected_action_image_digest")
+        elif not session.observed_action_image_digest:
+            r.append("no observed action image digest (OW_ACTION_IMAGE_DIGEST unset)")
+        elif exp_img != session.observed_action_image_digest:
+            r.append("action image digest mismatch")
     return tuple(r)

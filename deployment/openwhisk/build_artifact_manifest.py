@@ -33,8 +33,15 @@ import sqlite3
 import sys
 from datetime import datetime, timezone
 
+import platform  # noqa: E402
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "action"))
 import oracle  # noqa: E402
+try:
+    import sqlite_bridge  # noqa: E402
+    _BRIDGE_SQLITE_VERSION = sqlite_bridge.libversion()
+except OSError:  # pragma: no cover - libsqlite3 unavailable
+    _BRIDGE_SQLITE_VERSION = None
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 DB_REL = "pipeline/preparation/layout_rewriter/runs/test.db"
@@ -141,7 +148,8 @@ def build_oracle(db_path):
             out[wk][str(s)] = {}
             for fop in SUPPORTED_FIRST_OPS:
                 key = first_op_key(tp, fop)
-                hit, digest = oracle.digest_row(oracle.run_read(conn, key))
+                hit_raw, payload = oracle.run_read_payload(conn, key)
+                hit, digest = oracle.digest_payload(hit_raw, payload)
                 out[wk][str(s)][str(fop)] = {
                     "key": key, "expected_hit": hit, "expected_digest": digest}
     conn.close()
@@ -195,6 +203,14 @@ def main():
         "repository_commit": git_commit(),
         "os_page_size_expected": EXPECTED_PAGE_SIZE,
         "sqlite_page_size_expected": EXPECTED_PAGE_SIZE,
+        "runtime": {
+            "sqlite_library_version": _BRIDGE_SQLITE_VERSION,
+            "python_version": platform.python_version(),
+        },
+        # Immutable action image digest; filled at deploy (from OW_ACTION_IMAGE_DIGEST
+        # or the run config). Null in the committed example.
+        "action_image_digest": None if args.example else os.environ.get("OW_ACTION_IMAGE_DIGEST"),
+        "canonical_query": oracle.SELECT_SQL,
         "database": {
             "path": DB_REL,
             "sha256": sha256_file(db),
