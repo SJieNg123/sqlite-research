@@ -17,8 +17,12 @@ import json
 import os
 import statistics
 
-# The atomic comparison unit; a baseline must share all of these with its
-# strategy to be a valid denominator.
+# Observation key: identifies one measured cell (INCLUDES strategy).
+OBSERVATION_KEY = ("warm_session_id", "workload", "seed", "first_operation_id",
+                   "strategy")
+# Pairing-block key: the block within which a strategy is paired against its
+# baseline (EXCLUDES strategy). A valid denominator shares all of these AND the
+# same warm-process session (present in the key), never a local-machine baseline.
 PAIR_KEY = ("warm_session_id", "workload", "seed", "first_operation_id")
 
 

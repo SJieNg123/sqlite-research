@@ -28,9 +28,9 @@ import uuid
 # Fields copied verbatim from the action response into summary.csv.
 SUMMARY_FIELDS = [
     "request_id", "invocation_counter", "process_uuid", "pid",
-    "artifact_manifest_sha256", "db_device", "db_inode", "db_sha256",
-    "workload", "strategy", "seed", "first_operation_id",
-    "trace_sha256", "plan_sha256",
+    "artifact_manifest_sha256", "action_image_digest", "db_device", "db_inode",
+    "db_sha256", "workload", "strategy", "handle_mode", "seed",
+    "first_operation_id", "trace_sha256", "plan_sha256",
     "cold_reset_requested", "cold_reset_method", "cold_reset_succeeded",
     "relevant_pages_total", "resident_pages_before_reset",
     "resident_pages_after_reset", "resident_interiors_before_reset",
@@ -38,7 +38,9 @@ SUMMARY_FIELDS = [
     "cold_threshold_passed", "selected_page_count", "selected_interior_count",
     "selected_leaf_count", "delivered_page_count",
     "reset_us", "open_us", "select_us", "deliver_us", "first_query_us",
-    "handler_total_us", "query_hit", "result_digest", "sqlite_error", "error",
+    "handler_total_us", "query_hit", "result_digest",
+    "oracle_expected_hit", "oracle_expected_digest", "oracle_passed",
+    "measured_valid", "sqlite_error", "error", "error_stage",
     "client_send_utc", "client_recv_utc", "client_elapsed_us",
     "warm_session_id", "valid", "exclusion_reason",
 ]
@@ -55,15 +57,17 @@ def classify(resp, prev_counter_by_session):
     """Return (valid, exclusion_reason). Applies the retention rules of
     PROTOCOL.md without interpreting latency."""
     if resp.get("error"):
-        return False, "action_error:%s" % resp["error"]
+        return False, "action_error:%s" % resp.get("error_stage", "?")
     if resp.get("sqlite_error"):
         return False, "sqlite_error"
     if not resp.get("process_uuid"):
         return False, "no_process_identity"
     if not resp.get("cold_threshold_passed"):
         return False, "cold_threshold_not_passed"
-    if resp.get("query_hit") != 1:
-        return False, "query_miss_or_no_digest"
+    # correctness is the frozen oracle (exact expected hit/not-found + digest),
+    # NOT a hard-coded query_hit == 1.
+    if resp.get("oracle_passed") is not True:
+        return False, "oracle_failed"
     sid = warm_session_id(resp)
     ctr = resp.get("invocation_counter")
     prev = prev_counter_by_session.get(sid)

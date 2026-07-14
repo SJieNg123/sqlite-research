@@ -1,76 +1,90 @@
-"""Unit tests for the residency/selection pure logic (no syscalls required)."""
+"""Unit tests for residency primitives, the efficacy-based reset diagnostics,
+and strategy selection."""
 import os
 import sys
-import tempfile
+import types
 import unittest
 
 HERE = os.path.dirname(__file__)
+REPO = os.path.abspath(os.path.join(HERE, "..", "..", ".."))
 sys.path.insert(0, os.path.join(HERE, "..", "action"))
 
 import residency  # noqa: E402
 import main  # noqa: E402
 
+DB = os.path.join(REPO, "pipeline/preparation/layout_rewriter/runs/test.db")
+
 
 class TestColdThreshold(unittest.TestCase):
-    def test_zero_interiors_is_cold(self):
+    def test_zero_is_cold(self):
         self.assertTrue(residency.cold_threshold_passed(0))
 
-    def test_any_resident_interior_is_not_cold(self):
+    def test_nonzero_is_not_cold(self):
         self.assertFalse(residency.cold_threshold_passed(1))
         self.assertFalse(residency.cold_threshold_passed(92))
 
 
 class TestCountIn(unittest.TestCase):
-    def test_counts_only_resident_offsets(self):
-        # 4 pages; pages 0 and 2 resident (bit0 set).
+    def test_counts_resident_offsets(self):
         vec = bytes([1, 0, 1, 0])
-        offs = [0, residency.PAGE, 2 * residency.PAGE, 3 * residency.PAGE]
+        offs = [i * residency.PAGE for i in range(4)]
         self.assertEqual(residency.count_in(vec, offs), 2)
 
-    def test_out_of_range_offsets_ignored(self):
-        vec = bytes([1])
-        self.assertEqual(residency.count_in(vec, [0, 999 * residency.PAGE]), 1)
+    def test_out_of_range_ignored(self):
+        self.assertEqual(residency.count_in(bytes([1]), [0, 999 * residency.PAGE]), 1)
 
 
-class TestPlanLoading(unittest.TestCase):
-    def _plan(self, rows):
-        fd, p = tempfile.mkstemp(suffix=".csv")
-        with os.fdopen(fd, "w") as f:
-            f.write("page_number,file_offset\n")
-            for pn, off in rows:
-                f.write("%d,%d\n" % (pn, off))
-        return p
-
-    def test_loads_offsets_in_order(self):
-        p = self._plan([(2, 4096), (3, 8192)])
-        try:
-            self.assertEqual(main.load_interior_offsets(p), [4096, 8192])
-        finally:
-            os.remove(p)
-
-    def test_duplicate_page_fails(self):
-        p = self._plan([(2, 4096), (2, 4096)])
-        try:
-            with self.assertRaises(ValueError):
-                main.load_interior_offsets(p)
-        finally:
-            os.remove(p)
+def fake_session(offsets, interior_count=92):
+    s = types.SimpleNamespace()
+    s.interior_offsets = list(offsets)
+    s.interior_offset_set = set(offsets)
+    s.manifest = {"interior_page_count": interior_count}
+    return s
 
 
-class TestSelectPages(unittest.TestCase):
-    def test_baseline_selects_zero(self):
-        self.assertEqual(main.select_pages("baseline", [1, 2, 3], 3), [])
+class TestSelectOffsets(unittest.TestCase):
+    def test_baseline_zero(self):
+        s = fake_session([10, 20])
+        self.assertEqual(main.select_offsets("baseline", s), [])
 
-    def test_2d_selects_all_interiors(self):
-        self.assertEqual(main.select_pages("2d", [10, 20, 30], 3), [10, 20, 30])
+    def test_2d_all_interiors(self):
+        offs = [(p) * residency.PAGE for p in range(1, 93)]
+        s = fake_session(offs, 92)
+        self.assertEqual(main.select_offsets("2d", s), offs)
 
     def test_2d_wrong_count_fails(self):
+        s = fake_session([10, 20], 92)
         with self.assertRaises(ValueError):
-            main.select_pages("2d", [10, 20], 92)
+            main.select_offsets("2d", s)
 
-    def test_unsupported_strategy_fails(self):
+    def test_unsupported_fails(self):
         with self.assertRaises(ValueError):
-            main.select_pages("2f_slru", [1], 1)
+            main.select_offsets("2f_slru", fake_session([1]))
+
+
+@unittest.skipUnless(os.path.exists(DB), "reference DB missing")
+class TestColdResetDiagnostics(unittest.TestCase):
+    def setUp(self):
+        # first 92 page offsets as a stand-in interior set for the shape test
+        self.interiors = [(p) * residency.PAGE for p in range(1, 93)]
+
+    def test_reset_returns_full_diagnostics(self):
+        d = residency.cold_reset_and_verify(DB, self.interiors)
+        for k in ("resident_pages_before_reset", "resident_interiors_before_reset",
+                  "attempted_methods", "cold_reset_method",
+                  "resident_pages_after_reset", "resident_interiors_after_reset",
+                  "cold_reset_succeeded", "cold_threshold_passed"):
+            self.assertIn(k, d)
+        self.assertTrue(d["attempted_methods"])
+        for a in d["attempted_methods"]:
+            for k in ("method", "rc", "errno", "resident_interiors_after"):
+                self.assertIn(k, a)
+
+    def test_chain_stops_when_cold(self):
+        d = residency.cold_reset_and_verify(DB, self.interiors)
+        # if the final state is cold, the last attempt achieved zero interiors
+        if d["cold_threshold_passed"]:
+            self.assertEqual(d["attempted_methods"][-1]["resident_interiors_after"], 0)
 
 
 if __name__ == "__main__":

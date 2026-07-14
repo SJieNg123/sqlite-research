@@ -1,7 +1,9 @@
 {
-  "schema_version": 1,
-  "generated_utc": "2026-07-13T23:23:39Z",
-  "repository_commit": "108acc24a30c9212271412be4b94cc3ef22fe6ef",
+  "schema_version": 2,
+  "generated_utc": "2026-07-14T10:27:40Z",
+  "repository_commit": "7fd270095165ed534d50cce0d0253b7739c7e1c8",
+  "os_page_size_expected": 4096,
+  "sqlite_page_size_expected": 4096,
   "database": {
     "path": "pipeline/preparation/layout_rewriter/runs/test.db",
     "sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
@@ -12,6 +14,10 @@
     "max_key": 600000,
     "device": null,
     "inode": null
+  },
+  "classifier": {
+    "path": "pipeline/preparation/layout_rewriter/runs/classify_before.csv",
+    "sha256": "6ec6837dc6a801c28e1cc08e90ccac570ee9a517765c0f6f03ab1b723349cc32"
   },
   "interior_page_list": {
     "path": "deployment/openwhisk/config/plans/interior_pages.csv",
@@ -112,16 +118,29 @@
       106520576
     ]
   },
+  "interior_page_count": 92,
+  "expected_relevant_page_count": 26331,
+  "sqlite_pragmas": {
+    "cache_size": 0,
+    "mmap_size": 0
+  },
+  "canonical_reference_pragmas": {
+    "cache_size": 0,
+    "mmap_size": 107851776,
+    "source": "benchmark_harness.c default"
+  },
   "strategy_plans": {
     "2d": {
       "path": "deployment/openwhisk/config/plans/interior_pages.csv",
       "sha256": "37ed5e4682d1771c735edc93133bb8ecb77d772a992721b180a9cabaae28745e",
-      "kind": "interior_skeleton"
+      "kind": "interior_skeleton",
+      "expected_pages": 92
     },
     "baseline": {
       "path": null,
       "sha256": null,
-      "kind": "no_prefetch"
+      "kind": "no_prefetch",
+      "expected_pages": 0
     }
   },
   "workload_traces": {
@@ -171,6 +190,82 @@
       }
     }
   },
-  "expected_relevant_page_count": 92,
-  "notes": "Interior skeleton (2d) plan derived from the canonical page classifier; every mandatory interior page listed once. Paths are repository-relative and resolved at runtime against OW_ARTIFACT_ROOT."
+  "supported_first_operation_ids": [
+    0
+  ],
+  "first_query_oracle": {
+    "A": {
+      "1": {
+        "0": {
+          "key": 155,
+          "expected_hit": 1,
+          "expected_digest": "a3a2e6f0be2188496f34d4a340c45a57daaa6ab995369487f51a9d670776a81a"
+        }
+      },
+      "2": {
+        "0": {
+          "key": 20648,
+          "expected_hit": 1,
+          "expected_digest": "b5999fb587a0d9bfdc9c0831ed8a15069949b8338f959d49515d6a371e8981e2"
+        }
+      },
+      "3": {
+        "0": {
+          "key": 47539,
+          "expected_hit": 1,
+          "expected_digest": "81415b7a6790bd506ad0c7d2cd3bde2a4cff949d5218b4fb23b407a921bca49a"
+        }
+      },
+      "4": {
+        "0": {
+          "key": 85483,
+          "expected_hit": 1,
+          "expected_digest": "8a904d11e9537a36c6a1e5a8a79058981ab19c085884799fa6f962eba43fbfe3"
+        }
+      },
+      "5": {
+        "0": {
+          "key": 46074,
+          "expected_hit": 1,
+          "expected_digest": "87f39bf5faedda672f195185dda9f1633af0bafb1a3600b6da81c34cf91ccf60"
+        }
+      },
+      "6": {
+        "0": {
+          "key": 94520,
+          "expected_hit": 1,
+          "expected_digest": "13b00d80e2a7e6d4b6806048477ceaa6c30ba30f98bfc6af332cefef53377ccf"
+        }
+      },
+      "7": {
+        "0": {
+          "key": 51017,
+          "expected_hit": 1,
+          "expected_digest": "8b3cc2e345ba622e71ea35e654061df75a42f2c9a9c3fea68cbbbe797a9c14f9"
+        }
+      },
+      "8": {
+        "0": {
+          "key": 976,
+          "expected_hit": 1,
+          "expected_digest": "8e51fa468ad9bb4c2ce06acf5c50d02748920ad7a2fd9b5d3ca7152775d45774"
+        }
+      },
+      "9": {
+        "0": {
+          "key": 1340,
+          "expected_hit": 1,
+          "expected_digest": "10c775d255444cb610507eb9b03b74e177e8cf96e63bd5e27083732f72bc12c5"
+        }
+      },
+      "10": {
+        "0": {
+          "key": 56699,
+          "expected_hit": 1,
+          "expected_digest": "246875c135fff5e3626ef6f9102c54a24501c74fe3d498cea9f3cbfc6c0fcb9b"
+        }
+      }
+    }
+  },
+  "notes": "Interior skeleton (2d) plan derived from the canonical page classifier; invariants validated at generation. Paths are repository-relative, resolved at runtime against OW_ARTIFACT_ROOT. expected_relevant_page_count is the whole-DB page count; interior_page_count is the 92-page skeleton."
 }
