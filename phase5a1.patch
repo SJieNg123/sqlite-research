@@ -1,0 +1,2677 @@
+From b01e3c173cddf5203fa308eeb42fe5c924dd1a77 Mon Sep 17 00:00:00 2001
+From: sj <shijie.jh@gmail.com>
+Date: Tue, 14 Jul 2026 10:34:14 +0000
+Subject: [PATCH] deployment: harden OpenWhisk measurement correctness
+
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+---
+ deployment/openwhisk/PROTOCOL.md              | 234 +++++----
+ deployment/openwhisk/action/main.py           | 464 ++++++++++--------
+ deployment/openwhisk/action/oracle.py         |  34 ++
+ deployment/openwhisk/action/residency.py      | 148 ++++--
+ deployment/openwhisk/action/session.py        | 268 +++++++---
+ .../openwhisk/build_artifact_manifest.py      | 190 +++++--
+ deployment/openwhisk/client/collect.py        |  18 +-
+ deployment/openwhisk/client/summarize.py      |   8 +-
+ .../openwhisk/config/artifacts.example.json   | 109 +++-
+ deployment/openwhisk/tests/test_contract.py   | 193 +++++---
+ .../tests/test_manifest_invariants.py         | 127 +++++
+ .../openwhisk/tests/test_residency_logic.py   |  96 ++--
+ .../tests/test_session_classification.py      | 163 ++++--
+ 13 files changed, 1432 insertions(+), 620 deletions(-)
+ create mode 100644 deployment/openwhisk/action/oracle.py
+ create mode 100644 deployment/openwhisk/tests/test_manifest_invariants.py
+
+diff --git a/deployment/openwhisk/PROTOCOL.md b/deployment/openwhisk/PROTOCOL.md
+index 1c4190e..10d4d43 100644
+--- a/deployment/openwhisk/PROTOCOL.md
++++ b/deployment/openwhisk/PROTOCOL.md
+@@ -1,100 +1,152 @@
+ # OpenWhisk Cold-Start Measurement Protocol
+ 
+-This protocol defines how the OpenWhisk action measures SQLite cold-start
+-behaviour and how invocations are retained, paired, and aggregated. It is the
+-authority for the next (measurement) phase. **Phase 5A implements the mechanism
+-and gates only; it produces no performance result.**
++Authority for how the action measures SQLite cold-start behaviour and how
++invocations are retained, paired, and aggregated. Documentation is kept in exact
++correspondence with the implementation. **Phase 5A/5A.1 build the mechanism and
++gates only; no performance result is produced.**
+ 
+ ## 1. Measurement boundary
+ 
+-Each invocation measures, with a monotonic high-resolution clock, only:
+-
+-| term              | field             | meaning                                              |
+-|-------------------|-------------------|------------------------------------------------------|
+-| cold reset        | `reset_us`        | non-root eviction hint over the DB mapping           |
+-| page selection    | `select_us`       | load the frozen plan and choose pages                |
+-| delivery          | `deliver_us`      | per-page `MADV_WILLNEED` prefetch                    |
+-| cold file open    | `open_us`         | opening the SQLite connection for the query          |
+-| first query       | `first_query_us`  | the exact requested `read <key>`                     |
+-| handler total     | `handler_total_us`| whole handler span                                   |
+-
+-Process initialization time (container start, module import, artifact
+-validation) is **excluded** from every term above; it happens once per warm
+-process, before any invocation is timed. The two deployment models are composed
+-downstream, exactly as in the local study:
+-
+-    e2e_warm       = deliver_us + first_query_us          (handle already open)
+-    e2e_standalone = open_us + deliver_us + first_query_us (cold open paid)
+-
+-## 2. Warm-process definition
+-
+-A *warm process* is one long-lived OpenWhisk container process. It is identified
+-by `(process_uuid, pid, db_inode)` captured at process init — **never** by the
+-OpenWhisk activation id. `invocation_counter` increments once per invocation
+-inside that process. A `warm_session_id` groups invocations sharing that triple.
+-
+-## 3. Cold-data definition and residency acceptance threshold
+-
+-*Cold data* means the OS page cache backing the reference DB has been evicted for
+-this measurement, achieved with **non-root** hints only (`MADV_DONTNEED`, with
+-`MADV_PAGEOUT`/`MADV_COLD` fallbacks). Never `sudo`, `drop_caches`, container
+-restart, or host reboot.
+-
+-A successful `madvise` return code is **not** accepted as eviction. Residency is
+-re-measured with `mincore` after the reset. The strict acceptance threshold is:
++Each invocation times, with a monotonic clock, only:
++
++| term          | field             | meaning                                                    |
++|---------------|-------------------|------------------------------------------------------------|
++| cold reset    | `reset_us`        | span of the efficacy-verified non-root eviction            |
++| page select   | `select_us`       | choose the plan pages (cached at init; off critical path)  |
++| delivery      | `deliver_us`      | per-page `MADV_WILLNEED` prefetch                          |
++| cold open     | `open_us`         | fresh-connection open (standalone mode only; 0 in warm)    |
++| first query   | `first_query_us`  | the exact requested `read <key>` (step only)               |
++| handler total | `handler_total_us`| whole handler span                                         |
++
++Process initialization (container start, module import, artifact validation, and
++opening the warm handle) is **excluded** from every term. Deployment models are
++composed downstream:
++
++    e2e_warm       = deliver_us + first_query_us            (warm handle, open_us = 0)
++    e2e_standalone = open_us + deliver_us + first_query_us  (fresh handle per call)
++
++The plan/trace/oracle metadata is cached at process init, so `select_us` is off
++the critical path and is **not** part of `e2e_warm`.
++
++## 2. Warm-process definition and the warm SQLite handle
++
++A *warm process* is one long-lived container process, identified by
++`(process_uuid, pid, db_inode)` captured at init — **never** the activation id.
++`invocation_counter` increments once per invocation; `warm_session_id` groups a
++session.
++
++The **primary (warm) mode** implements a genuine warm SQLite handle, mirroring
++`benchmark_harness.c`: the connection is opened **once at process init** and
++reused; `PRAGMA cache_size = 0` (the OS page cache is the only data cache); the
++read statement is compiled once (via sqlite3's statement cache) and only *stepped*
++at the measured query; the timing boundary wraps that step alone. Warm mode pays
++**no** `open_us` on the critical path — and it is a real reused handle, not a
++fresh open with `open_us` merely excluded.
++
++`mmap_size` departs from the C-harness default (file size) and is set to **0**
++(pager `pread` path). A persistent SQLite mmap pins the pages it traverses, which
++blocks non-root re-eviction of those pages between invocations on a warm process;
++the `pread` path keeps no mapping alive so the file can be re-colded before every
++invocation without root. The canonical file-size value is recorded in the
++manifest as `canonical_reference_pragmas` for fidelity comparison (it requires
++root `drop_caches` to re-cold between invocations, which this non-root protocol
++forbids).
++
++The **standalone mode** opens a fresh connection per invocation with the same
++pragmas and measures `open_us`; it is reported separately and never conflated
++with the warm handle.
++
++## 3. Cold-data definition, efficacy-based reset, residency threshold
++
++*Cold data* means the OS page cache backing the reference DB has been evicted
++using **non-root** hints only. Never `sudo`, `drop_caches`, container restart, or
++reboot.
++
++Cold reset is **efficacy-based, not rc-based**. Candidates are tried in order —
++`MADV_DONTNEED`, page-aligned `POSIX_FADV_DONTNEED`, `MADV_PAGEOUT`, `MADV_COLD` —
++and after each the mapping is dropped and a **fresh mapping** is made to
++re-measure residency with `mincore`. Escalation stops as soon as zero mandatory
++interiors are resident. Each attempt records `{method, rc, errno,
++resident_interiors_after, resident_pages_after}` in `attempted_methods`. A
++successful advice return code is never accepted as eviction: only the re-measured
++`mincore` residency is the truth.
++
++Strict acceptance threshold:
+ 
+ > **zero mandatory interior pages resident before any prefetch/query**
+ > (`resident_interiors_after_reset == 0` ⇒ `cold_threshold_passed = true`).
+ 
+-Total relevant-page residency is also reported. If the filesystem/runtime cannot
+-evict non-root (the pages stay resident), the invocation is **excluded** with a
+-diagnostic reason — it is never silently accepted as warm.
+-
+-## 4. Atomic comparison unit
+-
+-    (OpenWhisk environment, action image digest, process session,
+-     workload, seed, first_operation, strategy)
+-
+-Absolute latencies are only ever compared inside a single such unit.
+-
+-## 5. Relative comparison rules
+-
+-- A strategy is paired against a **baseline from the same OpenWhisk
+-  run/configuration**, the same workload and seed, the same first operation, the
+-  same warm-process session where possible, and the same cold-verification
+-  criteria.
+-- **No local-machine baseline is ever used as a denominator** for an OpenWhisk
+-  strategy.
+-- Cross-seed aggregation computes **per-seed paired values first**, then
+-  aggregates those paired values. A percentage is never derived from cross-seed
+-  absolute means.
+-
+-## 6. Retention (exclusion) rules
+-
+-An invocation is retained only if **all** hold:
+-
+-1. expected process UUID/PID session present (`process_uuid` non-empty);
+-2. `invocation_counter` strictly increases within its session;
+-3. DB `device`/`inode`/`sha256` unchanged from the manifest;
+-4. `expected_artifact_manifest_hash` matches;
+-5. `cold_threshold_passed` is true (zero resident mandatory interiors pre-query);
+-6. `query_hit == 1` with a correct `result_digest`;
+-7. no action/platform/SQLite error.
+-
+-Otherwise the collector records `valid = false` with an `exclusion_reason`.
+-
+-## 7. Session-change handling
+-
+-Any change in `(process_uuid, pid, db_inode)` — a container recycle, an action
+-redeploy, or an image swap — starts a **new session group**. Absolute values are
+-never merged across session identities without an explicit hierarchical
+-analysis. One action version is used per measured batch.
+-
+-## 8. Separate result batch
+-
+-The OpenWhisk numbers are a **separate result batch**. They are not written to
+-the canonical `results/` tree used by the local study and are not merged into it.
+-**Absolute local-machine and OpenWhisk latencies are not directly compared**; only
+-same-batch paired relative effects are meaningful across the two environments.
+-Whether the locally observed *ordering* of strategies carries over to a FaaS
+-runtime is the empirical question this measurement will test.
++Total relevant residency uses the **whole-DB page count** as denominator
++(`expected_relevant_page_count`), not the 92-page interior set
++(`interior_page_count`).
++
++## 4. Fail-closed gates (in order)
++
++Every gate fails closed with a complete error envelope carrying `error_stage`;
++no partial record is emitted that looks valid.
++
++1. `concurrency` — the full measured critical section is serialized by a
++   process-wide lock; an overlapping invocation is rejected.
++2. `artifact_validation` — the session must have validated the manifest, DB
++   (sha256/size/header page-size+count), classifier, and interior plan; and the
++   OS page size must be 4096. An unvalidated session runs no measured query.
++3. `request` — workload/seed/first-op known to the manifest; booleans well-typed;
++   `request_id` non-empty; `expected_artifact_manifest_hash` a 64-hex string.
++4. `identity` — DB device/inode unchanged since init; `expected_artifact_manifest_hash`
++   non-empty and an exact match of the loaded manifest hash.
++5. `cold_reset_required` — measured mode requires `cold_reset = true`;
++   `cold_reset = false` is only allowed in `diagnostic_mode` and is never measured.
++6. `cold_gate` — if `cold_threshold_passed` is false and not diagnostic, the
++   handler returns **before** select/deliver/open/query.
++7. `oracle` — the observed `(hit, result_digest)` must equal the frozen
++   `first_query_oracle` entry (`oracle_passed`). Correctness is the exact expected
++   hit/not-found and digest, **not** a hard-coded `query_hit == 1`.
++
++`measured_valid` (non-diagnostic) is the strict AND of `cold_threshold_passed`,
++`oracle_passed`, and no error. In diagnostic mode it is `null` and gates 5/6 are
++advisory so residency behaviour can be observed.
++
++## 5. Strategy validity
++
++- `baseline`: `selected_page_count == 0`, `delivered_page_count == 0`.
++- `2d`: `selected_page_count == 92`, all interior, `selected_leaf_count == 0`;
++  `delivered_page_count` is the accepted `MADV_WILLNEED` count and is recorded.
++- `resident_interiors_after_prefetch` is a separate observed field (delivery may
++  be partial); it is never conflated with syscall acceptance.
++
++## 6. Atomic keys
++
++- **Observation key** (one measured cell, INCLUDES strategy):
++  `(warm_session_id, workload, seed, first_operation_id, strategy)`.
++- **Pairing-block key** (block within which a strategy pairs to its baseline,
++  EXCLUDES strategy): `(warm_session_id, workload, seed, first_operation_id)`.
++- Full atomic comparison unit for absolute values:
++  `(OpenWhisk environment, action image digest, process session, workload, seed,
++  first_operation, strategy)`. `action_image_digest` is carried in each response
++  (or the frozen run config).
++
++## 7. Relative comparison + aggregation
++
++- A strategy pairs against a **baseline in the same pairing block and the same
++  warm-process session**. No local-machine baseline is ever a denominator.
++- Cross-seed: compute **per-seed paired values first**, then aggregate those;
++  never a percentage from cross-seed absolute means.
++- Cross-session results are a **separate** sensitivity analysis; absolute values
++  are never merged across session identities without explicit hierarchical
++  analysis.
++
++## 8. Retention (exclusion) rules
++
++Retain only if all hold: process identity present; `invocation_counter` strictly
++increasing within the session; DB device/inode/sha256 unchanged; manifest hash
++matched; `cold_threshold_passed`; `oracle_passed`; no action/SQLite error.
++Otherwise `valid = false` with an `exclusion_reason`.
++
++## 9. Session-change handling and separate batch
++
++Any change in `(process_uuid, pid, db_inode)` — container recycle, redeploy, image
++swap — starts a **new session group**; one action version per measured batch. The
++OpenWhisk numbers are a **separate result batch**, never written to or merged with
++the canonical `results/` tree. **Absolute local-machine and OpenWhisk latencies
++are not directly compared**; whether the locally observed strategy *ordering*
++carries over is the empirical question this measurement will test.
+diff --git a/deployment/openwhisk/action/main.py b/deployment/openwhisk/action/main.py
+index add26bf..b0fd7db 100644
+--- a/deployment/openwhisk/action/main.py
++++ b/deployment/openwhisk/action/main.py
+@@ -1,264 +1,308 @@
+-"""OpenWhisk action entrypoint: cold-start first-query measurement.
+-
+-Warm-process, cold-data model. One long-lived container process (a `Session`)
+-serves many invocations; each invocation cold-resets the OS page cache for the
+-frozen reference DB, optionally delivers a prefetch plan, and times the exact
+-requested first query. Only baseline and 2d (interior skeleton) are implemented
+-in Phase 5A; both reuse the frozen artifacts and the canonical non-root
+-primitives in `residency.py`. No latency is interpreted here — the action emits a
+-complete, atomically-scoped record and the client/collector aggregates later.
+-
+-`main(params)` is the OpenWhisk handler. `handle(request, session)` is the pure,
++"""OpenWhisk action entrypoint: fail-closed cold-start first-query measurement.
++
++Warm-process, cold-data model. One long-lived container process (a ``Session``
++with a canonical warm SQLite handle) serves many invocations; each invocation
++cold-resets the OS page cache for the frozen reference DB (efficacy-verified),
++optionally delivers the 2d interior skeleton, and times the exact requested first
++query, comparing the result against a frozen oracle. Every gate fails closed:
++on any artifact/identity/cold-gate/oracle failure the handler returns a complete
++error envelope with the failing stage and never emits a partial record that looks
++valid.
++
++`main(params)` is the OpenWhisk handler; `handle(request, session)` is the
+ locally-testable core (no OpenWhisk dependency).
+ """
+-import csv
+-import hashlib
+ import os
+ import sqlite3
+ import time
+ 
+-try:  # allow both `python -m action.main` and OpenWhisk's flat import
+-    from . import residency
+-    from .session import Session
++try:
++    from . import residency, oracle
++    from .session import Session, validate_request_semantics
+ except ImportError:  # pragma: no cover - OpenWhisk flat layout
+     import residency
+-    from session import Session
++    import oracle
++    from session import Session, validate_request_semantics
+ 
+ SUPPORTED_STRATEGIES = ("baseline", "2d")
++HANDLE_MODES = ("warm", "standalone")
++REQUIRED_REQUEST_FIELDS = ("request_id", "workload", "strategy", "seed",
++                           "first_operation_id", "diagnostic_mode", "cold_reset",
++                           "expected_artifact_manifest_hash")
+ _SESSION = None
+ 
+ 
+ def get_session():
+-    """Module-singleton Session, created on first invocation of the warm process."""
++    """Module-singleton warm Session. Validates artifacts and opens the warm
++    handle exactly once; if validation fails the session is returned unvalidated
++    so the handler refuses measured mode."""
+     global _SESSION
+     if _SESSION is None:
+         manifest = os.environ.get("OW_ARTIFACT_MANIFEST") or os.path.join(
+             os.path.dirname(__file__), "..", "config", "artifacts.json")
+-        _SESSION = Session(os.path.abspath(manifest))
+-        _SESSION.validate_artifacts()
++        s = Session(os.path.abspath(manifest))
++        s.validate_artifacts()          # sets s.validated / s.validation_reasons
++        if s.validated:
++            s.open_warm_handle()
++        _SESSION = s
+     return _SESSION
+ 
+ 
+-# --------------------------------------------------------------------------- IO
+-def load_interior_offsets(plan_path):
+-    """Load the frozen interior-page plan (page_number,file_offset). Fails loudly
+-    on duplicate page numbers. Returns an ordered, de-duplicated offset list."""
+-    seen = set()
+-    offsets = []
+-    with open(plan_path, newline="") as f:
+-        for row in csv.DictReader(f):
+-            pn = int(row["page_number"])
+-            if pn in seen:
+-                raise ValueError("duplicate page in plan: %d" % pn)
+-            seen.add(pn)
+-            offsets.append(int(row["file_offset"]))
+-    return offsets
+-
+-
+-def select_pages(strategy, interior_offsets, expected_interior_count):
+-    """Return the offsets to deliver for a strategy. baseline delivers nothing;
+-    2d delivers every mandatory interior page exactly once. Fails if the plan
+-    size disagrees with the manifest (STEP 8)."""
++def validate_request_schema(request):
++    """Structural request validation (fields present + basic types)."""
++    missing = [f for f in REQUIRED_REQUEST_FIELDS if f not in request]
++    if missing:
++        return ("missing request fields: " + ", ".join(missing),)
++    problems = []
++    if request["strategy"] not in SUPPORTED_STRATEGIES:
++        problems.append("strategy must be one of %s" % (SUPPORTED_STRATEGIES,))
++    if not isinstance(request["first_operation_id"], int) or request["first_operation_id"] < 0:
++        problems.append("first_operation_id must be a non-negative int")
++    hm = request.get("handle_mode", "warm")
++    if hm not in HANDLE_MODES:
++        problems.append("handle_mode must be one of %s" % (HANDLE_MODES,))
++    return tuple(problems)
++
++
++# retained for older callers/tests
++def validate_request(request):
++    return validate_request_schema(request)
++
++
++def select_offsets(strategy, session):
++    """Return the delivery offsets for a strategy from the process-init cache.
++    baseline delivers nothing; 2d delivers exactly the 92 mandatory interiors.
++    Fails closed on any count disagreement."""
+     if strategy == "baseline":
+         return []
+     if strategy == "2d":
+-        if len(interior_offsets) != expected_interior_count:
+-            raise ValueError("2d plan has %d interiors, manifest expects %d"
+-                             % (len(interior_offsets), expected_interior_count))
+-        return list(interior_offsets)
++        offs = session.interior_offsets
++        expected = session.manifest["interior_page_count"]
++        if len(offs) != expected or expected != 92:
++            raise ValueError("2d plan has %d interiors, expected 92" % len(offs))
++        if any(o not in session.interior_offset_set for o in offs):
++            raise ValueError("2d plan contains a non-interior offset")
++        return list(offs)
+     raise ValueError("unsupported strategy: %s" % strategy)
+ 
+ 
+-def read_first_operation(trace_path, first_operation_id):
+-    """Return the integer key of the requested first operation (YCSB `read <k>`)."""
+-    with open(trace_path) as f:
+-        for i, line in enumerate(f):
+-            if i == first_operation_id:
+-                parts = line.split()
+-                if len(parts) < 2 or parts[0] != "read":
+-                    raise ValueError("unsupported op at %d: %r" % (i, line))
+-                return int(parts[1])
+-    raise ValueError("first_operation_id %d beyond trace" % first_operation_id)
+-
+-
+-def run_first_query(db_path, key):
+-    """Execute the exact first query and return (hit, result_digest, open_us,
+-    query_us, sqlite_error). Identical logic for baseline and 2d."""
++def _run_query(session, key, handle_mode):
++    """Execute the exact first query and return
++    (row, open_us, query_us, sqlite_error). Warm mode reuses the process handle
++    (no open cost on the critical path); standalone opens a fresh connection with
++    the canonical pragmas and pays open_us."""
+     err = None
++    if handle_mode == "warm":
++        conn = session.open_warm_handle()
++        open_us = 0.0
++        tq = time.monotonic_ns()
++        try:
++            row = oracle.run_read(conn, key)
++        except sqlite3.Error as e:  # pragma: no cover
++            return None, open_us, (time.monotonic_ns() - tq) / 1000.0, str(e)
++        return row, open_us, (time.monotonic_ns() - tq) / 1000.0, err
++    # standalone: fresh connection, measured open cost, same pragmas
++    pragmas = session.manifest.get("sqlite_pragmas", {"cache_size": 0,
++                                                      "mmap_size": session.manifest["database"]["byte_size"]})
+     t0 = time.monotonic_ns()
+-    conn = sqlite3.connect(db_path)
+-    conn.execute("PRAGMA mmap_size=0")  # exercise the pager read() path
++    conn = sqlite3.connect(session.db_path)
++    conn.execute("PRAGMA cache_size = %d" % int(pragmas.get("cache_size", 0)))
++    conn.execute("PRAGMA mmap_size = %d" % int(pragmas.get("mmap_size",
++                                                           session.manifest["database"]["byte_size"])))
+     open_us = (time.monotonic_ns() - t0) / 1000.0
+-    hit, digest = 0, ""
+     tq = time.monotonic_ns()
+     try:
+-        cur = conn.execute("SELECT id,k1,k2,payload FROM items WHERE id=?", (key,))
+-        row = cur.fetchone()
+-        query_us = (time.monotonic_ns() - tq) / 1000.0
+-        if row is not None:
+-            hit = 1
+-            h = hashlib.sha256()
+-            for col in row:
+-                h.update(str(col).encode() if not isinstance(col, (bytes, bytearray))
+-                         else col)
+-                h.update(b"\x1f")
+-            digest = h.hexdigest()
+-        else:
+-            digest = "NOTFOUND"
++        row = oracle.run_read(conn, key)
+     except sqlite3.Error as e:  # pragma: no cover
+-        query_us = (time.monotonic_ns() - tq) / 1000.0
+-        err = str(e)
+-    finally:
+         conn.close()
+-    return hit, digest, open_us, query_us, err
++        return None, open_us, (time.monotonic_ns() - tq) / 1000.0, str(e)
++    q_us = (time.monotonic_ns() - tq) / 1000.0
++    conn.close()
++    return row, open_us, q_us, err
++
++
++def _envelope(session, request, stage, message, base=None):
++    """Complete error envelope; measured_valid is always False."""
++    resp = base or {}
++    resp.setdefault("request_id", request.get("request_id"))
++    if session is not None:
++        resp.setdefault("process_uuid", session.process_uuid)
++        resp.setdefault("pid", session.pid)
++    resp["error"] = message
++    resp["error_stage"] = stage
++    resp["measured_valid"] = False
++    return resp
+ 
+ 
+-# ------------------------------------------------------------------- handler
+ def handle(request, session):
+-    """Core handler. `request` is the validated JSON dict; `session` the warm
+-    process singleton. Returns the response-contract dict."""
++    """Fail-closed core handler. Enforces every gate regardless of caller."""
+     t_handler = time.monotonic_ns()
+-    resp = {"error": None, "sqlite_error": None}
+ 
+-    # ---- identity ----
+-    resp.update(session.identity_fields())
+-    resp["invocation_counter"] = session.next_invocation()
+-
+-    strategy = request["strategy"]
+-    workload = request["workload"]
+-    seed = request["seed"]
+-    first_op = request["first_operation_id"]
+-    diagnostic = bool(request.get("diagnostic_mode", False))
+-    cold_reset_requested = bool(request.get("cold_reset", True))
+-
+-    resp.update({"workload": workload, "strategy": strategy, "seed": seed,
+-                 "first_operation_id": first_op})
+-
+-    if strategy not in SUPPORTED_STRATEGIES:
+-        resp["error"] = "unsupported strategy in Phase 5A: %s" % strategy
+-        resp["handler_total_us"] = (time.monotonic_ns() - t_handler) / 1000.0
+-        return resp
+-
+-    # ---- artifact identity gate (refuse measured mode on any mismatch) ----
+-    if session.db_identity_changed():
+-        resp["error"] = "db device/inode changed since process init"
+-        resp["handler_total_us"] = (time.monotonic_ns() - t_handler) / 1000.0
+-        return resp
+-    exp_hash = request.get("expected_artifact_manifest_hash")
+-    if exp_hash and exp_hash != session.artifact_manifest_sha256:
+-        resp["error"] = "expected_artifact_manifest_hash mismatch"
+-        resp["handler_total_us"] = (time.monotonic_ns() - t_handler) / 1000.0
+-        return resp
+-
+-    m = session.manifest
+-    trace_rel = m["workload_traces"][workload]["seeds"][str(seed)]["path"]
+-    trace_sha = m["workload_traces"][workload]["seeds"][str(seed)]["sha256"]
+-    plan_rel = m["strategy_plans"]["2d"]["path"]
+-    plan_sha = m["strategy_plans"]["2d"]["sha256"]
+-    tp = session.validate_trace_plan(trace_rel, trace_sha,
+-                                     plan_rel if strategy == "2d" else None,
+-                                     plan_sha if strategy == "2d" else None)
+-    if tp:
+-        resp["error"] = "; ".join(tp)
+-        resp["handler_total_us"] = (time.monotonic_ns() - t_handler) / 1000.0
+-        return resp
+-    resp["trace_sha256"] = trace_sha
+-    resp["plan_sha256"] = plan_sha if strategy == "2d" else ""
+-
+-    interior_offsets = m["interior_page_list"]["offsets"]
+-    expected_interiors = m["interior_page_list"]["count"]
+-    relevant_total = m.get("expected_relevant_page_count", expected_interiors)
+-    interior_set = set(interior_offsets)
+-
+-    db_path = session.db_path
+-    key = read_first_operation(session._abspath(trace_rel), first_op)
+-
+-    # ---- cold reset + residency verification ----
+-    pm = residency.PageMap(db_path)
++    # ---- stage: overlap guard (serialize the whole measured critical section) ----
++    if not session.critical_lock.acquire(blocking=False):
++        return _envelope(session, request, "concurrency",
++                         "overlapping invocation rejected (concurrency must be 1)")
+     try:
+-        vec_before = pm.residency_vector()
+-        resp["resident_pages_before_reset"] = sum(b & 1 for b in vec_before)
+-        resp["resident_interiors_before_reset"] = residency.count_in(vec_before, interior_set)
++        resp = {"error": None, "error_stage": None, "sqlite_error": None}
++
++        # ---- stage: artifact validation (fail closed) ----
++        if not session.validated:
++            return _envelope(session, request, "artifact_validation",
++                             "session not validated: " + "; ".join(session.validation_reasons),
++                             resp)
++
++        # ---- stage: request semantics ----
++        sem = validate_request_semantics(request, session)
++        if sem:
++            return _envelope(session, request, "request", "; ".join(sem), resp)
++
++        strategy = request["strategy"]
++        workload = request["workload"]
++        seed = request["seed"]
++        first_op = request["first_operation_id"]
++        diagnostic = request["diagnostic_mode"]
++        cold_reset_requested = request["cold_reset"]
++        handle_mode = request.get("handle_mode", "warm")
++
++        resp.update(session.identity_fields())
++        resp["invocation_counter"] = session.next_invocation()
++        resp.update({"workload": workload, "strategy": strategy, "seed": seed,
++                     "first_operation_id": first_op, "handle_mode": handle_mode,
++                     "diagnostic_mode": diagnostic})
++
++        if strategy not in SUPPORTED_STRATEGIES:
++            return _envelope(session, request, "request",
++                             "unsupported strategy: %s" % strategy, resp)
++
++        # ---- stage: identity gate ----
++        if session.db_identity_changed():
++            return _envelope(session, request, "identity",
++                             "db device/inode changed since process init", resp)
++        exp = request.get("expected_artifact_manifest_hash")
++        if not exp or exp != session.artifact_manifest_sha256:
++            return _envelope(session, request, "identity",
++                             "expected_artifact_manifest_hash empty or mismatch", resp)
++
++        # ---- stage: measured mode requires cold_reset=True ----
++        if not cold_reset_requested and not diagnostic:
++            return _envelope(session, request, "cold_reset_required",
++                             "measured mode requires cold_reset=true", resp)
++
++        # trace / oracle metadata (cached at init; select is off the critical path)
++        trace_rel, trace_sha = session.trace_meta(workload, seed)
++        resp["trace_sha256"] = trace_sha
++        plan = session.manifest["strategy_plans"]["2d"]
++        resp["plan_sha256"] = plan["sha256"] if strategy == "2d" else ""
++        oc = session.oracle_for(workload, seed, first_op)
++        if oc is None:
++            return _envelope(session, request, "oracle",
++                             "no oracle entry for %s/%s/%s" % (workload, seed, first_op), resp)
++        key = oc["key"]
++        resp["oracle_expected_hit"] = oc["expected_hit"]
++        resp["oracle_expected_digest"] = oc["expected_digest"]
++        resp["relevant_pages_total"] = session.manifest["expected_relevant_page_count"]
+         resp["cold_reset_requested"] = cold_reset_requested
+-        if cold_reset_requested:
++
++        # ---- stage: cold reset + efficacy verification ----
++        try:
++            if cold_reset_requested:
++                t0 = time.monotonic_ns()
++                diag = residency.cold_reset_and_verify(session.db_path,
++                                                       session.interior_offsets)
++                resp["reset_us"] = (time.monotonic_ns() - t0) / 1000.0
++            else:
++                diag = {"resident_pages_before_reset": None,
++                        "resident_interiors_before_reset": None,
++                        "attempted_methods": [], "cold_reset_method": "none",
++                        "resident_pages_after_reset": None,
++                        "resident_interiors_after_reset": None,
++                        "cold_reset_succeeded": False, "cold_threshold_passed": False}
++                resp["reset_us"] = 0.0
++        except OSError as e:
++            return _envelope(session, request, "cold_reset",
++                             "cold reset failed: %s" % e, resp)
++        resp.update({k: diag[k] for k in (
++            "resident_pages_before_reset", "resident_interiors_before_reset",
++            "attempted_methods", "cold_reset_method", "resident_pages_after_reset",
++            "resident_interiors_after_reset", "cold_reset_succeeded",
++            "cold_threshold_passed")})
++
++        # fail closed: if the cold gate fails and we are NOT diagnostic, return
++        # BEFORE any select/deliver/open/query.
++        if not diag["cold_threshold_passed"] and not diagnostic:
++            resp["measured_valid"] = False
++            resp["handler_total_us"] = (time.monotonic_ns() - t_handler) / 1000.0
++            resp["error_stage"] = "cold_gate"
++            return resp
++
++        # ---- stage: select (cached plan; off critical path) ----
++        try:
+             t0 = time.monotonic_ns()
+-            method = pm.cold_reset()
+-            resp["reset_us"] = (time.monotonic_ns() - t0) / 1000.0
+-            resp["cold_reset_method"] = method
+-        else:
+-            resp["reset_us"] = 0.0
+-            resp["cold_reset_method"] = "none"
+-        vec_after = pm.residency_vector()
+-        resp["resident_pages_after_reset"] = sum(b & 1 for b in vec_after)
+-        resp["resident_interiors_after_reset"] = residency.count_in(vec_after, interior_set)
+-        resp["relevant_pages_total"] = relevant_total
+-        cold_ok = residency.cold_threshold_passed(resp["resident_interiors_after_reset"])
+-        resp["cold_reset_succeeded"] = cold_ok
+-        resp["cold_threshold_passed"] = cold_ok
+-
+-        # ---- select ----
+-        t0 = time.monotonic_ns()
+-        plan_path = session._abspath(plan_rel)
+-        offsets = ([] if strategy == "baseline"
+-                   else select_pages("2d", load_interior_offsets(plan_path),
+-                                     expected_interiors))
+-        resp["select_us"] = (time.monotonic_ns() - t0) / 1000.0
++            offsets = select_offsets(strategy, session)
++            resp["select_us"] = (time.monotonic_ns() - t0) / 1000.0
++        except ValueError as e:
++            return _envelope(session, request, "select", str(e), resp)
+         resp["selected_page_count"] = len(offsets)
+-        resp["selected_interior_count"] = sum(1 for o in offsets if o in interior_set)
++        resp["selected_interior_count"] = sum(1 for o in offsets
++                                              if o in session.interior_offset_set)
+         resp["selected_leaf_count"] = len(offsets) - resp["selected_interior_count"]
+ 
+-        # ---- deliver ----
+-        t0 = time.monotonic_ns()
+-        delivered = pm.deliver_willneed(offsets) if offsets else 0
+-        resp["deliver_us"] = (time.monotonic_ns() - t0) / 1000.0
+-        resp["delivered_page_count"] = delivered
+-        vec_pf = pm.residency_vector()
+-        resp["resident_interiors_after_prefetch"] = residency.count_in(vec_pf, interior_set)
++        # ---- stage: deliver (fresh mapping) ----
++        try:
++            pm = residency.PageMap(session.db_path)
++            try:
++                t0 = time.monotonic_ns()
++                delivered = pm.deliver_willneed(offsets) if offsets else 0
++                resp["deliver_us"] = (time.monotonic_ns() - t0) / 1000.0
++                resp["delivered_page_count"] = delivered
++                vec = pm.residency_vector()
++                resp["resident_interiors_after_prefetch"] = residency.count_in(
++                    vec, session.interior_offset_set)
++            finally:
++                pm.close()
++        except OSError as e:
++            return _envelope(session, request, "deliver",
++                             "delivery failed: %s" % e, resp)
++
++        # ---- stage: query (warm or standalone) ----
++        try:
++            row, open_us, q_us, sqlite_err = _run_query(session, key, handle_mode)
++        except Exception as e:  # pragma: no cover
++            return _envelope(session, request, "query", "query failed: %s" % e, resp)
++        resp["open_us"] = open_us
++        resp["first_query_us"] = q_us
++        resp["sqlite_error"] = sqlite_err
++        hit, digest = oracle.digest_row(row)
++        resp["query_hit"] = hit
++        resp["result_digest"] = digest
++
++        # ---- stage: correctness oracle ----
++        oracle_ok = (hit == oc["expected_hit"] and digest == oc["expected_digest"]
++                     and sqlite_err is None)
++        resp["oracle_passed"] = oracle_ok
++        resp["handler_total_us"] = (time.monotonic_ns() - t_handler) / 1000.0
++        if diagnostic:
++            resp["measured_valid"] = None
++        else:
++            resp["measured_valid"] = bool(diag["cold_threshold_passed"] and oracle_ok)
++        return resp
+     finally:
+-        pm.close()
+-
+-    # ---- open + first query (identical logic across strategies) ----
+-    hit, digest, open_us, query_us, sqlite_err = run_first_query(db_path, key)
+-    resp["open_us"] = open_us
+-    resp["first_query_us"] = query_us
+-    resp["query_hit"] = hit
+-    resp["result_digest"] = digest
+-    resp["sqlite_error"] = sqlite_err
+-
+-    resp["handler_total_us"] = (time.monotonic_ns() - t_handler) / 1000.0
+-    if not diagnostic:
+-        # keep the record complete but flag when cold gate failed
+-        resp["measured_valid"] = bool(resp["cold_threshold_passed"]
+-                                      and sqlite_err is None and hit == 1)
+-    else:
+-        resp["measured_valid"] = None
+-    return resp
+-
+-
+-REQUIRED_REQUEST_FIELDS = ("request_id", "workload", "strategy", "seed",
+-                           "first_operation_id", "diagnostic_mode", "cold_reset",
+-                           "expected_artifact_manifest_hash")
+-
+-
+-def validate_request(request):
+-    """Return () if valid, else a tuple of missing/invalid-field messages."""
+-    missing = [f for f in REQUIRED_REQUEST_FIELDS if f not in request]
+-    if missing:
+-        return ("missing request fields: " + ", ".join(missing),)
+-    problems = []
+-    if not isinstance(request["first_operation_id"], int) or request["first_operation_id"] < 0:
+-        problems.append("first_operation_id must be a non-negative int")
+-    if request["strategy"] not in SUPPORTED_STRATEGIES:
+-        problems.append("strategy must be one of %s" % (SUPPORTED_STRATEGIES,))
+-    return tuple(problems)
++        session.critical_lock.release()
+ 
+ 
+ def main(params):
+     """OpenWhisk entrypoint."""
+-    problems = validate_request(params or {})
+-    if problems:
+-        return {"error": "; ".join(problems), "request_id": (params or {}).get("request_id")}
++    params = params or {}
++    schema = validate_request_schema(params)
++    if schema:
++        return {"error": "; ".join(schema), "error_stage": "request",
++                "measured_valid": False, "request_id": params.get("request_id")}
+     session = get_session()
++    if not session.validated:
++        return {"error": "artifact validation failed: "
++                + "; ".join(session.validation_reasons),
++                "error_stage": "artifact_validation", "measured_valid": False,
++                "request_id": params.get("request_id")}
+     out = handle(params, session)
+     out["request_id"] = params.get("request_id")
+     return out
+diff --git a/deployment/openwhisk/action/oracle.py b/deployment/openwhisk/action/oracle.py
+new file mode 100644
+index 0000000..798d29c
+--- /dev/null
++++ b/deployment/openwhisk/action/oracle.py
+@@ -0,0 +1,34 @@
++"""Single source of truth for the first-query result oracle.
++
++Both the action (`main.py`) and the manifest generator
++(`build_artifact_manifest.py`) import this module so the expected/observed
++result digest is computed by identical code. The digest is a stable, order-fixed
++hash of the returned row; a not-found lookup has its own sentinel. This lets the
++correctness oracle assert the *exact* expected hit/not-found and digest per
++first operation rather than hard-coding ``query_hit == 1``.
++"""
++import hashlib
++
++READ_SQL = "SELECT id,k1,k2,payload FROM items WHERE id=?"
++FIELD_SEP = b"\x1f"
++NOTFOUND = "NOTFOUND"
++
++
++def digest_row(row):
++    """Return (hit, digest). row is a tuple of columns or None.
++    hit == 1 and a sha256 hex digest for a found row; hit == 0 and the NOTFOUND
++    sentinel otherwise."""
++    if row is None:
++        return 0, NOTFOUND
++    h = hashlib.sha256()
++    for col in row:
++        h.update(col if isinstance(col, (bytes, bytearray)) else str(col).encode())
++        h.update(FIELD_SEP)
++    return 1, h.hexdigest()
++
++
++def run_read(conn, key):
++    """Execute the canonical read against an open connection and return the row.
++    Statement reuse is handled by sqlite3's internal statement cache; the SQL
++    text is constant so the compiled statement is reused across invocations."""
++    return conn.execute(READ_SQL, (key,)).fetchone()
+diff --git a/deployment/openwhisk/action/residency.py b/deployment/openwhisk/action/residency.py
+index e204012..5ad4191 100644
+--- a/deployment/openwhisk/action/residency.py
++++ b/deployment/openwhisk/action/residency.py
+@@ -1,34 +1,28 @@
+ """Non-root page-residency primitives for the OpenWhisk cold-start action.
+ 
+-This mirrors the canonical measurement primitives of
+-``pipeline/engine/benchmark_harness/benchmark_harness.c`` in Python via ctypes so
+-the same warm-process, no-root mechanism runs inside a long-lived OpenWhisk
+-runtime:
+-
+-  * ``mmap(MAP_SHARED, PROT_READ)`` the database file  -> observe file page cache
+-  * ``mincore``                                        -> per-page residency vector
+-  * ``madvise(MADV_DONTNEED)`` (fallback COLD/PAGEOUT) -> non-root cold reset
+-  * ``madvise(MADV_WILLNEED)`` per page                -> async prefetch delivery
+-
+-It is deliberately NOT a second benchmark: it exposes exactly the syscalls the C
+-harness uses, and the action layer (``main.py``) composes them. No sudo,
+-drop_caches, container restart, or reboot is used anywhere.
+-
+-Pure-logic helpers (``cold_threshold_passed``, ``count_in``) are importable and
+-unit-testable without mapping a real database.
++Mirrors the canonical measurement primitives of
++``pipeline/engine/benchmark_harness/benchmark_harness.c`` in Python via ctypes:
++``mmap(MAP_SHARED, PROT_READ)`` + ``mincore`` (residency), ``madvise`` /
++``posix_fadvise`` (non-root cold reset), ``madvise(MADV_WILLNEED)`` (delivery).
++
++Cold reset is **efficacy-based, not rc-based**: after each candidate hint the
++mapping is dropped and a *fresh* mapping is made to re-measure residency with
++``mincore``; that residency is the truth. Candidates escalate until zero
++mandatory interiors are resident or the list is exhausted. No sudo, drop_caches,
++container restart, or reboot is ever used.
+ """
+ import ctypes
+ import os
+ 
+-PAGE = 4096  # OS page size; equals the SQLite page size of the reference DB.
++PAGE = 4096
+ 
+-# mmap / madvise constants (Linux x86-64).
+ PROT_READ = 0x1
+ MAP_SHARED = 0x1
+ MADV_DONTNEED = 4
+ MADV_WILLNEED = 3
+ MADV_COLD = 20
+ MADV_PAGEOUT = 21
++POSIX_FADV_DONTNEED = 4
+ 
+ _libc = ctypes.CDLL("libc.so.6", use_errno=True)
+ _libc.mmap.restype = ctypes.c_void_p
+@@ -37,19 +31,18 @@ _libc.mmap.argtypes = [ctypes.c_void_p, ctypes.c_size_t, ctypes.c_int,
+ _libc.munmap.argtypes = [ctypes.c_void_p, ctypes.c_size_t]
+ _libc.mincore.argtypes = [ctypes.c_void_p, ctypes.c_size_t, ctypes.c_char_p]
+ _libc.madvise.argtypes = [ctypes.c_void_p, ctypes.c_size_t, ctypes.c_int]
++_libc.posix_fadvise.argtypes = [ctypes.c_int, ctypes.c_long, ctypes.c_long, ctypes.c_int]
+ MAP_FAILED = ctypes.c_void_p(-1).value
+ 
+ 
+ def cold_threshold_passed(resident_interiors_after_reset):
+     """Strict cold condition: zero mandatory interior pages resident before any
+-    prefetch/query. A successful madvise return code alone is NOT accepted as
+-    eviction; residency is re-measured and must be zero."""
++    prefetch/query. A madvise/fadvise success rc is NOT accepted as eviction;
++    only a re-measured mincore residency of zero passes."""
+     return resident_interiors_after_reset == 0
+ 
+ 
+ def count_in(vec, offsets):
+-    """Count how many of the given file offsets map to a resident page in the
+-    mincore vector (bit 0 == resident). Pure function for unit tests."""
+     n = 0
+     for off in offsets:
+         idx = off // PAGE
+@@ -59,9 +52,9 @@ def count_in(vec, offsets):
+ 
+ 
+ class PageMap:
+-    """A read-only MAP_SHARED mapping of the database file plus the mincore /
+-    madvise operations over it. One instance is created per invocation because a
+-    cold reset must drop and re-establish the mapping (STEP 7)."""
++    """A fresh read-only MAP_SHARED mapping of the DB plus mincore/madvise over
++    it. Constructed per operation because a cold reset must drop and re-establish
++    the mapping."""
+ 
+     def __init__(self, db_path):
+         self.db_path = db_path
+@@ -76,7 +69,6 @@ class PageMap:
+         self.addr = addr
+ 
+     def residency_vector(self):
+-        """Return a bytes-like vector, one byte per page; bit0 set == resident."""
+         vec = ctypes.create_string_buffer(self.npages)
+         if _libc.mincore(ctypes.c_void_p(self.addr), self.size, vec) != 0:
+             err = ctypes.get_errno()
+@@ -86,32 +78,17 @@ class PageMap:
+     def madvise(self, advice, offset=0, length=None):
+         if length is None:
+             length = self.size
++        ctypes.set_errno(0)
+         rc = _libc.madvise(ctypes.c_void_p(self.addr + offset), length, advice)
+-        return rc == 0
+-
+-    def cold_reset(self):
+-        """Non-root eviction hint chain over the whole mapping. Tries the same
+-        MADV_DONTNEED path the C harness uses, then weaker COLD/PAGEOUT hints.
+-        Returns the advice label actually issued. Efficacy is VERIFIED separately
+-        by re-reading residency; this return value is not proof of eviction."""
+-        if self.madvise(MADV_DONTNEED):
+-            method = "MADV_DONTNEED"
+-        elif self.madvise(MADV_PAGEOUT):
+-            method = "MADV_PAGEOUT"
+-        elif self.madvise(MADV_COLD):
+-            method = "MADV_COLD"
+-        else:
+-            err = ctypes.get_errno()
+-            raise OSError(err, "no non-root eviction hint accepted: "
+-                          + os.strerror(err))
+-        return method
++        return rc, (ctypes.get_errno() if rc != 0 else 0)
+ 
+     def deliver_willneed(self, offsets):
+-        """Async per-page prefetch delivery, mirroring the warmer's per-page
+-        MADV_WILLNEED hints. Returns the number of hints accepted."""
++        """Async per-page prefetch delivery (per-page MADV_WILLNEED). Returns the
++        number of hints the kernel accepted (rc==0)."""
+         delivered = 0
+         for off in offsets:
+-            if self.madvise(MADV_WILLNEED, off, PAGE):
++            rc, _ = self.madvise(MADV_WILLNEED, off, PAGE)
++            if rc == 0:
+                 delivered += 1
+         return delivered
+ 
+@@ -128,3 +105,80 @@ class PageMap:
+ 
+     def __exit__(self, *exc):
+         self.close()
++
++
++# ------------------------------------------------------------ reset orchestration
++def _measure(db_path, interior_set):
++    """Fresh mapping -> mincore -> (resident_total, resident_interiors); the
++    mapping is dropped before returning (mapping lifecycle)."""
++    pm = PageMap(db_path)
++    try:
++        vec = pm.residency_vector()
++        return sum(b & 1 for b in vec), count_in(vec, interior_set)
++    finally:
++        pm.close()
++
++
++def _apply_madvise(db_path, advice):
++    """Apply an madvise hint over the whole file on a FRESH mapping, then drop
++    it. Returns (rc, errno)."""
++    pm = PageMap(db_path)
++    try:
++        return pm.madvise(advice)
++    finally:
++        pm.close()
++
++
++def _apply_fadvise_dontneed(db_path):
++    """Page-aligned POSIX_FADV_DONTNEED over the whole file via a fresh fd."""
++    fd = os.open(db_path, os.O_RDONLY)
++    try:
++        ctypes.set_errno(0)
++        rc = _libc.posix_fadvise(fd, 0, 0, POSIX_FADV_DONTNEED)  # 0 len == whole file
++        # posix_fadvise returns the errno directly (0 on success)
++        return (0, 0) if rc == 0 else (rc, rc)
++    finally:
++        os.close(fd)
++
++
++# candidate order: canonical MADV_DONTNEED first, then fd-based fadvise, then the
++# stronger reclaim hints. All non-root.
++_CANDIDATES = [
++    ("MADV_DONTNEED", lambda p: _apply_madvise(p, MADV_DONTNEED)),
++    ("POSIX_FADV_DONTNEED", _apply_fadvise_dontneed),
++    ("MADV_PAGEOUT", lambda p: _apply_madvise(p, MADV_PAGEOUT)),
++    ("MADV_COLD", lambda p: _apply_madvise(p, MADV_COLD)),
++]
++
++
++def cold_reset_and_verify(db_path, interior_offsets):
++    """Efficacy-based non-root cold reset. Snapshots residency, then escalates
++    candidate hints, re-mapping/mincore-ing after each, until zero interiors are
++    resident or candidates are exhausted. Returns a diagnostics dict; the caller
++    treats ``cold_threshold_passed`` as the truth."""
++    interior_set = set(interior_offsets)
++    before_total, before_interiors = _measure(db_path, interior_set)
++
++    attempts = []
++    final_total, final_interiors = before_total, before_interiors
++    chosen = "none"
++    for name, fn in _CANDIDATES:
++        rc, errno = fn(db_path)
++        post_total, post_interiors = _measure(db_path, interior_set)
++        attempts.append({"method": name, "rc": rc, "errno": errno,
++                         "resident_interiors_after": post_interiors,
++                         "resident_pages_after": post_total})
++        final_total, final_interiors, chosen = post_total, post_interiors, name
++        if cold_threshold_passed(post_interiors):
++            break
++
++    return {
++        "resident_pages_before_reset": before_total,
++        "resident_interiors_before_reset": before_interiors,
++        "attempted_methods": attempts,
++        "cold_reset_method": chosen,
++        "resident_pages_after_reset": final_total,
++        "resident_interiors_after_reset": final_interiors,
++        "cold_reset_succeeded": cold_threshold_passed(final_interiors),
++        "cold_threshold_passed": cold_threshold_passed(final_interiors),
++    }
+diff --git a/deployment/openwhisk/action/session.py b/deployment/openwhisk/action/session.py
+index 8dbee24..1d9cd11 100644
+--- a/deployment/openwhisk/action/session.py
++++ b/deployment/openwhisk/action/session.py
+@@ -1,129 +1,235 @@
+-"""Warm-process session state and frozen-artifact validation.
+-
+-An OpenWhisk container is reused across invocations ("warm container, cold
+-data"). This module holds the per-PROCESS identity that distinguishes one warm
+-session from another, and validates that the frozen artifacts (DB, interior-page
+-plan, workload trace) are byte-identical to the manifest before any measured
+-query runs. The OpenWhisk activation id is deliberately NOT used as process
+-identity (STEP 6): only a process-local UUID + PID + monotonic init timestamp +
+-invocation counter identify a warm session.
++"""Warm-process session state, fail-closed artifact validation, and the canonical
++warm SQLite handle.
++
++Identity is process-local (uuid + pid + monotonic init + counter), never the
++OpenWhisk activation id. Before any measured query the frozen artifacts (DB,
++classifier, interior plan, per-request trace) must validate byte-for-byte against
++the manifest AND the structural invariants must hold; otherwise ``validated`` is
++False and the handler refuses measured mode.
++
++The warm handle mirrors ``benchmark_harness.c``: one long-lived connection opened
++at process init with ``PRAGMA cache_size=0`` (the OS page cache is the only
++cache) and ``PRAGMA mmap_size=<file size>``, with statement reuse via sqlite3's
++statement cache. This is the *primary* (warm-process / integrated) mode; a fresh
++per-invocation connection is a separate *standalone* mode that additionally pays
++open cost.
+ """
+ import hashlib
+ import json
+ import os
++import re
++import sqlite3
+ import threading
+ import time
+ import uuid
+ 
++try:
++    from . import oracle
++except ImportError:  # pragma: no cover - OpenWhisk flat layout
++    import oracle
++
++_HEX64 = re.compile(r"^[0-9a-f]{64}$")
++_PAGE = 4096
++
+ 
+-def sha256_file(path, _bufsize=1 << 20):
++def sha256_file(path, _b=1 << 20):
+     h = hashlib.sha256()
+     with open(path, "rb") as f:
+-        for chunk in iter(lambda: f.read(_bufsize), b""):
++        for chunk in iter(lambda: f.read(_b), b""):
+             h.update(chunk)
+     return h.hexdigest()
+ 
+ 
+-def sha256_bytes(data):
+-    return hashlib.sha256(data).hexdigest()
+-
+-
+-class ArtifactMismatch(Exception):
+-    """Raised when a frozen artifact's hash/identity does not match the manifest;
+-    the action must refuse to run a measured query."""
+-
+-
+ class Session:
+-    """Process-singleton. Construct once at module import; reused every
+-    invocation within the same warm container."""
+-
+     def __init__(self, manifest_path, resolve_root=None):
+-        # --- identity, captured exactly once per process ---
++        # identity, captured exactly once per process
+         self.process_uuid = str(uuid.uuid4())
+         self.pid = os.getpid()
+         self.process_init_monotonic_ns = time.monotonic_ns()
+         self._counter = 0
+-        self._lock = threading.Lock()
++        self._counter_lock = threading.Lock()
++        # process-wide lock serializing the measured critical section
++        self.critical_lock = threading.Lock()
+ 
+-        # --- load + validate the frozen artifact manifest once ---
+         self.manifest_path = manifest_path
+         with open(manifest_path, "rb") as f:
+             raw = f.read()
+-        self.artifact_manifest_sha256 = sha256_bytes(raw)
++        self.artifact_manifest_sha256 = hashlib.sha256(raw).hexdigest()
+         self.manifest = json.loads(raw)
+-        # Paths in the manifest are repo-relative; resolve against a root the
+-        # deployment provides (mounted volume or image path), never machine paths
+-        # baked into the committed example.
+         self.root = resolve_root or os.environ.get("OW_ARTIFACT_ROOT") or os.getcwd()
+ 
+         self.db_path = self._abspath(self.manifest["database"]["path"])
+         st = os.stat(self.db_path)
+         self.db_device = st.st_dev
+         self.db_inode = st.st_ino
+-        self.db_sha256 = None  # filled lazily by validate_artifacts()
+-        self._validated = False
++        self.db_sha256 = None
++        self.validated = False
++        self.validation_reasons = ("not_validated",)
++        # canonical warm handle (opened by open_warm_handle after validation)
++        self.conn = None
++        self.os_page_size = os.sysconf("SC_PAGE_SIZE") if hasattr(os, "sysconf") else _PAGE
++        # plan offsets cached at process init (off the invocation critical path)
++        self.interior_offsets = list(self.manifest["interior_page_list"]["offsets"])
++        self.interior_offset_set = set(self.interior_offsets)
+ 
+     def _abspath(self, rel):
+         return rel if os.path.isabs(rel) else os.path.join(self.root, rel)
+ 
++    # ------------------------------------------------------------------ validate
+     def validate_artifacts(self, expected_manifest_hash=None):
+-        """Full identity check. Returns () on success or a tuple of human-readable
+-        mismatch reasons. Never raises for a data mismatch (the caller records it
+-        and refuses measured mode)."""
+-        reasons = []
++        """Full fail-closed validation. Returns () on success, else a tuple of
++        reasons. Sets self.validated accordingly; never raises for a data
++        mismatch."""
++        r = []
+         m = self.manifest
+-        if expected_manifest_hash and expected_manifest_hash != self.artifact_manifest_sha256:
+-            reasons.append("artifact_manifest_hash mismatch")
++
++        if expected_manifest_hash is not None:
++            if not expected_manifest_hash:
++                r.append("empty expected_artifact_manifest_hash")
++            elif expected_manifest_hash != self.artifact_manifest_sha256:
++                r.append("artifact_manifest_hash mismatch")
++
++        # page-size invariants (OS + SQLite must be 4096)
++        if self.os_page_size != _PAGE:
++            r.append("os page size %d != 4096" % self.os_page_size)
++        if m.get("os_page_size_expected") != _PAGE:
++            r.append("manifest os_page_size_expected != 4096")
++        if m["database"]["page_size"] != _PAGE:
++            r.append("db page_size != 4096")
+ 
+         db = m["database"]
+-        self.db_sha256 = sha256_file(self.db_path)
++        try:
++            self.db_sha256 = sha256_file(self.db_path)
++        except OSError as e:
++            r.append("db unreadable: %s" % e)
++            self.validated = False
++            self.validation_reasons = tuple(r)
++            return self.validation_reasons
+         if self.db_sha256 != db["sha256"]:
+-            reasons.append("db sha256 mismatch")
++            r.append("db sha256 mismatch")
+         if os.path.getsize(self.db_path) != db["byte_size"]:
+-            reasons.append("db byte_size mismatch")
+-        # cheap header checks (page size @ off 16 BE u16, page count @ off 28 BE u32)
++            r.append("db byte_size mismatch")
+         with open(self.db_path, "rb") as f:
+             head = f.read(32)
+-        page_size = int.from_bytes(head[16:18], "big")
+-        if page_size == 1:
+-            page_size = 65536
++        ps = int.from_bytes(head[16:18], "big")
++        page_size = 65536 if ps == 1 else ps
+         page_count = int.from_bytes(head[28:32], "big")
+         if page_size != db["page_size"]:
+-            reasons.append("db page_size mismatch")
++            r.append("db header page_size mismatch")
+         if page_count != db["page_count"]:
+-            reasons.append("db page_count mismatch")
++            r.append("db header page_count mismatch")
++
++        # device/inode: current DB must match what init captured; and, when the
++        # (real) manifest pins device/inode, it must match those too.
++        st = os.stat(self.db_path)
++        if (st.st_dev, st.st_ino) != (self.db_device, self.db_inode):
++            r.append("db device/inode changed during init")
++        if db.get("device") is not None and st.st_dev != db["device"]:
++            r.append("db device != manifest")
++        if db.get("inode") is not None and st.st_ino != db["inode"]:
++            r.append("db inode != manifest")
+ 
++        # classifier + interior plan hashes
++        cl = m.get("classifier")
++        if cl and sha256_file(self._abspath(cl["path"])) != cl["sha256"]:
++            r.append("classifier sha256 mismatch")
+         ipl = m["interior_page_list"]
+         if sha256_file(self._abspath(ipl["path"])) != ipl["sha256"]:
+-            reasons.append("interior_page_list sha256 mismatch")
+-
+-        self._validated = not reasons
+-        return tuple(reasons)
+-
+-    def validate_trace_plan(self, trace_rel, trace_sha, plan_rel, plan_sha):
+-        """Per-request check that the requested trace/plan match the manifest's
+-        frozen hashes."""
+-        reasons = []
+-        if trace_rel is not None:
+-            if sha256_file(self._abspath(trace_rel)) != trace_sha:
+-                reasons.append("trace sha256 mismatch")
+-        if plan_rel is not None:
+-            if sha256_file(self._abspath(plan_rel)) != plan_sha:
+-                reasons.append("plan sha256 mismatch")
+-        return tuple(reasons)
++            r.append("interior_page_list sha256 mismatch")
+ 
++        # plan structural invariants (aligned / unique / within DB / count / ==offsets)
++        r += self._validate_plan_invariants(page_size, page_count)
++
++        self.validated = not r
++        self.validation_reasons = tuple(r) if r else ()
++        return self.validation_reasons
++
++    def _validate_plan_invariants(self, page_size, page_count):
++        r = []
++        m = self.manifest
++        offs = self.interior_offsets
++        if m.get("interior_page_count") != 92 or m["interior_page_list"]["count"] != 92:
++            r.append("interior_page_count != 92")
++        if len(offs) != 92:
++            r.append("plan does not have 92 offsets")
++        if len(set(offs)) != len(offs):
++            r.append("duplicate plan offsets")
++        for off in offs:
++            if off % page_size != 0:
++                r.append("plan offset %d not aligned" % off); break
++            if not (0 <= off < page_count * page_size):
++                r.append("plan offset %d outside DB" % off); break
++        # plan file offsets must equal manifest offsets exactly
++        try:
++            import csv
++            file_offs = []
++            with open(self._abspath(m["interior_page_list"]["path"]), newline="") as f:
++                for row in csv.DictReader(f):
++                    pn = int(row["page_number"])
++                    fo = int(row["file_offset"])
++                    if fo != (pn - 1) * page_size:
++                        r.append("plan offset != (page-1)*page_size"); break
++                    file_offs.append(fo)
++            if sorted(file_offs) != sorted(offs):
++                r.append("plan offsets != manifest offsets")
++        except (OSError, ValueError, KeyError) as e:
++            r.append("plan unreadable: %s" % e)
++        return r
++
++    # ------------------------------------------------------------- warm handle
++    def open_warm_handle(self):
++        """Open the canonical warm SQLite handle once. Requires prior successful
++        validation. Applies cache_size=0 + mmap_size (canonical pragmas) and warms
++        the read statement (compile only, no data). Safe to call repeatedly."""
++        if not self.validated:
++            raise RuntimeError("refusing warm handle before successful validation")
++        if self.conn is not None:
++            return self.conn
++        pragmas = self.manifest.get("sqlite_pragmas", {"cache_size": 0,
++                                                       "mmap_size": self.manifest["database"]["byte_size"]})
++        conn = sqlite3.connect(self.db_path, check_same_thread=False)
++        conn.execute("PRAGMA cache_size = %d" % int(pragmas.get("cache_size", 0)))
++        conn.execute("PRAGMA mmap_size = %d" % int(pragmas.get("mmap_size",
++                                                               self.manifest["database"]["byte_size"])))
++        # Warm the *statement compilation* only (parse + plan), without stepping
++        # the read against real data -- mirroring benchmark_harness.c, which
++        # prepares once but first steps at the measured op. EXPLAIN QUERY PLAN
++        # compiles the read without a B-tree data descent, so no interior/leaf
++        # page is faulted at init and the cold gate can still reach zero.
++        conn.execute("EXPLAIN QUERY PLAN " + oracle.READ_SQL, (0,)).fetchall()
++        self.conn = conn
++        return conn
++
++    def close_warm_handle(self):
++        if self.conn is not None:
++            self.conn.close()
++            self.conn = None
++
++    # ----------------------------------------------------------------- helpers
+     def next_invocation(self):
+-        with self._lock:
++        with self._counter_lock:
+             self._counter += 1
+             return self._counter
+ 
+     def db_identity_changed(self):
+-        """True if the DB device/inode changed under us (image swap / remount);
+-        measured mode must fail in that case."""
+         st = os.stat(self.db_path)
+         return (st.st_dev, st.st_ino) != (self.db_device, self.db_inode)
+ 
++    def oracle_for(self, workload, seed, first_op):
++        try:
++            return self.manifest["first_query_oracle"][workload][str(seed)][str(first_op)]
++        except KeyError:
++            return None
++
++    def trace_meta(self, workload, seed):
++        try:
++            e = self.manifest["workload_traces"][workload]["seeds"][str(seed)]
++            return e["path"], e["sha256"]
++        except KeyError:
++            return None, None
++
+     def identity_fields(self):
++        img = self.manifest.get("action_image_digest") or os.environ.get("OW_ACTION_IMAGE_DIGEST")
+         return {
+             "process_uuid": self.process_uuid,
+             "pid": self.pid,
+@@ -132,4 +238,34 @@ class Session:
+             "db_inode": self.db_inode,
+             "db_sha256": self.db_sha256,
+             "artifact_manifest_sha256": self.artifact_manifest_sha256,
++            "action_image_digest": img,
+         }
++
++
++# --------------------------------------------------------------- request checks
++def valid_hash_format(h):
++    return bool(h) and bool(_HEX64.match(h))
++
++
++def validate_request_semantics(request, session):
++    """Semantic validation against the manifest (workload/seed/first_op known,
++    booleans well-typed, hash format). Returns () or a tuple of reasons."""
++    r = []
++    wl = request.get("workload")
++    seed = request.get("seed")
++    fop = request.get("first_operation_id")
++    if wl not in session.manifest["workload_traces"]:
++        r.append("unknown workload: %r" % wl)
++    else:
++        if str(seed) not in session.manifest["workload_traces"][wl]["seeds"]:
++            r.append("unknown seed for workload: %r" % seed)
++    if fop not in session.manifest.get("supported_first_operation_ids", [0]):
++        r.append("unsupported first_operation_id: %r" % fop)
++    for b in ("diagnostic_mode", "cold_reset"):
++        if not isinstance(request.get(b), bool):
++            r.append("%s must be a bool" % b)
++    if not request.get("request_id"):
++        r.append("empty request_id")
++    if not valid_hash_format(request.get("expected_artifact_manifest_hash", "")):
++        r.append("expected_artifact_manifest_hash must be 64-hex")
++    return tuple(r)
+diff --git a/deployment/openwhisk/build_artifact_manifest.py b/deployment/openwhisk/build_artifact_manifest.py
+index 75927e2..ac202c3 100755
+--- a/deployment/openwhisk/build_artifact_manifest.py
++++ b/deployment/openwhisk/build_artifact_manifest.py
+@@ -1,19 +1,27 @@
+ #!/usr/bin/env python3
+-"""Freeze the identity of every measurement artifact into a manifest.
++"""Freeze the identity + invariants of every measurement artifact into a manifest.
+ 
+-Reuses the repository's canonical inputs (the reference DB, the page classifier
+-CSV, and the workload traces used by ``run_experiment.py``) and records their
+-SHA-256 so the OpenWhisk action can refuse to run on anything but the exact
+-frozen data. It also derives the mandatory-interior plan (the "2d" skeleton) from
+-the classifier and freezes it as ``config/plans/interior_pages.csv``.
++Reuses the repository's canonical inputs (reference DB, page classifier, workload
++traces) and records their SHA-256 plus structural invariants so the OpenWhisk
++action can fail closed on anything but the exact frozen data. It also:
+ 
+-This does NOT run any benchmark; it only hashes and describes artifacts.
++  * derives + validates the mandatory-interior (2d) skeleton from the classifier;
++  * pins the canonical SQLite pragmas (cache_size=0, mmap_size=file size);
++  * records a first-query correctness oracle (expected hit + result digest) for
++    every supported first operation.
++
++Invariants enforced here (generation aborts on violation):
++  - SQLite page size == 4096 and DB page/row facts read from the header/table;
++  - every interior file_offset == (page_number-1)*page_size, 4096-aligned,
++    unique, within the DB, exactly 92 interior pages;
++  - plan offsets == manifest offsets;
++  - all workload-A seeds 1..10 present.
++
++No benchmark is run.
+ 
+ Usage:
+-  python3 deployment/openwhisk/build_artifact_manifest.py \
+-      --out deployment/openwhisk/config/artifacts.json          # real (has dev/inode)
+-  python3 deployment/openwhisk/build_artifact_manifest.py \
+-      --example --out deployment/openwhisk/config/artifacts.example.json
++  python3 deployment/openwhisk/build_artifact_manifest.py --out .../artifacts.json
++  python3 deployment/openwhisk/build_artifact_manifest.py --example --out .../artifacts.example.json
+ """
+ import argparse
+ import csv
+@@ -25,13 +33,18 @@ import sqlite3
+ import sys
+ from datetime import datetime, timezone
+ 
++sys.path.insert(0, os.path.join(os.path.dirname(__file__), "action"))
++import oracle  # noqa: E402
++
+ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+ DB_REL = "pipeline/preparation/layout_rewriter/runs/test.db"
+ CLASSIFY_REL = "pipeline/preparation/layout_rewriter/runs/classify_before.csv"
+ PLAN_REL = "deployment/openwhisk/config/plans/interior_pages.csv"
+-WORKLOADS = {"A": "a"}          # request key -> trace filename stem
++WORKLOADS = {"A": "a"}
+ SEEDS = list(range(1, 11))
+-PAGE_SIZE = 4096
++EXPECTED_PAGE_SIZE = 4096
++EXPECTED_INTERIORS = 92
++SUPPORTED_FIRST_OPS = [0]
+ 
+ 
+ def sha256_file(path, _b=1 << 20):
+@@ -42,26 +55,56 @@ def sha256_file(path, _b=1 << 20):
+     return h.hexdigest()
+ 
+ 
+-def derive_interior_plan(classify_path, plan_path):
+-    """Write the frozen interior-page plan from the classifier and return
+-    (offsets, count). Every interior page appears exactly once."""
+-    rows = []
+-    seen = set()
++def decode_page_size(head):
++    """SQLite header page-size field (offset 16, u16 BE); the value 1 encodes
++    65536 (spec), which a naive `x or 65536` would mis-handle."""
++    ps = int.from_bytes(head[16:18], "big")
++    return 65536 if ps == 1 else ps
++
++
++def derive_and_validate_plan(classify_path, plan_path, page_size, page_count):
++    rows, seen = [], set()
+     with open(classify_path, newline="") as f:
+         for r in csv.DictReader(f):
+             if r["page_type"].startswith("interior"):
+                 pn = int(r["page_number"])
++                off = int(r["file_offset"])
+                 if pn in seen:
+                     sys.exit("duplicate interior page in classifier: %d" % pn)
+                 seen.add(pn)
+-                rows.append((pn, int(r["file_offset"])))
++                rows.append((pn, off))
+     rows.sort()
++    # ---- invariants ----
++    if len(rows) != EXPECTED_INTERIORS:
++        sys.exit("expected %d interior pages, found %d"
++                 % (EXPECTED_INTERIORS, len(rows)))
++    offs = set()
++    for pn, off in rows:
++        if not (1 <= pn <= page_count):
++            sys.exit("interior page_number %d out of range 1..%d" % (pn, page_count))
++        if off != (pn - 1) * page_size:
++            sys.exit("interior offset %d != (%d-1)*%d" % (off, pn, page_size))
++        if off % page_size != 0:
++            sys.exit("interior offset %d not %d-aligned" % (off, page_size))
++        if off in offs:
++            sys.exit("duplicate interior offset %d" % off)
++        if not (0 <= off < page_count * page_size):
++            sys.exit("interior offset %d outside DB" % off)
++        offs.add(off)
++    # ---- write frozen plan + confirm round-trip equality ----
+     os.makedirs(os.path.dirname(plan_path), exist_ok=True)
+     with open(plan_path, "w", newline="") as f:
+         w = csv.writer(f, lineterminator="\n")
+         w.writerow(["page_number", "file_offset"])
+         w.writerows(rows)
+-    return [off for _, off in rows], len(rows)
++    plan_offsets = []
++    with open(plan_path, newline="") as f:
++        for r in csv.DictReader(f):
++            plan_offsets.append(int(r["file_offset"]))
++    manifest_offsets = [off for _, off in rows]
++    if plan_offsets != manifest_offsets:
++        sys.exit("plan offsets differ from manifest offsets")
++    return manifest_offsets
+ 
+ 
+ def git_commit():
+@@ -72,16 +115,37 @@ def git_commit():
+         return None
+ 
+ 
+-def db_facts(db_path):
+-    with open(db_path, "rb") as f:
+-        head = f.read(32)
+-    page_size = int.from_bytes(head[16:18], "big") or 65536
+-    page_count = int.from_bytes(head[28:32], "big")
++def first_op_key(trace_path, first_op):
++    with open(trace_path) as f:
++        for i, line in enumerate(f):
++            if i == first_op:
++                parts = line.split()
++                if len(parts) < 2 or parts[0] != "read":
++                    sys.exit("unsupported op at %d in %s" % (i, trace_path))
++                return int(parts[1])
++    sys.exit("first_operation_id %d beyond %s" % (first_op, trace_path))
++
++
++def build_oracle(db_path):
++    """Expected hit + digest for every supported first op of every A seed."""
+     conn = sqlite3.connect(db_path)
+-    rows = conn.execute("SELECT count(*) FROM items").fetchone()[0]
+-    maxid = conn.execute("SELECT max(id) FROM items").fetchone()[0]
++    out = {}
++    for wk, stem in WORKLOADS.items():
++        out[wk] = {}
++        for s in SEEDS:
++            rel = "workloads/workload_%s_%d.txt" % (stem, s)
++            tp = os.path.join(ROOT, rel)
++            if not os.path.exists(tp):
++                conn.close()
++                sys.exit("missing required trace for oracle: %s" % rel)
++            out[wk][str(s)] = {}
++            for fop in SUPPORTED_FIRST_OPS:
++                key = first_op_key(tp, fop)
++                hit, digest = oracle.digest_row(oracle.run_read(conn, key))
++                out[wk][str(s)][str(fop)] = {
++                    "key": key, "expected_hit": hit, "expected_digest": digest}
+     conn.close()
+-    return page_size, page_count, rows, maxid
++    return out
+ 
+ 
+ def main():
+@@ -98,61 +162,97 @@ def main():
+         if not os.path.exists(p):
+             sys.exit("missing canonical artifact: %s" % p)
+ 
+-    offsets, interior_count = derive_interior_plan(classify, plan)
+-    page_size, page_count, rows, maxid = db_facts(db)
+-    st = os.stat(db)
++    with open(db, "rb") as f:
++        head = f.read(32)
++    page_size = decode_page_size(head)
++    if page_size != EXPECTED_PAGE_SIZE:
++        sys.exit("DB page size %d != %d" % (page_size, EXPECTED_PAGE_SIZE))
++    page_count = int.from_bytes(head[28:32], "big")
+ 
++    conn = sqlite3.connect(db)
++    row_count = conn.execute("SELECT count(*) FROM items").fetchone()[0]
++    maxid = conn.execute("SELECT max(id) FROM items").fetchone()[0]
++    conn.close()
++
++    offsets = derive_and_validate_plan(classify, plan, page_size, page_count)
++
++    # all A seeds required
+     traces = {}
+     for wk, stem in WORKLOADS.items():
+         seedmap = {}
+         for s in SEEDS:
+             rel = "workloads/workload_%s_%d.txt" % (stem, s)
+             ap_ = os.path.join(ROOT, rel)
+-            if os.path.exists(ap_):
+-                seedmap[str(s)] = {"path": rel, "sha256": sha256_file(ap_)}
++            if not os.path.exists(ap_):
++                sys.exit("missing required workload trace: %s" % rel)
++            seedmap[str(s)] = {"path": rel, "sha256": sha256_file(ap_)}
+         traces[wk] = {"stem": stem, "seeds": seedmap}
+ 
++    st = os.stat(db)
+     manifest = {
+-        "schema_version": 1,
++        "schema_version": 2,
+         "generated_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+         "repository_commit": git_commit(),
++        "os_page_size_expected": EXPECTED_PAGE_SIZE,
++        "sqlite_page_size_expected": EXPECTED_PAGE_SIZE,
+         "database": {
+             "path": DB_REL,
+             "sha256": sha256_file(db),
+             "byte_size": st.st_size,
+             "page_size": page_size,
+             "page_count": page_count,
+-            "row_count": rows,
++            "row_count": row_count,
+             "max_key": maxid,
+-            # machine-specific; only in the real (non-example) manifest
+             "device": None if args.example else st.st_dev,
+             "inode": None if args.example else st.st_ino,
+         },
++        "classifier": {"path": CLASSIFY_REL, "sha256": sha256_file(classify)},
+         "interior_page_list": {
+             "path": PLAN_REL,
+             "sha256": sha256_file(plan),
+-            "count": interior_count,
++            "count": EXPECTED_INTERIORS,
+             "offsets": offsets,
+         },
++        "interior_page_count": EXPECTED_INTERIORS,
++        # denominator for "relevant page residency %" is the WHOLE DB, not the
++        # 92-page interior skeleton (blocker 5).
++        "expected_relevant_page_count": page_count,
++        # Warm-handle pragmas. cache_size=0 matches benchmark_harness.c (the OS
++        # page cache is the only data cache). mmap_size=0 (pager pread path) is a
++        # deliberate departure from the C harness default (file size): a
++        # persistent SQLite mmap pins the pages it traverses, which blocks
++        # non-root re-eviction between invocations on a warm process. Using the
++        # pread path keeps no mapping alive, so POSIX_FADV_DONTNEED can re-cold
++        # the file before every measured invocation. The canonical file-size
++        # value is recorded below for fidelity comparison (it requires root
++        # drop_caches to re-cold between invocations).
++        "sqlite_pragmas": {"cache_size": 0, "mmap_size": 0},
++        "canonical_reference_pragmas": {"cache_size": 0, "mmap_size": st.st_size,
++                                        "source": "benchmark_harness.c default"},
+         "strategy_plans": {
+             "2d": {"path": PLAN_REL, "sha256": sha256_file(plan),
+-                   "kind": "interior_skeleton"},
+-            "baseline": {"path": None, "sha256": None, "kind": "no_prefetch"},
++                   "kind": "interior_skeleton", "expected_pages": EXPECTED_INTERIORS},
++            "baseline": {"path": None, "sha256": None, "kind": "no_prefetch",
++                         "expected_pages": 0},
+         },
+         "workload_traces": traces,
+-        "expected_relevant_page_count": interior_count,
++        "supported_first_operation_ids": SUPPORTED_FIRST_OPS,
++        "first_query_oracle": build_oracle(db),
+         "notes": ("Interior skeleton (2d) plan derived from the canonical page "
+-                  "classifier; every mandatory interior page listed once. Paths "
+-                  "are repository-relative and resolved at runtime against "
+-                  "OW_ARTIFACT_ROOT."),
++                  "classifier; invariants validated at generation. Paths are "
++                  "repository-relative, resolved at runtime against "
++                  "OW_ARTIFACT_ROOT. expected_relevant_page_count is the whole-DB "
++                  "page count; interior_page_count is the 92-page skeleton."),
+     }
+ 
+     os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
+     with open(args.out, "w") as f:
+         json.dump(manifest, f, indent=2)
+         f.write("\n")
+-    print("wrote %s (interiors=%d, page_count=%d, rows=%d)"
+-          % (args.out, interior_count, page_count, rows))
++    print("wrote %s (interiors=%d, relevant_denominator=%d, rows=%d, oracle_ops=%d)"
++          % (args.out, EXPECTED_INTERIORS, page_count, row_count,
++             sum(len(v) for wk in manifest["first_query_oracle"].values()
++                 for v in wk.values())))
+ 
+ 
+ if __name__ == "__main__":
+diff --git a/deployment/openwhisk/client/collect.py b/deployment/openwhisk/client/collect.py
+index ea68d3d..0be60da 100755
+--- a/deployment/openwhisk/client/collect.py
++++ b/deployment/openwhisk/client/collect.py
+@@ -28,9 +28,9 @@ import uuid
+ # Fields copied verbatim from the action response into summary.csv.
+ SUMMARY_FIELDS = [
+     "request_id", "invocation_counter", "process_uuid", "pid",
+-    "artifact_manifest_sha256", "db_device", "db_inode", "db_sha256",
+-    "workload", "strategy", "seed", "first_operation_id",
+-    "trace_sha256", "plan_sha256",
++    "artifact_manifest_sha256", "action_image_digest", "db_device", "db_inode",
++    "db_sha256", "workload", "strategy", "handle_mode", "seed",
++    "first_operation_id", "trace_sha256", "plan_sha256",
+     "cold_reset_requested", "cold_reset_method", "cold_reset_succeeded",
+     "relevant_pages_total", "resident_pages_before_reset",
+     "resident_pages_after_reset", "resident_interiors_before_reset",
+@@ -38,7 +38,9 @@ SUMMARY_FIELDS = [
+     "cold_threshold_passed", "selected_page_count", "selected_interior_count",
+     "selected_leaf_count", "delivered_page_count",
+     "reset_us", "open_us", "select_us", "deliver_us", "first_query_us",
+-    "handler_total_us", "query_hit", "result_digest", "sqlite_error", "error",
++    "handler_total_us", "query_hit", "result_digest",
++    "oracle_expected_hit", "oracle_expected_digest", "oracle_passed",
++    "measured_valid", "sqlite_error", "error", "error_stage",
+     "client_send_utc", "client_recv_utc", "client_elapsed_us",
+     "warm_session_id", "valid", "exclusion_reason",
+ ]
+@@ -55,15 +57,17 @@ def classify(resp, prev_counter_by_session):
+     """Return (valid, exclusion_reason). Applies the retention rules of
+     PROTOCOL.md without interpreting latency."""
+     if resp.get("error"):
+-        return False, "action_error:%s" % resp["error"]
++        return False, "action_error:%s" % resp.get("error_stage", "?")
+     if resp.get("sqlite_error"):
+         return False, "sqlite_error"
+     if not resp.get("process_uuid"):
+         return False, "no_process_identity"
+     if not resp.get("cold_threshold_passed"):
+         return False, "cold_threshold_not_passed"
+-    if resp.get("query_hit") != 1:
+-        return False, "query_miss_or_no_digest"
++    # correctness is the frozen oracle (exact expected hit/not-found + digest),
++    # NOT a hard-coded query_hit == 1.
++    if resp.get("oracle_passed") is not True:
++        return False, "oracle_failed"
+     sid = warm_session_id(resp)
+     ctr = resp.get("invocation_counter")
+     prev = prev_counter_by_session.get(sid)
+diff --git a/deployment/openwhisk/client/summarize.py b/deployment/openwhisk/client/summarize.py
+index 48bf27c..7925f61 100755
+--- a/deployment/openwhisk/client/summarize.py
++++ b/deployment/openwhisk/client/summarize.py
+@@ -17,8 +17,12 @@ import json
+ import os
+ import statistics
+ 
+-# The atomic comparison unit; a baseline must share all of these with its
+-# strategy to be a valid denominator.
++# Observation key: identifies one measured cell (INCLUDES strategy).
++OBSERVATION_KEY = ("warm_session_id", "workload", "seed", "first_operation_id",
++                   "strategy")
++# Pairing-block key: the block within which a strategy is paired against its
++# baseline (EXCLUDES strategy). A valid denominator shares all of these AND the
++# same warm-process session (present in the key), never a local-machine baseline.
+ PAIR_KEY = ("warm_session_id", "workload", "seed", "first_operation_id")
+ 
+ 
+diff --git a/deployment/openwhisk/config/artifacts.example.json b/deployment/openwhisk/config/artifacts.example.json
+index 078f1c4..3e97f04 100644
+--- a/deployment/openwhisk/config/artifacts.example.json
++++ b/deployment/openwhisk/config/artifacts.example.json
+@@ -1,7 +1,9 @@
+ {
+-  "schema_version": 1,
+-  "generated_utc": "2026-07-13T23:23:39Z",
+-  "repository_commit": "108acc24a30c9212271412be4b94cc3ef22fe6ef",
++  "schema_version": 2,
++  "generated_utc": "2026-07-14T10:27:40Z",
++  "repository_commit": "7fd270095165ed534d50cce0d0253b7739c7e1c8",
++  "os_page_size_expected": 4096,
++  "sqlite_page_size_expected": 4096,
+   "database": {
+     "path": "pipeline/preparation/layout_rewriter/runs/test.db",
+     "sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+@@ -13,6 +15,10 @@
+     "device": null,
+     "inode": null
+   },
++  "classifier": {
++    "path": "pipeline/preparation/layout_rewriter/runs/classify_before.csv",
++    "sha256": "6ec6837dc6a801c28e1cc08e90ccac570ee9a517765c0f6f03ab1b723349cc32"
++  },
+   "interior_page_list": {
+     "path": "deployment/openwhisk/config/plans/interior_pages.csv",
+     "sha256": "37ed5e4682d1771c735edc93133bb8ecb77d772a992721b180a9cabaae28745e",
+@@ -112,16 +118,29 @@
+       106520576
+     ]
+   },
++  "interior_page_count": 92,
++  "expected_relevant_page_count": 26331,
++  "sqlite_pragmas": {
++    "cache_size": 0,
++    "mmap_size": 0
++  },
++  "canonical_reference_pragmas": {
++    "cache_size": 0,
++    "mmap_size": 107851776,
++    "source": "benchmark_harness.c default"
++  },
+   "strategy_plans": {
+     "2d": {
+       "path": "deployment/openwhisk/config/plans/interior_pages.csv",
+       "sha256": "37ed5e4682d1771c735edc93133bb8ecb77d772a992721b180a9cabaae28745e",
+-      "kind": "interior_skeleton"
++      "kind": "interior_skeleton",
++      "expected_pages": 92
+     },
+     "baseline": {
+       "path": null,
+       "sha256": null,
+-      "kind": "no_prefetch"
++      "kind": "no_prefetch",
++      "expected_pages": 0
+     }
+   },
+   "workload_traces": {
+@@ -171,6 +190,82 @@
+       }
+     }
+   },
+-  "expected_relevant_page_count": 92,
+-  "notes": "Interior skeleton (2d) plan derived from the canonical page classifier; every mandatory interior page listed once. Paths are repository-relative and resolved at runtime against OW_ARTIFACT_ROOT."
++  "supported_first_operation_ids": [
++    0
++  ],
++  "first_query_oracle": {
++    "A": {
++      "1": {
++        "0": {
++          "key": 155,
++          "expected_hit": 1,
++          "expected_digest": "a3a2e6f0be2188496f34d4a340c45a57daaa6ab995369487f51a9d670776a81a"
++        }
++      },
++      "2": {
++        "0": {
++          "key": 20648,
++          "expected_hit": 1,
++          "expected_digest": "b5999fb587a0d9bfdc9c0831ed8a15069949b8338f959d49515d6a371e8981e2"
++        }
++      },
++      "3": {
++        "0": {
++          "key": 47539,
++          "expected_hit": 1,
++          "expected_digest": "81415b7a6790bd506ad0c7d2cd3bde2a4cff949d5218b4fb23b407a921bca49a"
++        }
++      },
++      "4": {
++        "0": {
++          "key": 85483,
++          "expected_hit": 1,
++          "expected_digest": "8a904d11e9537a36c6a1e5a8a79058981ab19c085884799fa6f962eba43fbfe3"
++        }
++      },
++      "5": {
++        "0": {
++          "key": 46074,
++          "expected_hit": 1,
++          "expected_digest": "87f39bf5faedda672f195185dda9f1633af0bafb1a3600b6da81c34cf91ccf60"
++        }
++      },
++      "6": {
++        "0": {
++          "key": 94520,
++          "expected_hit": 1,
++          "expected_digest": "13b00d80e2a7e6d4b6806048477ceaa6c30ba30f98bfc6af332cefef53377ccf"
++        }
++      },
++      "7": {
++        "0": {
++          "key": 51017,
++          "expected_hit": 1,
++          "expected_digest": "8b3cc2e345ba622e71ea35e654061df75a42f2c9a9c3fea68cbbbe797a9c14f9"
++        }
++      },
++      "8": {
++        "0": {
++          "key": 976,
++          "expected_hit": 1,
++          "expected_digest": "8e51fa468ad9bb4c2ce06acf5c50d02748920ad7a2fd9b5d3ca7152775d45774"
++        }
++      },
++      "9": {
++        "0": {
++          "key": 1340,
++          "expected_hit": 1,
++          "expected_digest": "10c775d255444cb610507eb9b03b74e177e8cf96e63bd5e27083732f72bc12c5"
++        }
++      },
++      "10": {
++        "0": {
++          "key": 56699,
++          "expected_hit": 1,
++          "expected_digest": "246875c135fff5e3626ef6f9102c54a24501c74fe3d498cea9f3cbfc6c0fcb9b"
++        }
++      }
++    }
++  },
++  "notes": "Interior skeleton (2d) plan derived from the canonical page classifier; invariants validated at generation. Paths are repository-relative, resolved at runtime against OW_ARTIFACT_ROOT. expected_relevant_page_count is the whole-DB page count; interior_page_count is the 92-page skeleton."
+ }
+diff --git a/deployment/openwhisk/tests/test_contract.py b/deployment/openwhisk/tests/test_contract.py
+index 1a766cf..916f5f0 100644
+--- a/deployment/openwhisk/tests/test_contract.py
++++ b/deployment/openwhisk/tests/test_contract.py
+@@ -1,41 +1,38 @@
+-"""Request/response contract tests. Exercises the action handler end-to-end
+-against the real reference DB via a locally-constructed warm session (no
+-OpenWhisk, no benchmark sweep)."""
++"""Request/response contract, gate, and correctness-oracle tests. Exercises the
++hardened handler end-to-end against the real reference DB via a locally
++constructed warm session (no OpenWhisk, no benchmark sweep)."""
+ import os
+ import sys
++import threading
+ import unittest
++from unittest import mock
+ 
+ HERE = os.path.dirname(__file__)
+ REPO = os.path.abspath(os.path.join(HERE, "..", "..", ".."))
+ sys.path.insert(0, os.path.join(HERE, "..", "action"))
+ 
+ import main  # noqa: E402
++import residency  # noqa: E402
+ import session as session_mod  # noqa: E402
+ 
+ EXAMPLE = os.path.join(REPO, "deployment/openwhisk/config/artifacts.example.json")
+ DB = os.path.join(REPO, "pipeline/preparation/layout_rewriter/runs/test.db")
+ 
+ RESPONSE_CONTRACT = [
+-    # identity
+     "process_uuid", "pid", "process_init_monotonic_ns", "invocation_counter",
+     "db_device", "db_inode", "db_sha256", "artifact_manifest_sha256",
+-    # input identity
+-    "workload", "strategy", "seed", "first_operation_id", "trace_sha256",
+-    "plan_sha256",
+-    # cold diagnostics
++    "action_image_digest", "workload", "strategy", "seed", "first_operation_id",
++    "handle_mode", "trace_sha256", "plan_sha256",
+     "cold_reset_requested", "cold_reset_method", "cold_reset_succeeded",
+     "relevant_pages_total", "resident_pages_before_reset",
+     "resident_pages_after_reset", "resident_interiors_before_reset",
+     "resident_interiors_after_reset", "resident_interiors_after_prefetch",
+-    "cold_threshold_passed",
+-    # strategy diagnostics
+-    "selected_page_count", "selected_interior_count", "selected_leaf_count",
+-    "delivered_page_count",
+-    # timings
++    "cold_threshold_passed", "attempted_methods", "selected_page_count",
++    "selected_interior_count", "selected_leaf_count", "delivered_page_count",
+     "reset_us", "open_us", "select_us", "deliver_us", "first_query_us",
+-    "handler_total_us",
+-    # correctness
+-    "query_hit", "result_digest", "sqlite_error", "error",
++    "handler_total_us", "query_hit", "result_digest", "oracle_expected_hit",
++    "oracle_expected_digest", "oracle_passed", "measured_valid", "sqlite_error",
++    "error", "error_stage",
+ ]
+ 
+ 
+@@ -50,79 +47,165 @@ def req(strategy, h, **kw):
+ @unittest.skipUnless(os.path.exists(EXAMPLE) and os.path.exists(DB),
+                      "example manifest / reference DB not available")
+ class TestContract(unittest.TestCase):
+-    @classmethod
+-    def setUpClass(cls):
+-        cls.session = session_mod.Session(EXAMPLE, resolve_root=REPO)
+-        cls.session.validate_artifacts()
+-        cls.h = cls.session.artifact_manifest_sha256
++    def setUp(self):
++        self.session = session_mod.Session(EXAMPLE, resolve_root=REPO)
++        self.session.validate_artifacts()
++        self.assertTrue(self.session.validated, self.session.validation_reasons)
++        self.session.open_warm_handle()
++        self.h = self.session.artifact_manifest_sha256
+ 
+-    # ---- request validation ----
++    def tearDown(self):
++        self.session.close_warm_handle()
++
++    # ---- request schema ----
+     def test_missing_fields_rejected(self):
+-        self.assertTrue(main.validate_request({"request_id": "x"}))
++        self.assertTrue(main.validate_request_schema({"request_id": "x"}))
+ 
+     def test_bad_first_op_rejected(self):
+         r = req("baseline", self.h)
+         r["first_operation_id"] = -1
+-        self.assertTrue(main.validate_request(r))
++        self.assertTrue(main.validate_request_schema(r))
+ 
+     def test_unsupported_strategy_rejected(self):
+-        r = req("2f_slru", self.h)
+-        self.assertTrue(main.validate_request(r))
++        self.assertTrue(main.validate_request_schema(req("2f_slru", self.h)))
++
++    def test_bad_handle_mode_rejected(self):
++        self.assertTrue(main.validate_request_schema(req("2d", self.h, handle_mode="x")))
+ 
+     def test_valid_request_accepted(self):
+-        self.assertEqual(main.validate_request(req("2d", self.h)), ())
++        self.assertEqual(main.validate_request_schema(req("2d", self.h)), ())
+ 
+-    # ---- response completeness ----
++    # ---- response completeness (diagnostic mode reaches every stage) ----
+     def test_response_has_all_contract_fields(self):
+         resp = main.handle(req("2d", self.h), self.session)
+         missing = [f for f in RESPONSE_CONTRACT if f not in resp]
+-        self.assertEqual(missing, [], "missing response fields: %s" % missing)
++        self.assertEqual(missing, [], "missing: %s" % missing)
+ 
+-    # ---- baseline vs 2d selection ----
++    # ---- strategy invariants ----
+     def test_baseline_selects_and_delivers_zero(self):
+         resp = main.handle(req("baseline", self.h), self.session)
+         self.assertEqual(resp["selected_page_count"], 0)
+         self.assertEqual(resp["delivered_page_count"], 0)
+-        self.assertIsNone(resp["error"])
++        self.assertEqual(resp["selected_interior_count"], 0)
+ 
+-    def test_2d_selects_expected_interiors(self):
+-        expected = self.session.manifest["interior_page_list"]["count"]
++    def test_2d_selects_92_all_interior_no_leaf(self):
+         resp = main.handle(req("2d", self.h), self.session)
+-        self.assertEqual(resp["selected_interior_count"], expected)
+-        self.assertEqual(resp["selected_page_count"], expected)
++        self.assertEqual(resp["selected_page_count"], 92)
++        self.assertEqual(resp["selected_interior_count"], 92)
++        self.assertEqual(resp["selected_leaf_count"], 0)
++        self.assertEqual(resp["delivered_page_count"], 92)
+ 
+-    def test_identical_query_digest_across_strategies(self):
+-        a = main.handle(req("baseline", self.h), self.session)
+-        b = main.handle(req("2d", self.h), self.session)
+-        self.assertEqual(a["result_digest"], b["result_digest"])
+-        self.assertEqual(a["query_hit"], 1)
++    # ---- correctness oracle ----
++    def test_oracle_passes_on_correct_result(self):
++        resp = main.handle(req("2d", self.h), self.session)
++        self.assertTrue(resp["oracle_passed"])
++        self.assertEqual(resp["query_hit"], resp["oracle_expected_hit"])
++        self.assertEqual(resp["result_digest"], resp["oracle_expected_digest"])
+ 
+-    def test_counter_monotonic_across_invocations(self):
+-        a = main.handle(req("baseline", self.h), self.session)
+-        b = main.handle(req("2d", self.h), self.session)
+-        self.assertLess(a["invocation_counter"], b["invocation_counter"])
++    def test_wrong_expected_digest_fails_oracle(self):
++        # tamper the frozen oracle digest -> observed result won't match
++        self.session.manifest["first_query_oracle"]["A"]["1"]["0"]["expected_digest"] = "0" * 64
++        resp = main.handle(req("2d", self.h, diagnostic_mode=False), self.session)
++        self.assertFalse(resp["oracle_passed"])
++        self.assertFalse(resp["measured_valid"])
+ 
+     # ---- identity gates ----
+     def test_manifest_hash_mismatch_refused(self):
+-        resp = main.handle(req("2d", "deadbeef", diagnostic_mode=False), self.session)
+-        self.assertEqual(resp["error"], "expected_artifact_manifest_hash mismatch")
++        resp = main.handle(req("2d", "b" * 64, diagnostic_mode=False), self.session)
++        self.assertEqual(resp["error_stage"], "identity")
++        self.assertFalse(resp["measured_valid"])
++
++    def test_empty_hash_refused(self):
++        r = req("2d", "", diagnostic_mode=False)
++        # schema catches empty/!64hex first
++        self.assertTrue(main.validate_request_schema(r) or
++                        main.handle(r, self.session)["error"])
+ 
+     def test_db_inode_change_refused(self):
+         saved = self.session.db_inode
+-        self.session.db_inode = saved + 1  # simulate image swap / remount
++        self.session.db_inode = saved + 1
+         try:
+             resp = main.handle(req("2d", self.h), self.session)
+-            self.assertEqual(resp["error"], "db device/inode changed since process init")
++            self.assertEqual(resp["error_stage"], "identity")
+         finally:
+             self.session.db_inode = saved
+ 
+-    def test_cold_gate_reflected_in_measured_valid(self):
+-        # non-diagnostic: measured_valid must be a strict AND of the cold gate,
+-        # query hit, and no error (host may or may not achieve cold state).
+-        resp = main.handle(req("2d", self.h, diagnostic_mode=False), self.session)
+-        expected = bool(resp["cold_threshold_passed"] and resp["query_hit"] == 1
+-                        and resp["sqlite_error"] is None)
+-        self.assertEqual(resp["measured_valid"], expected)
++    # ---- cold_reset gate ----
++    def test_cold_reset_false_cannot_be_measured(self):
++        resp = main.handle(req("2d", self.h, cold_reset=False, diagnostic_mode=False),
++                           self.session)
++        self.assertEqual(resp["error_stage"], "cold_reset_required")
++        self.assertFalse(resp["measured_valid"])
++
++    def test_cold_gate_failure_runs_no_select_deliver_query(self):
++        fail = {"resident_pages_before_reset": 100,
++                "resident_interiors_before_reset": 92, "attempted_methods": [],
++                "cold_reset_method": "MADV_DONTNEED",
++                "resident_pages_after_reset": 100,
++                "resident_interiors_after_reset": 92,
++                "cold_reset_succeeded": False, "cold_threshold_passed": False}
++        with mock.patch.object(residency, "cold_reset_and_verify", return_value=fail):
++            resp = main.handle(req("2d", self.h, diagnostic_mode=False), self.session)
++        self.assertEqual(resp["error_stage"], "cold_gate")
++        self.assertFalse(resp["measured_valid"])
++        for f in ("selected_page_count", "delivered_page_count", "first_query_us"):
++            self.assertNotIn(f, resp)
++
++    def test_reset_chain_continues_after_ineffective_success(self):
++        # on this host MADV_DONTNEED returns rc=0 but leaves pages resident;
++        # the chain must move on to a further candidate.
++        resp = main.handle(req("2d", self.h), self.session)
++        methods = resp["attempted_methods"]
++        self.assertGreaterEqual(len(methods), 1)
++        first = methods[0]
++        if first["resident_interiors_after"] > 0:
++            self.assertEqual(first["rc"], 0)          # advice "succeeded"
++            self.assertGreaterEqual(len(methods), 2)  # yet the chain continued
++
++    # ---- warm vs standalone ----
++    def test_warm_mode_pays_no_open_cost(self):
++        resp = main.handle(req("2d", self.h, handle_mode="warm"), self.session)
++        self.assertEqual(resp["open_us"], 0.0)
++
++    def test_standalone_mode_pays_open_cost(self):
++        resp = main.handle(req("2d", self.h, handle_mode="standalone"), self.session)
++        self.assertGreater(resp["open_us"], 0.0)
++
++    # ---- semantic errors ----
++    def test_unknown_workload_structured_error(self):
++        resp = main.handle(req("2d", self.h, workload="Z"), self.session)
++        self.assertEqual(resp["error_stage"], "request")
++        self.assertFalse(resp["measured_valid"])
++
++    def test_unknown_seed_structured_error(self):
++        resp = main.handle(req("2d", self.h, seed=99), self.session)
++        self.assertEqual(resp["error_stage"], "request")
++
++    # ---- concurrency ----
++    def test_overlapping_invocation_rejected(self):
++        self.session.critical_lock.acquire()
++        try:
++            resp = main.handle(req("2d", self.h), self.session)
++            self.assertEqual(resp["error_stage"], "concurrency")
++            self.assertFalse(resp["measured_valid"])
++        finally:
++            self.session.critical_lock.release()
++
++    # ---- counter monotonic ----
++    def test_counter_monotonic(self):
++        a = main.handle(req("baseline", self.h), self.session)
++        b = main.handle(req("2d", self.h), self.session)
++        self.assertLess(a["invocation_counter"], b["invocation_counter"])
++
++
++class TestArtifactValidationFailClosed(unittest.TestCase):
++    @unittest.skipUnless(os.path.exists(EXAMPLE), "example manifest missing")
++    def test_unvalidated_session_refuses_handler(self):
++        s = session_mod.Session(EXAMPLE, resolve_root=REPO)
++        # never called validate_artifacts -> validated is False
++        resp = main.handle(req("2d", s.artifact_manifest_sha256, diagnostic_mode=False), s)
++        self.assertEqual(resp["error_stage"], "artifact_validation")
++        self.assertFalse(resp["measured_valid"])
+ 
+ 
+ if __name__ == "__main__":
+diff --git a/deployment/openwhisk/tests/test_manifest_invariants.py b/deployment/openwhisk/tests/test_manifest_invariants.py
+new file mode 100644
+index 0000000..dd3dc7f
+--- /dev/null
++++ b/deployment/openwhisk/tests/test_manifest_invariants.py
+@@ -0,0 +1,127 @@
++"""Tests for the artifact-manifest generator invariants: page-size decoding,
++interior-plan validation (alignment / off-by-one / duplicate / out-of-range /
++count), and that the frozen first-query oracle is computed by the same code the
++action uses."""
++import csv
++import importlib.util
++import json
++import os
++import sys
++import tempfile
++import unittest
++
++HERE = os.path.dirname(__file__)
++REPO = os.path.abspath(os.path.join(HERE, "..", "..", ".."))
++sys.path.insert(0, os.path.join(HERE, "..", "action"))
++import oracle  # noqa: E402
++
++# import the generator module by path (it is a script, not a package member)
++_spec = importlib.util.spec_from_file_location(
++    "build_artifact_manifest",
++    os.path.join(REPO, "deployment/openwhisk/build_artifact_manifest.py"))
++gen = importlib.util.module_from_spec(_spec)
++_spec.loader.exec_module(gen)
++
++PAGE = 4096
++PAGE_COUNT = 26331
++EXAMPLE = os.path.join(REPO, "deployment/openwhisk/config/artifacts.example.json")
++
++
++def write_classify(rows):
++    fd, p = tempfile.mkstemp(suffix=".csv")
++    with os.fdopen(fd, "w", newline="") as f:
++        w = csv.writer(f, lineterminator="\n")
++        w.writerow(["page_number", "page_type", "file_offset"])
++        for pn, off in rows:
++            w.writerow([pn, "interior_table", off])
++    return p
++
++
++def good_rows():
++    # 92 valid interior pages: pages 2..93, offset == (pn-1)*PAGE
++    return [(pn, (pn - 1) * PAGE) for pn in range(2, 94)]
++
++
++class TestPageSizeDecode(unittest.TestCase):
++    def test_value_1_means_65536(self):
++        head = bytearray(32)
++        head[16:18] = (1).to_bytes(2, "big")
++        self.assertEqual(gen.decode_page_size(bytes(head)), 65536)
++
++    def test_normal_4096(self):
++        head = bytearray(32)
++        head[16:18] = (4096).to_bytes(2, "big")
++        self.assertEqual(gen.decode_page_size(bytes(head)), 4096)
++
++
++class TestPlanInvariants(unittest.TestCase):
++    def _run(self, rows):
++        cp = write_classify(rows)
++        pp = tempfile.mktemp(suffix=".csv")
++        try:
++            return gen.derive_and_validate_plan(cp, pp, PAGE, PAGE_COUNT)
++        finally:
++            os.remove(cp)
++            if os.path.exists(pp):
++                os.remove(pp)
++
++    def test_valid_plan_ok(self):
++        offs = self._run(good_rows())
++        self.assertEqual(len(offs), 92)
++
++    def test_wrong_count_fails(self):
++        with self.assertRaises(SystemExit):
++            self._run(good_rows()[:91])
++
++    def test_misaligned_offset_fails(self):
++        rows = good_rows()
++        rows[0] = (rows[0][0], rows[0][1] + 1)   # off-by-one -> misaligned
++        with self.assertRaises(SystemExit):
++            self._run(rows)
++
++    def test_offset_not_page_formula_fails(self):
++        rows = good_rows()
++        # aligned but wrong page: offset for a different page number
++        rows[0] = (2, 10 * PAGE)                 # page 2 should be offset PAGE
++        with self.assertRaises(SystemExit):
++            self._run(rows)
++
++    def test_duplicate_page_fails(self):
++        rows = good_rows()
++        rows[1] = rows[0]                        # duplicate page_number
++        with self.assertRaises(SystemExit):
++            self._run(rows)
++
++    def test_out_of_range_page_fails(self):
++        rows = good_rows()
++        rows[0] = (PAGE_COUNT + 5, (PAGE_COUNT + 4) * PAGE)
++        with self.assertRaises(SystemExit):
++            self._run(rows)
++
++
++@unittest.skipUnless(os.path.exists(EXAMPLE), "example manifest missing")
++class TestOracleSingleSource(unittest.TestCase):
++    def test_manifest_oracle_matches_action_oracle(self):
++        with open(EXAMPLE) as f:
++            m = json.load(f)
++        db = os.path.join(REPO, m["database"]["path"])
++        import sqlite3
++        conn = sqlite3.connect(db)
++        try:
++            for seed, byop in m["first_query_oracle"]["A"].items():
++                for fop, entry in byop.items():
++                    hit, digest = oracle.digest_row(oracle.run_read(conn, entry["key"]))
++                    self.assertEqual(hit, entry["expected_hit"])
++                    self.assertEqual(digest, entry["expected_digest"])
++        finally:
++            conn.close()
++
++    def test_denominator_is_page_count_not_92(self):
++        with open(EXAMPLE) as f:
++            m = json.load(f)
++        self.assertEqual(m["expected_relevant_page_count"], m["database"]["page_count"])
++        self.assertEqual(m["interior_page_count"], 92)
++
++
++if __name__ == "__main__":
++    unittest.main()
+diff --git a/deployment/openwhisk/tests/test_residency_logic.py b/deployment/openwhisk/tests/test_residency_logic.py
+index ffb39c6..8e953ee 100644
+--- a/deployment/openwhisk/tests/test_residency_logic.py
++++ b/deployment/openwhisk/tests/test_residency_logic.py
+@@ -1,76 +1,90 @@
+-"""Unit tests for the residency/selection pure logic (no syscalls required)."""
++"""Unit tests for residency primitives, the efficacy-based reset diagnostics,
++and strategy selection."""
+ import os
+ import sys
+-import tempfile
++import types
+ import unittest
+ 
+ HERE = os.path.dirname(__file__)
++REPO = os.path.abspath(os.path.join(HERE, "..", "..", ".."))
+ sys.path.insert(0, os.path.join(HERE, "..", "action"))
+ 
+ import residency  # noqa: E402
+ import main  # noqa: E402
+ 
++DB = os.path.join(REPO, "pipeline/preparation/layout_rewriter/runs/test.db")
++
+ 
+ class TestColdThreshold(unittest.TestCase):
+-    def test_zero_interiors_is_cold(self):
++    def test_zero_is_cold(self):
+         self.assertTrue(residency.cold_threshold_passed(0))
+ 
+-    def test_any_resident_interior_is_not_cold(self):
++    def test_nonzero_is_not_cold(self):
+         self.assertFalse(residency.cold_threshold_passed(1))
+         self.assertFalse(residency.cold_threshold_passed(92))
+ 
+ 
+ class TestCountIn(unittest.TestCase):
+-    def test_counts_only_resident_offsets(self):
+-        # 4 pages; pages 0 and 2 resident (bit0 set).
++    def test_counts_resident_offsets(self):
+         vec = bytes([1, 0, 1, 0])
+-        offs = [0, residency.PAGE, 2 * residency.PAGE, 3 * residency.PAGE]
++        offs = [i * residency.PAGE for i in range(4)]
+         self.assertEqual(residency.count_in(vec, offs), 2)
+ 
+-    def test_out_of_range_offsets_ignored(self):
+-        vec = bytes([1])
+-        self.assertEqual(residency.count_in(vec, [0, 999 * residency.PAGE]), 1)
+-
+-
+-class TestPlanLoading(unittest.TestCase):
+-    def _plan(self, rows):
+-        fd, p = tempfile.mkstemp(suffix=".csv")
+-        with os.fdopen(fd, "w") as f:
+-            f.write("page_number,file_offset\n")
+-            for pn, off in rows:
+-                f.write("%d,%d\n" % (pn, off))
+-        return p
++    def test_out_of_range_ignored(self):
++        self.assertEqual(residency.count_in(bytes([1]), [0, 999 * residency.PAGE]), 1)
+ 
+-    def test_loads_offsets_in_order(self):
+-        p = self._plan([(2, 4096), (3, 8192)])
+-        try:
+-            self.assertEqual(main.load_interior_offsets(p), [4096, 8192])
+-        finally:
+-            os.remove(p)
+ 
+-    def test_duplicate_page_fails(self):
+-        p = self._plan([(2, 4096), (2, 4096)])
+-        try:
+-            with self.assertRaises(ValueError):
+-                main.load_interior_offsets(p)
+-        finally:
+-            os.remove(p)
++def fake_session(offsets, interior_count=92):
++    s = types.SimpleNamespace()
++    s.interior_offsets = list(offsets)
++    s.interior_offset_set = set(offsets)
++    s.manifest = {"interior_page_count": interior_count}
++    return s
+ 
+ 
+-class TestSelectPages(unittest.TestCase):
+-    def test_baseline_selects_zero(self):
+-        self.assertEqual(main.select_pages("baseline", [1, 2, 3], 3), [])
++class TestSelectOffsets(unittest.TestCase):
++    def test_baseline_zero(self):
++        s = fake_session([10, 20])
++        self.assertEqual(main.select_offsets("baseline", s), [])
+ 
+-    def test_2d_selects_all_interiors(self):
+-        self.assertEqual(main.select_pages("2d", [10, 20, 30], 3), [10, 20, 30])
++    def test_2d_all_interiors(self):
++        offs = [(p) * residency.PAGE for p in range(1, 93)]
++        s = fake_session(offs, 92)
++        self.assertEqual(main.select_offsets("2d", s), offs)
+ 
+     def test_2d_wrong_count_fails(self):
++        s = fake_session([10, 20], 92)
+         with self.assertRaises(ValueError):
+-            main.select_pages("2d", [10, 20], 92)
++            main.select_offsets("2d", s)
+ 
+-    def test_unsupported_strategy_fails(self):
++    def test_unsupported_fails(self):
+         with self.assertRaises(ValueError):
+-            main.select_pages("2f_slru", [1], 1)
++            main.select_offsets("2f_slru", fake_session([1]))
++
++
++@unittest.skipUnless(os.path.exists(DB), "reference DB missing")
++class TestColdResetDiagnostics(unittest.TestCase):
++    def setUp(self):
++        # first 92 page offsets as a stand-in interior set for the shape test
++        self.interiors = [(p) * residency.PAGE for p in range(1, 93)]
++
++    def test_reset_returns_full_diagnostics(self):
++        d = residency.cold_reset_and_verify(DB, self.interiors)
++        for k in ("resident_pages_before_reset", "resident_interiors_before_reset",
++                  "attempted_methods", "cold_reset_method",
++                  "resident_pages_after_reset", "resident_interiors_after_reset",
++                  "cold_reset_succeeded", "cold_threshold_passed"):
++            self.assertIn(k, d)
++        self.assertTrue(d["attempted_methods"])
++        for a in d["attempted_methods"]:
++            for k in ("method", "rc", "errno", "resident_interiors_after"):
++                self.assertIn(k, a)
++
++    def test_chain_stops_when_cold(self):
++        d = residency.cold_reset_and_verify(DB, self.interiors)
++        # if the final state is cold, the last attempt achieved zero interiors
++        if d["cold_threshold_passed"]:
++            self.assertEqual(d["attempted_methods"][-1]["resident_interiors_after"], 0)
+ 
+ 
+ if __name__ == "__main__":
+diff --git a/deployment/openwhisk/tests/test_session_classification.py b/deployment/openwhisk/tests/test_session_classification.py
+index 5313739..c10c051 100644
+--- a/deployment/openwhisk/tests/test_session_classification.py
++++ b/deployment/openwhisk/tests/test_session_classification.py
+@@ -1,5 +1,5 @@
+-"""Tests for warm-process identity, artifact validation, and collector session
+-classification. Uses the committed example manifest resolved against the repo."""
++"""Warm-process identity, fail-closed artifact validation, collector session
++classification, and the atomic pairing-key definition."""
+ import json
+ import os
+ import shutil
+@@ -15,6 +15,7 @@ sys.path.insert(0, os.path.join(HERE, "..", "client"))
+ 
+ import session as session_mod  # noqa: E402
+ import collect  # noqa: E402
++import summarize  # noqa: E402
+ 
+ EXAMPLE = os.path.join(REPO, "deployment/openwhisk/config/artifacts.example.json")
+ 
+@@ -23,68 +24,115 @@ def make_session():
+     return session_mod.Session(EXAMPLE, resolve_root=REPO)
+ 
+ 
++def tampered_session(mutate):
++    with open(EXAMPLE) as f:
++        m = json.load(f)
++    mutate(m)
++    tmp = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False)
++    json.dump(m, tmp)
++    tmp.close()
++    return session_mod.Session(tmp.name, resolve_root=REPO), tmp.name
++
++
+ @unittest.skipUnless(os.path.exists(EXAMPLE), "example manifest not generated")
+ class TestSessionIdentity(unittest.TestCase):
+-    def test_uuid_stable_within_process_object(self):
+-        s = make_session()
+-        self.assertEqual(s.process_uuid, s.identity_fields()["process_uuid"])
+-
+     def test_counter_increments(self):
+         s = make_session()
+         self.assertEqual([s.next_invocation() for _ in range(3)], [1, 2, 3])
+ 
+     def test_new_session_new_uuid(self):
+-        self.assertNotEqual(make_session().process_uuid,
+-                            make_session().process_uuid)
++        self.assertNotEqual(make_session().process_uuid, make_session().process_uuid)
+ 
+-    def test_validate_artifacts_ok(self):
++    def test_activation_id_not_used_as_identity(self):
++        s = make_session()
++        f = s.identity_fields()
++        self.assertIn("process_uuid", f)
++        self.assertNotIn("activation_id", f)
++
++
++@unittest.skipUnless(os.path.exists(EXAMPLE), "example manifest not generated")
++class TestFailClosedValidation(unittest.TestCase):
++    def test_valid_manifest_passes(self):
+         s = make_session()
+         self.assertEqual(s.validate_artifacts(s.artifact_manifest_sha256), ())
++        self.assertTrue(s.validated)
+ 
+-    def test_manifest_hash_mismatch_detected(self):
++    def test_empty_expected_hash_fails(self):
+         s = make_session()
+-        r = s.validate_artifacts("deadbeef")
+-        self.assertIn("artifact_manifest_hash mismatch", r)
+-
+-    def test_tampered_db_hash_fails(self):
+-        # Point a session at a manifest whose db sha256 is wrong.
+-        with open(EXAMPLE) as ef:
+-            m = json.load(ef)
+-        m["database"]["sha256"] = "0" * 64
+-        tmp = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False)
+-        json.dump(m, tmp)
+-        tmp.close()
++        r = s.validate_artifacts("")
++        self.assertIn("empty expected_artifact_manifest_hash", r)
++        self.assertFalse(s.validated)
++
++    def test_manifest_hash_mismatch_fails(self):
++        s = make_session()
++        self.assertIn("artifact_manifest_hash mismatch", s.validate_artifacts("d" * 64))
++
++    def test_db_sha_mismatch_fails(self):
++        s, p = tampered_session(lambda m: m["database"].__setitem__("sha256", "0" * 64))
+         try:
+-            s = session_mod.Session(tmp.name, resolve_root=REPO)
+             self.assertIn("db sha256 mismatch", s.validate_artifacts())
++            self.assertFalse(s.validated)
++        finally:
++            os.remove(p)
++
++    def test_device_mismatch_fails(self):
++        s, p = tampered_session(lambda m: m["database"].__setitem__("device", 999999999))
++        try:
++            self.assertIn("db device != manifest", s.validate_artifacts())
+         finally:
+-            os.remove(tmp.name)
++            os.remove(p)
++
++    def test_inode_mismatch_fails(self):
++        s, p = tampered_session(lambda m: m["database"].__setitem__("inode", 999999999))
++        try:
++            self.assertIn("db inode != manifest", s.validate_artifacts())
++        finally:
++            os.remove(p)
++
++    def test_non_4096_manifest_page_size_fails(self):
++        s, p = tampered_session(lambda m: m.__setitem__("os_page_size_expected", 8192))
++        try:
++            self.assertIn("manifest os_page_size_expected != 4096", s.validate_artifacts())
++        finally:
++            os.remove(p)
++
++    def test_db_page_size_field_non_4096_fails(self):
++        s, p = tampered_session(lambda m: m["database"].__setitem__("page_size", 8192))
++        try:
++            self.assertIn("db page_size != 4096", s.validate_artifacts())
++        finally:
++            os.remove(p)
++
++    def test_relevant_denominator_is_page_count(self):
++        s = make_session()
++        self.assertEqual(s.manifest["expected_relevant_page_count"],
++                         s.manifest["database"]["page_count"])
++        self.assertNotEqual(s.manifest["expected_relevant_page_count"], 92)
++        self.assertEqual(s.manifest["interior_page_count"], 92)
+ 
+ 
+ class TestCollectorClassification(unittest.TestCase):
+     def _resp(self, **kw):
+-        base = dict(process_uuid="u1", pid=100, db_inode=5,
+-                    invocation_counter=1, cold_threshold_passed=True,
+-                    query_hit=1, error=None, sqlite_error=None)
++        base = dict(process_uuid="u1", pid=100, db_inode=5, invocation_counter=1,
++                    cold_threshold_passed=True, oracle_passed=True,
++                    error=None, sqlite_error=None)
+         base.update(kw)
+         return base
+ 
+-    def test_valid_invocation_retained(self):
++    def test_valid_retained(self):
+         ok, reason = collect.classify(self._resp(), {})
+         self.assertTrue(ok, reason)
+ 
+     def test_cold_gate_excludes(self):
+         ok, reason = collect.classify(self._resp(cold_threshold_passed=False), {})
+-        self.assertFalse(ok)
+         self.assertEqual(reason, "cold_threshold_not_passed")
+ 
+-    def test_action_error_excludes(self):
+-        ok, reason = collect.classify(self._resp(error="boom"), {})
+-        self.assertFalse(ok)
+-
+-    def test_query_miss_excludes(self):
+-        ok, reason = collect.classify(self._resp(query_hit=0), {})
++    def test_oracle_fail_excludes_not_hardcoded_hit(self):
++        # oracle_passed False (e.g. wrong digest) must exclude even if a naive
++        # query_hit==1 would have retained it.
++        ok, reason = collect.classify(self._resp(oracle_passed=False, query_hit=1), {})
+         self.assertFalse(ok)
++        self.assertEqual(reason, "oracle_failed")
+ 
+     def test_non_monotonic_counter_excludes(self):
+         prev = {}
+@@ -92,24 +140,44 @@ class TestCollectorClassification(unittest.TestCase):
+         collect.classify(r1, prev)
+         prev[collect.warm_session_id(r1)] = 5
+         ok, reason = collect.classify(self._resp(invocation_counter=5), prev)
+-        self.assertFalse(ok)
+         self.assertEqual(reason, "non_monotonic_invocation_counter")
+ 
+-    def test_session_id_separates_processes(self):
+-        a = collect.warm_session_id(self._resp(process_uuid="A", pid=1, db_inode=9))
+-        b = collect.warm_session_id(self._resp(process_uuid="B", pid=1, db_inode=9))
++    def test_session_separates_processes(self):
++        a = collect.warm_session_id(self._resp(process_uuid="A"))
++        b = collect.warm_session_id(self._resp(process_uuid="B"))
+         self.assertNotEqual(a, b)
+ 
+ 
++class TestPairingKey(unittest.TestCase):
++    def test_pair_key_excludes_strategy_requires_session(self):
++        self.assertNotIn("strategy", summarize.PAIR_KEY)
++        self.assertIn("warm_session_id", summarize.PAIR_KEY)
++
++    def test_observation_key_includes_strategy(self):
++        self.assertIn("strategy", summarize.OBSERVATION_KEY)
++
++    def test_pairing_uses_same_session_baseline(self):
++        rows = [
++            dict(strategy="baseline", warm_session_id="S1", workload="A", seed="1",
++                 first_operation_id="0", first_query_us="500", valid="True"),
++            dict(strategy="2d", warm_session_id="S1", workload="A", seed="1",
++                 first_operation_id="0", first_query_us="360", valid="True"),
++            # a 2d in a DIFFERENT session must NOT pair with S1's baseline
++            dict(strategy="2d", warm_session_id="S2", workload="A", seed="1",
++                 first_operation_id="0", first_query_us="999", valid="True"),
++        ]
++        deltas = summarize.paired_deltas(rows)
++        paired = {(d["warm_session_id"], round(d["paired_pct"])) for d in deltas}
++        self.assertIn(("S1", -28), paired)          # 360 vs 500
++        self.assertTrue(all(d["warm_session_id"] == "S1" for d in deltas))  # S2 unpaired
++
++
+ class TestCollectorDryRun(unittest.TestCase):
+     def test_collect_writes_schema_to_tempdir_only(self):
+-        # Fake invoke_fn returns handler-shaped responses; NO OpenWhisk, NO
+-        # network, and output goes only under a temp dir (never results/).
+         def fake_invoke(req):
+             return dict(process_uuid="P", pid=7, db_inode=3,
+-                        invocation_counter=req["_ctr"],
+-                        cold_threshold_passed=True, query_hit=1,
+-                        error=None, sqlite_error=None,
++                        invocation_counter=req["_ctr"], cold_threshold_passed=True,
++                        oracle_passed=True, error=None, sqlite_error=None,
+                         strategy=req["strategy"], workload="A", seed=1,
+                         first_operation_id=0, first_query_us=100.0 + req["_ctr"])
+         reqs = [dict(request_id="r%d" % i, strategy=s, _ctr=i + 1)
+@@ -117,12 +185,10 @@ class TestCollectorDryRun(unittest.TestCase):
+         tmp = tempfile.mkdtemp()
+         try:
+             out = collect.collect("dryrun", reqs, fake_invoke, tmp)
+-            self.assertEqual(out["n_total"], 2)
+-            self.assertEqual(out["n_valid"], 2)
++            self.assertEqual((out["n_total"], out["n_valid"]), (2, 2))
+             for name in ("raw_invocations.jsonl", "activation_records.jsonl",
+                          "summary.csv", "README.md"):
+                 self.assertTrue(os.path.exists(os.path.join(out["run_dir"], name)))
+-            # never wrote into a canonical results directory
+             self.assertNotIn(os.path.join("results", "openwhisk"), out["run_dir"])
+         finally:
+             shutil.rmtree(tmp, ignore_errors=True)
+@@ -137,9 +203,8 @@ class TestEnvironmentRedaction(unittest.TestCase):
+                    OW_API_KEY="key-abc", WHISK_SECRET="nope")
+         out = subprocess.run(["bash", script], capture_output=True, text=True,
+                              env=env, cwd=REPO, timeout=60).stdout
+-        self.assertNotIn("supersecret123", out)
+-        self.assertNotIn("key-abc", out)
+-        self.assertNotIn("nope", out)
++        for leak in ("supersecret123", "key-abc", "nope"):
++            self.assertNotIn(leak, out)
+ 
+ 
+ if __name__ == "__main__":
+-- 
+2.51.0
+
