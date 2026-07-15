@@ -1,0 +1,32 @@
+{
+  "workload": "YC-u",
+  "registry_key": "ycu",
+  "seed": "trace-is-the-seed (YCSB ThreadLocalRandom)",
+  "source": "real YCSB 0.17.0 BasicDB verbose",
+  "ycsb_commit": "0.17.0 (Maven Central jars; sha256 in workload_fixed/env/ycsb_env.txt)",
+  "props": "workload=workloadc,requestdistribution=uniform,insertorder=hashed,recordcount=600000,operationcount=80000,zeropadding=19,fieldcount=1,fieldlength=1",
+  "out": "../workloads/workload_ycu_1.txt",
+  "n_ops": 80000,
+  "op_mix": {
+    "read": 80000
+  },
+  "hit_only_declared": false,
+  "hit_count": 80000,
+  "miss_count": 0,
+  "notfound_rate": 0.0,
+  "unique_key_ratio": 0.935525,
+  "measured_skew": {
+    "top1_key_share": 6.3e-05,
+    "top1pct_keys_share": 0.021513,
+    "distinct_keys": 74842
+  },
+  "generated_min_key": 6,
+  "generated_max_key": 600000,
+  "db_max_key": 600000,
+  "first_op": "read 208541",
+  "first_op_is_read": true,
+  "raw_load_sha256": "2eedd2ea4f1f3b662c91fb615ac63b06a9b5edcddbcfb23a8428587fa0e57e88",
+  "raw_run_sha256": "c5c585bbc99f96744a42b788c70e5f0c78bbb59f8dfa50c836e5109127603acb",
+  "trace_sha256": "d0af132f310f19627b5ee8ffe3cd9b10028e6c9b8975070dfb53a28ab7074ba0",
+  "validation_verdict": "PASS"
+}
