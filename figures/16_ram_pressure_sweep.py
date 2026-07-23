@@ -15,7 +15,7 @@ import csv, os
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from plot_utils import save, STRATEGY_COLORS
+from plot_utils import save, STRATEGY_COLORS, workload_display_name
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SWEEP = os.path.join(ROOT, "results/ram_pressure")
@@ -23,8 +23,9 @@ WS_MB = 17.3                                  # A/B resident working set
 # cap tag -> (MB for ×WS label, x position). unlimited drawn at the left as the control.
 CAPS = [("unlimited", None), ("16M", 16), ("12M", 12), ("8M", 8), ("6M", 6)]
 STRATS = ["layers_5", "2d", "2e_K10", "layers_92", "2e_K500", "2f_slru"]
+# CSV keys stay legacy (A/B); titles resolve to canonical display names.
 WORKLOADS = ["A", "B"]
-WL_TITLE = {"A": "Workload A (Zipfian)", "B": "Workload B (uniform)"}
+WL_TITLE = {"A": workload_display_name("A"), "B": workload_display_name("B")}
 
 
 def load(tag):

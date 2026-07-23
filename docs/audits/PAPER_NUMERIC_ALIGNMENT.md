@@ -1,5 +1,14 @@
 # Paper Numeric Alignment (Phase 2.5)
 
+> **Workload naming migration (2026-07-23).** The quantities in this alignment
+> are unchanged; only the workload *names* that label them were migrated from
+> legacy letters (A/B/C, ...) to display names (Scattered-Zipf, Uniform-100K,
+> Tail-Mixed, ...). Every number, source CSV, and same-batch pairing is
+> identical. Legacy IDs are retained in the results files and in the verifier's
+> machine-checked columns; the registry (`config/workload_registry.py`)
+> normalizes names for display. See
+> [`WORKLOAD_NAMING_MIGRATION.md`](WORKLOAD_NAMING_MIGRATION.md).
+
 ## Metadata
 - generated UTC: 2026-07-12
 - root HEAD before: `b5615923f7fda7fef1dcb6d9088663f7edec3945`

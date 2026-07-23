@@ -14,7 +14,7 @@ Stack per strategy (layout orig, arm async, medians):
 Green/red label = warm-process e2e vs the same-batch baseline.
 """
 import csv, sys
-from plot_utils import ROOT, save, STRATEGY_COLORS
+from plot_utils import ROOT, save, STRATEGY_COLORS, workload_display_name
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -22,9 +22,11 @@ UNIFIED = ROOT / "results/unified_v2/matrix/summary.csv"
 
 ARMS      = ['baseline', 'layers_5', '2d', '2f_slru']   # tie-break-unaffected only
 ARM_LABEL = {'baseline': 'baseline', 'layers_5': 'layers_5', '2d': '2d', '2f_slru': '2f_slru'}
+# CSV keys stay legacy (A/B/C); titles resolve to canonical display names.
 WORKLOADS = ['A', 'B', 'C']
-WL_TITLE  = {'A': 'A — Zipfian', 'B': 'B — Uniform',
-             'C': r'C$_{\mathrm{mixed}}$ (~50% not-found)'}
+WL_TITLE  = {'A': workload_display_name('A'),
+             'B': workload_display_name('B'),
+             'C': workload_display_name('C') + ' (~50% not-found)'}
 
 
 def load(path):

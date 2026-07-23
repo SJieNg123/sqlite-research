@@ -1,5 +1,16 @@
 # Paper Final Canonical Audit (Phase 4)
 
+> **Workload naming migration (2026-07-23).** Paper-visible workload identifiers
+> were changed from legacy letters (A/B/C/C\_mixed/C\_hit/Z, YD/YE, CHURN) to
+> descriptive display names (Scattered-Zipf, Uniform-100K, Tail-Mixed, Tail-Hit,
+> Concentrated-Zipf, Latest-Aging, Short-Scan Aging, Mixed-Mutation Churn). See
+> [`WORKLOAD_NAMING_MIGRATION.md`](WORKLOAD_NAMING_MIGRATION.md). **No results
+> CSV or raw data changed**: this manifest and `tools/verify_paper_atomicity.py`
+> intentionally keep legacy IDs in every machine-checked column (they map onto
+> the immutable results files); names are normalized for display via
+> `config/workload_registry.py`. The manifest gained a read-only `display_name`
+> column; all pre-existing columns are unchanged and the verifier still exits 0.
+
 ## Metadata
 - generated UTC: 2026-07-12
 - root HEAD before: `b70447c` (descends from the frozen `098f3a2`)
