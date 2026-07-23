@@ -14,7 +14,7 @@ Metric: paired first-query change vs same-batch baseline, (fq - base)/base * 100
 (negative = faster). Layout = orig, arm = async, median of 10 reps.
 """
 import csv, sys
-from plot_utils import ROOT, save, STRATEGY_COLORS
+from plot_utils import ROOT, save, STRATEGY_COLORS, workload_display_name
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -29,9 +29,11 @@ CHANGED = {('A', '2e_K500'),
 ARMS      = ['layers_5', '2d', '2e_K10', '2e_K500', '2f_slru']
 ARM_LABEL = {'layers_5': 'layers_5', '2d': '2d', '2e_K10': '2e_K10',
              '2e_K500': '2e_K500', '2f_slru': '2f_slru'}
+# CSV keys stay legacy (A/B/C); titles resolve to canonical display names.
 WORKLOADS = ['A', 'B', 'C']
-WL_TITLE  = {'A': 'A — Zipfian', 'B': 'B — Uniform',
-             'C': r'C$_{\mathrm{mixed}}$ — ~50% not-found tail-boundary'}
+WL_TITLE  = {'A': workload_display_name('A'),
+             'B': workload_display_name('B'),
+             'C': workload_display_name('C') + ' — ~50% not-found tail-boundary'}
 
 
 def load(path):

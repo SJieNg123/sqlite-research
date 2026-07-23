@@ -54,7 +54,8 @@ Both 13 and 14 scripts: read canonical CSVs directly, `sys.exit` on a missing or
 duplicated source row, print the selected `(source, baseline, value)` for every
 plotted cell, use deterministic strategy/workload ordering, and hard-code no bar
 heights. Determinism verified: two consecutive runs produce byte-identical PNGs
-(md5 `1090edc1…` for 13, `85345090…` for 14).
+(md5 `ddcbdb00…` for 13, `bda7947e…` for 14 after the 2026-07-23 workload
+display-name relabel; the pre-relabel values were `1090edc1…` and `85345090…`).
 
 ## Selected plotted cells (Phase-3 regeneration)
 
@@ -117,12 +118,21 @@ byte-identical to its `figures/out/*.png` root output.
 | Fig | Script | root/paper md5 | dimensions | status |
 |---|---|---|---|---|
 | 1  | `01_page_distribution.py`        | `8a9abac422…` | 1035×703  | current-valid |
-| 13 | `13_strategy_firstq_bars.py`     | `1090edc11f…` | 1935×643  | regenerated (Phase 3) |
-| 14 | `14_strategy_endtoend_stacked.py`| `8534509086…` | 1783×763  | regenerated (Phase 3) |
-| 16 | `16_ram_pressure_sweep.py`       | `0b5fbb7243…` | 1656×1248 | current-valid (seed-1 RAM axis; `cap_unlimited`, no `results/main`) |
-| 17 | `17_lever_ablation.py`           | `e8c25599d1…` | 1485×614  | regenerated (Phase 3b, C_mixed-only, ablation_comp_v2) |
+| 13 | `13_strategy_firstq_bars.py`     | `ddcbdb00bc…` | 1935×643  | regenerated (workload display-name relabel, 2026-07-23) |
+| 14 | `14_strategy_endtoend_stacked.py`| `bda7947e7c…` | 1783×764  | regenerated (workload display-name relabel, 2026-07-23) |
+| 16 | `16_ram_pressure_sweep.py`       | `2c097b23ec…` | 1656×1248 | regenerated (workload display-name relabel, 2026-07-23; seed-1 RAM axis) |
+| 17 | `17_lever_ablation.py`           | `1949efebc2…` | 1485×614  | regenerated (workload display-name relabel, 2026-07-23; Tail-Mixed-only, ablation_comp_v2) |
 | 18 | `18_capability_matrix.py`        | `b81d89226a…` | 1198×697  | current-valid (qualitative) |
 
 Env: `/home/u03/.cache/coldstart-venv/bin/python` (matplotlib 3.10.9, numpy 2.4.6).
 No paper-visible figure script reads a legacy/non-canonical result source; the
 unused `13b`/`13c`/`18_competitive_baseline` scripts are documented above.
+
+**Workload display names (2026-07-23).** Figures 13/14/16/17 now resolve
+workload titles through the canonical registry (`config/workloads.json` via
+`config/workload_registry.py`, re-exported from `figures/plot_utils.py` as
+`workload_display_name`) instead of hard-coding letters: A → Scattered-Zipf,
+B → Uniform-100K, C → Tail-Mixed. The CSV reads still key on the legacy IDs
+stored in the immutable results files (`workload=A/B/C`), so only the rendered
+labels changed; bar values, CI whiskers, ordering, and data sources are
+untouched. This is a pure-label regeneration, hence the new md5s above.

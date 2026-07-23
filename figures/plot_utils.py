@@ -13,6 +13,14 @@ ROOT = Path(__file__).resolve().parent.parent
 OUT  = Path(__file__).resolve().parent / "out"
 OUT.mkdir(parents=True, exist_ok=True)
 
+# Canonical workload registry: every figure resolves workload display names
+# through this single source of truth (config/workloads.json) rather than
+# hard-coding legacy IDs. CSV reads still key on the legacy IDs stored in the
+# immutable results files.
+import sys as _sys
+_sys.path.insert(0, str(ROOT / "config"))
+from workload_registry import normalize_workload_id, workload_display_name  # noqa: E402,F401
+
 plt.rcParams.update({
     "figure.dpi": 110,
     "savefig.dpi": 150,

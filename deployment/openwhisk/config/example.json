@@ -12,7 +12,7 @@
     "image": "REPLACE_WITH_CUSTOM_ACTION_IMAGE_DIGEST_OR_NAME"
   },
   "invocation_plan": {
-    "workloads": ["A"],
+    "workloads": ["read_zipf_scattered_100k"],
     "strategies": ["baseline", "2d"],
     "seeds": [1],
     "first_operation_id": 0,

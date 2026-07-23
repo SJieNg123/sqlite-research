@@ -18,6 +18,16 @@ No OpenWhisk is invoked here; this only writes ``schedule.json``.
 import argparse
 import hashlib
 import json
+import sys
+from pathlib import Path
+
+# Canonical workload registry (config/workload_registry.py). We normalize the
+# workload IDs supplied on the command line so new schedules record canonical IDs
+# and accept both legacy aliases (A/B/C) and canonical names. The pure
+# build_schedule() function is left untouched so it records whatever it is given.
+_ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(_ROOT / "config"))
+from workload_registry import normalize_workload_id  # noqa: E402
 
 
 def _order(schedule_seed, pair_id, target):
@@ -84,7 +94,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", required=True)
     ap.add_argument("--schedule-seed", type=int, required=True)
-    ap.add_argument("--workloads", default="A")
+    ap.add_argument("--workloads", default="read_zipf_scattered_100k",
+                    help="comma list of canonical workload IDs or legacy aliases (A/B/C ...); "
+                         "normalized to canonical IDs via config/workload_registry.py")
     ap.add_argument("--seeds", default="1,2,3,4,5,6,7,8,9,10")
     ap.add_argument("--first-ops", default="0")
     ap.add_argument("--handle-modes", default="warm")
@@ -97,8 +109,9 @@ def main():
     ids = {"run_config_sha256": a.run_config_sha256,
            "artifact_manifest_sha256": a.artifact_manifest_sha256,
            "action_image_digest": a.action_image_digest}
+    workloads = [normalize_workload_id(w) for w in a.workloads.split(",")]
     sched = build_schedule(
-        a.workloads.split(","), [int(x) for x in a.seeds.split(",")],
+        workloads, [int(x) for x in a.seeds.split(",")],
         [int(x) for x in a.first_ops.split(",")], a.handle_modes.split(","),
         a.targets.split(","), a.repetitions, a.schedule_seed, ids)
     with open(a.out, "w") as f:

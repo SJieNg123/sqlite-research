@@ -16,7 +16,7 @@ Run:  python3 figures/17_lever_ablation.py
 import csv
 import sys
 from pathlib import Path
-from plot_utils import ROOT, save
+from plot_utils import ROOT, save, workload_display_name
 import matplotlib.pyplot as plt
 
 SOURCE = ROOT / "results/ablation_comp_v2/uncertainty.csv"
@@ -71,7 +71,7 @@ for ci, (metric, mlabel) in enumerate(METRICS):
     ax.axhline(0, color="#222", lw=0.9)
     ax.set_xticks(x)
     ax.set_xticklabels([LABELS[s] for s in ARMS], fontsize=8.5)
-    ax.set_title(rf"C$_{{\mathrm{{mixed}}}}$ — {mlabel} $\Delta$% (orig)", fontsize=11)
+    ax.set_title(rf"{workload_display_name(WORKLOAD)} — {mlabel} $\Delta$% (orig)", fontsize=11)
     ax.set_ylabel("Δ% vs same-batch baseline (− = faster)", fontsize=9)
     ax.grid(axis="y", alpha=0.3)
     ax.set_axisbelow(True)
