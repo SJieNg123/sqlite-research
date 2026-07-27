@@ -1,0 +1,76 @@
+{
+  "label": "YE",
+  "trace": "traces/workload_YE.txt",
+  "n_ops": 80000,
+  "trace_lines": 80000,
+  "ycsb_ops": 80000,
+  "op_mix_actual": {
+    "scan": 76093,
+    "insert": 3907
+  },
+  "op_mix_ops": {
+    "scan": 76093,
+    "insert": 3907
+  },
+  "target_ops": 76093,
+  "unique_key_ratio": 0.644369,
+  "measured_skew": {
+    "top1_key_share": 0.038414,
+    "top1pct_keys_share": 0.272916,
+    "distinct_keys": 49032
+  },
+  "notfound_rate": 0.0,
+  "notfound_count": 0,
+  "db_max_key": 604112,
+  "hit_only_declared": false,
+  "insert_count": 3907,
+  "generated_min_key": 3,
+  "generated_max_key": 603566,
+  "first_op": "scan 544946 47",
+  "first_op_is_read": false,
+  "hotspot_movement": {
+    "hotset_present": true,
+    "contiguous": false,
+    "interpretable": false,
+    "hot_span_frac": 0.9967,
+    "per_segment_hot_span_frac": 0.9635,
+    "concentration_over_uniform": 27.3094,
+    "centroid_displacement_frac": null,
+    "jaccard": {
+      "status": "ok",
+      "segments": 10,
+      "series": [
+        0.52,
+        0.5616,
+        0.5676,
+        0.625,
+        0.6429,
+        0.5541,
+        0.5541,
+        0.5333,
+        0.5753
+      ],
+      "mean": 0.5704
+    },
+    "margins": {
+      "hotset_unique_key_ratio": 0.3425,
+      "hotset_concentration": 8.1031,
+      "contiguity": -8.635,
+      "displacement": null
+    },
+    "note": "movement NOT interpretable: hotset scattered in rowid space (hot_span_frac=0.9967)"
+  },
+  "thresholds_used": {
+    "max_unique_key_ratio": 0.98,
+    "min_top1pct_over_uniform": 3.0,
+    "max_hot_span_frac": 0.1,
+    "min_centroid_displacement_frac": 0.05
+  },
+  "parse_losses": 0,
+  "rightmost_leaf_share": {
+    "status": "deferred: needs key->page map (run phase)"
+  },
+  "props": "workload=workloade,requestdistribution=zipfian,insertproportion=0.05",
+  "verdict": "PASS",
+  "violations": []
+}

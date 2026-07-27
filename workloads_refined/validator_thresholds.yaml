@@ -1,0 +1,16 @@
+# validator_thresholds.yaml — Tier-0 validator 的啟發式門檻（§5.2）
+#
+# 這些門檻是 HEURISTIC，不是推導出來的。所以：
+#   (1) 它們住在這裡（唯一來源、進版控），不埋在程式碼裡 —— 同 yr_sweep.yaml 的正規化教訓。
+#   (2) validator 一律**報餘裕**（離門檻多遠），不只報 pass/fail。門檻附近 = 常數在驅動結論 = 該吵的地方。
+# 校準依據（實測，2026-07）：hot_span_frac 對 ordered=0.0099 / hashed=0.9947 → 0.10 穩落空檔。
+
+hotset_present:                     # 第 1 層：有熱集嗎？（jaccard/位移的前置）
+  max_unique_key_ratio: 0.98        # >= 此值 → 抽樣不放回 → 沒有熱集
+  min_top1pct_over_uniform: 3.0     # top-1% 集中度須 > 此倍數 × 均勻值
+
+hot_key_contiguity:                 # 第 2 層：熱集聚攏嗎？（質心/位移的前置；散開則質心無意義）
+  max_hot_span_frac: 0.10           # top-1% 熱 key 的 rowid 跨度 / 鍵空間跨度；< 此值 → 聚攏
+
+movement:                           # 第 3 層：它動嗎？（僅在前兩層通過後才問）
+  min_centroid_displacement_frac: 0.05   # 熱集質心須位移 >= 此比例才算「移動」
