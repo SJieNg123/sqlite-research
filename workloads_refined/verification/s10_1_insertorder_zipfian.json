@@ -1,0 +1,40 @@
+{
+  "ordered": {
+    "arm": "ordered",
+    "N": 600000,
+    "unique_ops": 51290,
+    "total_ops": 80000,
+    "top1_key_share_%": 3.748,
+    "hot100_rank_min": 0.0148,
+    "hot100_rank_max": 0.9876,
+    "hot100_rank_span": 0.9728,
+    "hot100_deciles_covered": 10,
+    "hot100_rank_stdev": 0.2914,
+    "hot100_first5_normranks": [
+      0.015,
+      0.016,
+      0.034,
+      0.043,
+      0.064
+    ]
+  },
+  "hashed": {
+    "arm": "hashed",
+    "N": 600000,
+    "unique_ops": 51413,
+    "total_ops": 80000,
+    "top1_key_share_%": 3.806,
+    "hot100_rank_min": 0.0074,
+    "hot100_rank_max": 0.9892,
+    "hot100_rank_span": 0.9818,
+    "hot100_deciles_covered": 10,
+    "hot100_rank_stdev": 0.2966,
+    "hot100_first5_normranks": [
+      0.007,
+      0.042,
+      0.052,
+      0.063,
+      0.087
+    ]
+  }
+}
