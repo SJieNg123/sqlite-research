@@ -27,6 +27,8 @@ LABELS = {"2d": "2d\n(interior · page-type)", "leaf_rand_K10": "leaf_rand\n(con
 ARM_COLOR = {"2d": "#3b82f6", "leaf_rand_K10": "#9ca3af",
              "leaf_freq_K10": "#059669", "2e_K10": "#111827"}
 METRICS = [("first_query_us", "first-query"), ("e2e_warm_us", "warm-process e2e")]
+# CSV key stays legacy (C == C_mixed); the rendered title resolves to the
+# canonical display name (Tail-Mixed) via workload_display_name().
 WORKLOAD, LAYOUT, PARM = "C", "orig", "async"
 
 

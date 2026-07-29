@@ -56,6 +56,12 @@ plotted cell, use deterministic strategy/workload ordering, and hard-code no bar
 heights. Determinism verified: two consecutive runs produce byte-identical PNGs
 (md5 `ddcbdb00…` for 13, `bda7947e…` for 14 after the 2026-07-23 workload
 display-name relabel; the pre-relabel values were `1090edc1…` and `85345090…`).
+The 2026-07-29 terminology cleanup did **not** touch any figure's rendered
+output: the paper-visible scripts already resolve titles through
+`workload_display_name()`, so all six included PNGs (01, 13, 14, 16, 17, 18)
+remain byte-identical between `figures/out/` and `paper/figures/` at the md5s
+above. Figure 17 gained a one-line provenance comment (clarifying that its `C`
+CSV filter is legacy `C_mixed` == Tail-Mixed); comments do not affect the PNG.
 
 ## Selected plotted cells (Phase-3 regeneration)
 

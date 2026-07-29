@@ -10,6 +10,18 @@
 > the immutable results files); names are normalized for display via
 > `config/workload_registry.py`. The manifest gained a read-only `display_name`
 > column; all pre-existing columns are unchanged and the verifier still exits 0.
+>
+> **Terminology cleanup (2026-07-29).** The paper's first-occurrence legacy
+> annotations (e.g. "(legacy workload A)", "legacy \emph{C\_hit}") were removed:
+> `paper/main.tex` now uses the descriptive display names exclusively and defines
+> each workload directly, with zero legacy tokens (verified by
+> `tests/test_workload_naming.py`). Two factual corrections accompanied the
+> cleanup: Scattered-Zipf and Uniform-100K draw from a 100,000-key active domain
+> (ids 1..100,000), not the full 600,000-key extent (confirmed against
+> `workloads/gen_workload.py`, `A_NKEYS=100000`); and the incorrect claim that
+> Uniform-100K approximates YCSB-A was dropped. Manifest row Q118's quote was
+> aligned to the corrected 100,000-key domain. No measured value, source CSV, or
+> same-batch pairing changed, and the verifier still exits 0.
 
 ## Metadata
 - generated UTC: 2026-07-12

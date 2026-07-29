@@ -8,6 +8,15 @@
 > machine-checked columns; the registry (`config/workload_registry.py`)
 > normalizes names for display. See
 > [`WORKLOAD_NAMING_MIGRATION.md`](WORKLOAD_NAMING_MIGRATION.md).
+>
+> **Terminology cleanup (2026-07-29).** The paper dropped its first-occurrence
+> legacy annotations and now uses display names exclusively. The only factual
+> (non-measured) corrections: the Scattered-Zipf / Uniform-100K key domain was
+> corrected from "600,000 keys" to the true 100,000-key active domain
+> (ids 1..100,000, per `workloads/gen_workload.py`), and the "Uniform-100K
+> approximates YCSB-A" claim was removed. No first-query baseline, reduction %,
+> or same-batch pairing changed; the cold baselines remain 523 / 749 / 1087
+> \textmu s (Scattered-Zipf / Uniform-100K / Tail-Mixed).
 
 ## Metadata
 - generated UTC: 2026-07-12

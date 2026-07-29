@@ -72,3 +72,49 @@ frozen and the registry bridges legacy ↔ canonical ↔ display on read.
 - `python3 tools/verify_paper_atomicity.py --manifest docs/audits/PAPER_CLAIM_MANIFEST.csv` → exit 0, 132 claims, 0 FAIL.
 - `python3 -m unittest discover deployment/openwhisk/tests` → 73 tests OK.
 - No file under `results/**` modified (verified via `git status`).
+
+## Terminology cleanup (2026-07-29)
+
+The initial migration (above) kept *first-occurrence legacy annotations* in the
+paper (e.g. "Scattered-Zipf (legacy workload A)", "Tail-Hit (legacy
+\emph{C\_hit})"). This follow-up removes them so the paper reads with the
+descriptive names alone.
+
+- **`paper/main.tex` now contains zero legacy tokens.** Every workload is defined
+  directly by its display name in §Workloads; the annotations, the "written
+  \emph{C\_mixed} in our data files" aside, and the "legacy identifiers survive
+  only in the immutable results files" sentence were deleted. Enforced by
+  `tests/test_workload_naming.py::PaperHasNoForbiddenTerms`, which greps
+  `paper/main.tex` for `legacy | workload [ABCZ] | C_mixed | C_hit | YD | YE |
+  CHURN` and asserts no match. (The reference to the *standard* YCSB core set
+  "A--F" is retained and is not a legacy token.)
+- **Two factual corrections** (descriptive text, not measured values):
+  - Scattered-Zipf and Uniform-100K draw from a **100,000-key active domain**
+    (ids 1..100,000), not the full 600,000-key extent. Ground truth:
+    `workloads/gen_workload.py` (`A_NKEYS = 100000`, `B_LO,B_HI = 1,100000`).
+    Manifest row **Q118**'s quote was updated from "600,000 keys" to
+    "100,000-key active domain (ids 1..100,000)" to match.
+  - The claim that **Uniform-100K approximates YCSB-A** was removed (it is a
+    matched no-skew control, not a YCSB-A reconstruction).
+  - Tail-Mixed is stated precisely as a 20,000-key interval (ids 590,000 through
+    609,999) crossing the DB maximum id 600,000.
+- **Table caption** changed to "Primary controlled workload matrix and mutation
+  schedule."; "auxiliary read workloads" → "auxiliary robustness workloads".
+- **Registry API** gained `workload_metadata()` (public alias of
+  `workload_meta`) and `is_mutation_schedule()`; the built-in `--selftest` now
+  also asserts C/C\_mixed collapse, CHURN-as-mutation-schedule, and YD/YE as
+  `ycsb_reconstruction`.
+- **Figures unchanged.** All six paper-visible PNGs stay byte-identical (rendered
+  titles already resolve via `workload_display_name()`); figure 17 gained a
+  provenance comment only.
+
+### Cleanup verification
+
+- `paper/main.tex` legacy-token scan → 0 matches.
+- `python3 config/workload_registry.py --selftest` → PASS (system + venv python).
+- `python3 -m unittest tests.test_workload_naming` → 7 tests OK.
+- `python3 tools/verify_paper_atomicity.py --manifest docs/audits/PAPER_CLAIM_MANIFEST.csv`
+  → exit 0, 132 claims, 0 FAIL.
+- `python3 -m unittest discover deployment/openwhisk/tests` → 73 tests OK.
+- Six paper figures byte-identical between `figures/out/` and `paper/figures/`.
+- No file under `results/**` modified.

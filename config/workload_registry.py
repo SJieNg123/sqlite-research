@@ -85,6 +85,14 @@ def workload_meta(id_):
     return _BY_CANONICAL[normalize_workload_id(id_)]
 
 
+def workload_metadata(id_):
+    """Return the full registry record for a workload (any alias/canonical).
+
+    Public name for the metadata accessor; ``workload_meta`` is kept as a
+    backward-compatible alias."""
+    return workload_meta(id_)
+
+
 def workload_display_name(id_):
     """Return the paper-facing display name for a workload (any alias/canonical)."""
     return workload_meta(id_)["display_name"]
@@ -93,6 +101,12 @@ def workload_display_name(id_):
 def is_measured(id_):
     """True for measured evaluation workloads, False for mutation schedules."""
     return bool(workload_meta(id_)["is_measured"])
+
+
+def is_mutation_schedule(id_):
+    """True for database-evolution mutation schedules (e.g. CHURN), which are
+    not latency-measured evaluation workloads."""
+    return workload_meta(id_)["category"] == "mutation_schedule"
 
 
 def legacy_aliases(id_):
@@ -131,6 +145,21 @@ def _selftest():
             problems.append(f"normalize({legacy!r}) != {canon!r}")
         if workload_display_name(legacy) != disp:
             problems.append(f"display({legacy!r}) != {disp!r}")
+    # C and C_mixed both collapse onto the single Tail-Mixed record
+    if normalize_workload_id("C") != normalize_workload_id("C_mixed"):
+        problems.append("C and C_mixed must map to the same canonical id")
+    # CHURN is a mutation schedule, not a measured workload
+    if not is_mutation_schedule("CHURN"):
+        problems.append("CHURN must be a mutation schedule")
+    if is_measured("CHURN"):
+        problems.append("CHURN must not be a measured workload")
+    for measured in ("A", "B", "C", "C_hit", "YD", "YE"):
+        if is_mutation_schedule(measured):
+            problems.append(f"{measured!r} must not be a mutation schedule")
+    # YD/YE are Python reconstructions, not official YCSB traces
+    for recon in ("YD", "YE"):
+        if workload_meta(recon)["category"] != "ycsb_reconstruction":
+            problems.append(f"{recon!r} must be a ycsb_reconstruction")
     # unknown id must fail loud
     try:
         normalize_workload_id("nope")
