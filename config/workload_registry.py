@@ -46,7 +46,17 @@ def _load():
                 f"registry alias collision: {key!r} maps to both "
                 f"{bucket[key]!r} and {canonical!r}")
         bucket[key] = canonical
-        ci_bucket.setdefault(key.lower(), canonical)
+        # Case-insensitive collisions across DIFFERENT canonical workloads must
+        # fail loud too -- setdefault would silently keep the first mapping and
+        # let a mixed-case variant resolve to the wrong workload. Re-registering
+        # the same lower-cased key for the SAME canonical (e.g. C_mixed and
+        # C_MIXED) stays fine.
+        lo = key.lower()
+        if lo in ci_bucket and ci_bucket[lo] != canonical:
+            raise ValueError(
+                f"registry case-insensitive alias collision: {lo!r} maps to both "
+                f"{ci_bucket[lo]!r} and {canonical!r}")
+        ci_bucket[lo] = canonical
 
     for rec in records:
         canonical = rec["canonical_id"]

@@ -85,6 +85,37 @@ class RegistryMapping(unittest.TestCase):
         with self.assertRaises(KeyError):
             normalize_workload_id("not-a-workload")
 
+    def test_case_insensitive_alias_collision_fails_loud(self):
+        # Two DIFFERENT canonical workloads must not share a case-insensitive
+        # alias. The loader must raise -- never silently keep the first mapping
+        # (the old setdefault bug let a mixed-case variant, e.g. "Foo", resolve
+        # to the wrong workload). Uses a synthetic registry so the real one is
+        # untouched.
+        import json
+        import os
+        import tempfile
+        import workload_registry as reg
+        synthetic = {"workloads": [
+            {"canonical_id": "canon_one", "display_name": "Canon One",
+             "legacy_aliases": ["foo"], "is_measured": True,
+             "category": "read", "kind": "x"},
+            {"canonical_id": "canon_two", "display_name": "Canon Two",
+             "legacy_aliases": ["FOO"], "is_measured": True,
+             "category": "read", "kind": "x"},
+        ]}
+        with tempfile.NamedTemporaryFile(
+                "w", suffix=".json", delete=False, encoding="utf-8") as f:
+            json.dump(synthetic, f)
+            tmp = Path(f.name)
+        saved = reg._REGISTRY_PATH
+        try:
+            reg._REGISTRY_PATH = tmp
+            with self.assertRaisesRegex(ValueError, "(?i)collision"):
+                reg._load()
+        finally:
+            reg._REGISTRY_PATH = saved
+            os.unlink(tmp)
+
 
 class PaperHasNoForbiddenTerms(unittest.TestCase):
     # Legacy tokens that must never appear in paper-visible LaTeX. "workload A"

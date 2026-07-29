@@ -118,3 +118,33 @@ descriptive names alone.
 - `python3 -m unittest discover deployment/openwhisk/tests` → 73 tests OK.
 - Six paper figures byte-identical between `figures/out/` and `paper/figures/`.
 - No file under `results/**` modified.
+
+## Final cleanup (2026-07-29)
+
+Three residual items closed:
+
+- **Paper wording.** The staleness paragraph called the two aging workloads
+  "two read workloads"; Short-Scan Aging is 95% scan + 5% insert, so it is not
+  read-only. Changed to "two aging robustness workloads" (`paper/main.tex`, the
+  Static-plan staleness paragraph). Numbers and claims unchanged.
+- **Registry fails loud on case-insensitive collisions.** `_register()` used
+  `ci_bucket.setdefault(key.lower(), ...)`, which silently kept the first
+  mapping when two **different** canonical workloads shared a case-insensitive
+  alias -- a mixed-case variant could then resolve to the wrong workload. It now
+  raises `ValueError` on a case-insensitive collision across different
+  canonicals, while re-registering the same lower-cased key for the **same**
+  canonical (e.g. `C_mixed` and `C_MIXED`) stays allowed.
+- **Test coverage.** `tests/test_workload_naming.py` gains
+  `test_case_insensitive_alias_collision_fails_loud`, which loads a synthetic
+  two-record registry whose aliases differ only in case (`foo` vs `FOO`) and
+  asserts the loader raises. The real registry is untouched.
+
+### Cleanup verification (2026-07-29)
+
+- `paper/main.tex` legacy-token scan → 0 matches.
+- `python3 config/workload_registry.py --selftest` → PASS.
+- `python3 -m unittest tests.test_workload_naming` → 8 tests OK.
+- `python3 tools/verify_paper_atomicity.py --manifest docs/audits/PAPER_CLAIM_MANIFEST.csv`
+  → exit 0, 0 FAIL.
+- `git diff --check` → clean.
+- No file under `results/**` modified; no benchmark / OpenWhisk execution.
