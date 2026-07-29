@@ -123,8 +123,16 @@ class PaperHasNoForbiddenTerms(unittest.TestCase):
     # workloads A-F, which is exactly what the migration removes. The bare
     # "A--F" reference to the *standard* YCSB set is allowed (it is not a
     # "workload X" token and names real YCSB workloads).
+    #
+    # The last alternative catches a single-letter legacy ID used as a bold
+    # table header/label, e.g. the competitive table's
+    # "\textbf{A} & \textbf{B} & \textbf{C}" column heads -- those must read as
+    # display names. Multi-word display names ("\textbf{Tail-Mixed}") and other
+    # bold labels ("\textbf{Arm}", "\textbf{Cell}") are longer than one
+    # character and never match.
     FORBIDDEN = re.compile(
-        r"legacy|workload [ABCZ]\b|C\\_mixed|C\\_hit|\bYD\b|\bYE\b|\bCHURN\b")
+        r"legacy|workload [ABCZ]\b|C\\_mixed|C\\_hit|\bYD\b|\bYE\b|\bCHURN\b"
+        r"|\\textbf\{[ABCZ]\}")
 
     def test_main_tex_clean(self):
         tex = _ROOT / "paper" / "main.tex"

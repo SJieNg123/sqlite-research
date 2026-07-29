@@ -148,3 +148,41 @@ Three residual items closed:
   → exit 0, 0 FAIL.
 - `git diff --check` → clean.
 - No file under `results/**` modified; no benchmark / OpenWhisk execution.
+
+## Final table-header fix (2026-07-29)
+
+Last paper-visible legacy labels closed:
+
+- **Competitive table header (`tab:competitive`).** The column heads were still
+  the bare legacy letters `\textbf{A} & \textbf{B} & \textbf{C}`. Changed to
+  `\textbf{Scattered-Zipf} & \textbf{Uniform-100K} & \textbf{Tail-Mixed}`. Body
+  cells, numbers, CIs, caption and per-row provenance are unchanged.
+- **Scan now covers bold single-letter headers.** The
+  `PaperHasNoForbiddenTerms` regex gained the alternative
+  `\\textbf\{[ABCZ]\}`, so a legacy ID used as a bold table header/label is
+  caught too (multi-word display names like `\textbf{Tail-Mixed}` and other
+  bold labels like `\textbf{Arm}`/`\textbf{Cell}` are longer than one character
+  and never match). The full legacy-token scan is now:
+
+  ```
+  legacy | workload [ABCZ]\b | C\_mixed | C\_hit | \bYD\b | \bYE\b | \bCHURN\b
+        | \textbf{[ABCZ]}
+  ```
+
+- **Aging `kind` no longer mislabelled `measured_read`.** In
+  `config/workloads.json`, Latest-Aging (read-latest + insert) becomes
+  `mixed_op_aging` and Short-Scan Aging (short scans + insert) becomes
+  `scan_insert_aging`, reflecting their real operation mix (both are 95/5
+  read-or-scan/insert, not read-only). `kind` is a descriptive field only
+  (printed by the registry CLI table); no consumer asserts on it. Canonical IDs,
+  display names, `category`, `is_measured`, and all results are unchanged.
+
+### Cleanup verification (2026-07-29, table-header fix)
+
+- `paper/main.tex` full legacy-token scan (incl. `\textbf{[ABCZ]}`) → 0 matches.
+- `python3 config/workload_registry.py --selftest` → PASS.
+- `python3 -m unittest tests.test_workload_naming` → OK.
+- `python3 tools/verify_paper_atomicity.py --manifest docs/audits/PAPER_CLAIM_MANIFEST.csv`
+  → exit 0, 0 FAIL.
+- `git diff --check` → clean.
+- No file under `results/**` modified; no benchmark / OpenWhisk execution.
