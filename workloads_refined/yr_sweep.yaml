@@ -1,0 +1,12 @@
+# yr_sweep.yaml — YR ρ-sweep 的唯一真相來源 (single source of truth)
+#
+# 只放「輸入」。所有推導值 (N / value / f / ρ / skeleton / DB size) 一律由
+# builder 計算 (見 tools/calc_n.py)，不在此檔、不在 spec 散文裡。
+# 這樣改一個數字 = 改此檔一行 → 下游全部重算 → spec 過時但不會建錯 DB。
+# 唯一能動此檔的 = §00 的 VOID 事件 (source 變 → 全部重算)。
+
+leaf_pages: 300000                                  # 固定 leaf 頁數 (D3)；DB ≈ 1.2GB
+leaf_tolerance: 0.02                                 # builder 閉環：建後 dbstat 量 leaf，|leaf-300k|/300k > 2% 就調 N 重建（§4.5.3「dbstat 驗收」）
+W: [101, 126, 226, 326]                             # 列寬 (bytes)，唯一規範輸入 (D7)
+ops_per_point: 600000                               # = 2 × leaf_pages (D4)，跨 W 點恆定
+schema: "(id INTEGER PRIMARY KEY, v BLOB) WITHOUT ROWID"   # D3

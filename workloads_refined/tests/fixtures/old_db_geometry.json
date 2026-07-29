@@ -1,0 +1,20 @@
+{
+  "_note": "FROZEN GROUND TRUTH -- dbstat of the reference OLD DB (testdb_builder output, 2026-07-15). Immutable. This is the RULER's answer key; Round 2's builder-built DB is judged AGAINST it, never the reverse. Do NOT regenerate from a fresh build (that would re-introduce the circularity).",
+  "source_db": "pipeline/.../test.db (untracked local artifact -> snapshot frozen here)",
+  "page_size": 4096,
+  "leaf_pages": 19983,
+  "internal_pages": 51,
+  "depth": 3,
+  "skeleton_bytes": 208896,
+  "dbstat_record_bytes": 75600000,
+  "page_count": 20035,
+  "_page_count_note": "HEADLINE expectation = items 20034 + sqlite_schema 1 = 20035 (fieldcount=1, no secondary indexes). The reference old DB itself has 26331 (it carries idx_items_k1/k2, ~6296 pages) -- but reproducing those needs k1/k2 columns, which D1's signed fieldcount=1 forbids. Items geometry (leaf/depth/skeleton/record) is shared and IS measured from the old DB.",
+  "skeleton_contiguity_OLD_DB_orig_layout": {
+    "n_interior": 51,
+    "largest_run": 2,
+    "n_runs": 50,
+    "largest_run_frac": 0.0392,
+    "span": 26006
+  },
+  "_skeleton_note": "REPORTED, not gated. Old DB (orig layout) skeleton is scattered (largest_run=2/51); the fresh headline DB's value is measured in Round 2 and explains alpha (§4.5.4), not rho."
+}
