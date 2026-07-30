@@ -884,6 +884,7 @@ orig 欄取自已 commit 的 [`results/stats/uncertainty.csv`](results/stats/unc
 
 ### 其餘 phase 摘要
 
+- **讀取矩陣 breadth**(Phase A,12 讀取 workload × 3 layout):2d 首查中位 **−38%**(mean −33%,range [−45%, +22%]);layout 皆穩健(YC orig −40% / vacuum −39% / type-aware −28%);唯一異常 **YCo05 +22%**——其 baseline 首查本就異常低(597 vs ~900 µs),2d 與 2e 同步 +22%,為 workload 特性非策略 artifact。
 - **10-seed 穩健性**(Phase D):10 條獨立 zipfian trace,2d 首查 mean **−38.4%**,95% CI **[−46.2%, −30.5%]**,排除 0。
 - **Size-scaling**(Phase E,6M-row/0.82 GiB):2d 首查 −57%(orig −40%)、preproc 持平 ~0.1ms;2f_slru warm-e2e = 31.9 ms(baseline 43×)。2d/2e_K10 是成本–收益曲線膝點。
 - **Churn**(Phase F,YA/YB/YF 的 update 流當 ager、量測 YC):以改列流翻動頁面,static 結構骨架(2e_K10_static / layers_92_static)首查優勢在 churn 下**大致保持**(vs baseline,11 checkpoint)。
