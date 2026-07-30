@@ -3,6 +3,10 @@
 本檔列出**每個策略 × 每個 workload × 每個 layout 的 實驗結果**（對照
 [overall_workloads.md](overall_workloads.md) 的 workload 定義）。
 
+> ⚠️ **Workload 出處（先讀，最重要）**：本檔下方**整個結果矩陣**——Scattered-Zipf / Uniform-100K / Tail-Mixed / Tail-Hit / Concentrated-Zipf（舊代號 A/B/C/C\_hit/Z）、Latest-Aging / Short-Scan Aging（舊代號 YD/YE，即下方「YCSB D/E self-aging」節）、以及 churn/cadence/size 各節——**全部是 `workloads/gen_workload.py` 產生的 Python 模擬**：複刻 YCSB 的*語意*（Zipf / uniform / read-latest / short-scan），**並非原生 YCSB trace**，名稱中的「YCSB」僅指語意來源。
+>
+> 用**原生 YCSB A–F**（真實 YCSB 0.17.0 產生器）獨立重跑的驗證，另見文末新節 **[原生 YCSB 全套重現](#原生-ycsb-全套重現-native-ycsb純原生非-python-模擬)**。兩條線結論一致，但**資料來源不同、切勿混為一談**。
+
 > 本檔所有數字來自 **統一 pipeline**（`run_experiment.py` 家族,全 cell `cold_pct`=0）。跨批只比相對量（impr% / 跨-seed Δ% / ratio），絕對 µs 不跨批逐格對（見「資料可比性」）。
 
 ### Canonical source precedence（tie-break 修正後）
@@ -379,18 +383,24 @@ hotset 內容≡`2f_slru`（checksum 同），只差 warmer pread **遞送順序
 
 **NVMe 上 offset 排序遞送快 10–16×，效應全在 deliver、fq 不變**（診斷：兩 arm 讀相同裝置位元組 ~18MB,排除資料量差異;結果**與 sequential readahead + 隱式 coalescing 一致**,惟未取 block trace,不宣稱證明 coalescing 機制本身）。async(fadvise) 無此效應 → 專屬同步 pread（libprefetch 模型）。
 
-### learned_markov（Chen-inspired 一階 Markov，held-out）— async fq / e2e_warm
+### learned_markov（Chen-inspired 一階 Markov，held-out）— 完整 10-fold LOSO
 
-**latency 只在單一 held-out fold**（test seed 1、train seeds 2..10）量測；**first-query coverage 另做跨 10 test seed 的 offline LOSO**（`results/loso/coverage.csv`，完整 10-fold latency 未跑）。hotset 取 finite-horizon expected-visit scores top-N；footprint 對齊 `2f_topN`。
+**完整 10-fold LOSO latency 已跑**（[`results/learned_10fold/`](results/learned_10fold/FINDINGS.md)，2026-07-30，單一 machine state、相對 % 橫向可比）：每個 test seed N∈1..10 在 9-seed 補集上訓練、量測 held-out seed N；參考臂 `2f_top14/28`、`2e_K10`、baseline 同 fold 配對量測。n=10、async+pread、A/B/C×orig，**300 prefetch 格 delivery=100%、330 格 cold_pct=0**。hotset 取 finite-horizon expected-visit scores top-N；footprint 對齊 `2f_topN`。**取代舊「單 fold test seed 1」量測**（`results/baselines_v2`）。first-query coverage 的離線 LOSO 見 `results/loso/coverage.csv`。
 
-| workload | learned_markov_14 | 2f_top14 | 2e_K10 |
-|---|---:|---:|---:|
-| A | 391 / 474 | 391 / 473 | 356 / 458 |
-| B | 414 / 496 | 415 / 497 | 414 / 519 |
-| C | 186 / 267 | 185 / 268 | 186 / 268 |
+**fq_median（冷 first-query），rel% vs no-prefetch baseline（±95% CI、t df=9、n=10）：**
 
-- **learned_markov 三 workload async fq/e2e 都 ≈ 2f_topN**（逐格幾乎相同）→ 此 transition baseline 冷啟動可用輸出落在頻率排名範圍。
-- **C 的 caveat（key-range artifact）**：C 的 key range [590000,609999] **超出初始 DB 最大 key 600000 → 半數(9,999/20,000 unique)為 not-found 高 key**（每 seed ~50% miss）。miss 查詢全沿右緣落到**最右葉**、該葉吸收 ~50k miss 流量成為壓倒性單一 hot leaf；hit 查詢散在頻率相近的真葉。offline coverage 的雙峰因此拆解為 **miss first-op 5/5 覆蓋、hit first-op 1/5 覆蓋**（合計 **6/10**，`results/loso/coverage.csv`）。C leaf score 平（每真 key 恰 5 次），learned/2f_topN 統一 tie-break 選同 hotset → fq 必等（186≈185）。**coverage 只能預測、非量到 latency regime**（seed 1 hit+覆蓋實測 186；not-covered 的 ~660 interior 地板是**推導預測**，10-fold latency 未跑）。held-out precision：**C=100%、A/B=43%**。A/B first-op 0/10 覆蓋但 interior 撐住。**勿讀成「learned 在 C 有效」。**
+| workload | learned_markov_14 | learned_markov_28 | 2f_top28 | 2e_K10 |
+|---|---:|---:|---:|---:|
+| A | −39.6 ±3.6 | −40.1 ±3.4 | **−50.6 ±14.9** | **−50.8 ±14.9** |
+| B | −36.6 ±9.8 | −38.0 ±10.3 | −36.9 ±8.3 | −36.6 ±8.6 |
+| C | −65.4 ±13.3 | −68.9 ±12.9 | −69.9 ±11.8 | −64.0 ±14.7 |
+
+（warm-process e2e 同排序、幅度較小：A ≈ −30%、B ≈ −27%、C ≈ −57%，見 `results/learned_10fold/batch.log`。）
+
+- **效益真實且統計穩健**：三 workload 每臂 CI 皆排除 0；learned_markov 冷 first-query −37%~−69%（依 workload）。
+- **learned_markov 不勝簡單 frequency top-N**：B/C 與 `2f_topN`/`2e_K10` 打平（CI 大幅重疊）、**A 反而較差**（−40% vs 2f_top28/2e_K10 −51%）。一階 Markov 的複雜度買不到勝過同 budget static frequency dump 的效益（沿用「learned ≈ 2f_topN」；舊「marginal-collapse 更優」宣稱已撤回）。
+- **單 fold（test seed 1）系統性高估**：10-fold 分佈顯示 seed 1 是**最樂觀的 held-out seed**——A/B 為 10 折中最快（rank 1/10）、C 近最快（3/10）。C 對 seed 極敏感（sd 200µs、range 180–629µs），單 fold 幾無意義。詳 [`results/learned_10fold/FINDINGS.md`](results/learned_10fold/FINDINGS.md)。
+- **C 的 caveat（key-range artifact）**：C 的 key range [590000,609999] **超出初始 DB 最大 key 600000 → 半數(9,999/20,000 unique)為 not-found 高 key**（每 seed ~50% miss）。miss 查詢全沿右緣落到**最右葉**、該葉吸收 ~50k miss 流量成為壓倒性單一 hot leaf；hit 查詢散在頻率相近的真葉。offline coverage 的雙峰因此拆解為 **miss first-op 5/5 覆蓋、hit first-op 1/5 覆蓋**（合計 **6/10**，`results/loso/coverage.csv`）。C leaf score 平（每真 key 恰 5 次），learned/2f_topN 統一 tie-break 選同 hotset → fq 必等（186≈185）。**coverage 預測 latency regime、10-fold 已證實**（seed 1 hit+覆蓋實測 186µs；10-fold mean 336µs（sd 200、range 180–629）證實非覆蓋 fold 落在較高 interior 地板——正是 coverage 的推導方向，見 `results/learned_10fold/`）。held-out precision：**C=100%、A/B=43%**。A/B first-op 0/10 覆蓋但 interior 撐住。**勿讀成「learned 在 C 有效」。**
 - **Jaccard**（hotset 相似度、離線分析、非性能）：區分兩個 frequency 對象——**同一訓練資料** `J(learned_markov, frequency_train)=1.0`（traces 2–10 塌縮到 marginal frequency；此 3 層固定深度 tree 的觀測性質、非普遍宣稱）；**held-out 量測種子** `J(learned_markov, 2f_topN_test)` A/B N14 0.47/0.56、**C 1.0**（out-of-sample ranking 位移，C 因 leaf score 全平仍 =1.0）。兩者不矛盾。
 - **Workload E 未支援**（scan 非 3-page episode，`gen_pageseq` fail-loud）。
 
@@ -494,6 +504,8 @@ C_hit（`id∈[580001,600000]`、同 20k key-space、tail locality、uniform ×5
 > 上面 C（churn，**平穩**熱點 [590000,609999] 固定）下 `2e_K10_static` **不 decay**（~82–89 全程）——這是「static t=0 hotset 不 decay」的原始結論。下面 YCSB D 是它的**第一個反例**。
 
 ## YCSB D/E self-aging（read-latest 熱點非平穩 → static hotset decay）
+
+> ⚠️ **Python 模擬、非原生 YCSB**：此節 YD（Latest-Aging）/ YE（Short-Scan Aging）由 `workloads/gen_workload.py` 產生，複刻 YCSB D（read-latest）/ E（short-scan）之*語意*，**並非原生 YCSB trace**。原生 YCSB A–F 的獨立重現另見文末[原生 YCSB 全套重現](#原生-ycsb-全套重現-native-ycsb純原生非-python-模擬)。
 
 > 資料 `results/aging_v2/aging_ci.csv`（10 checkpoints × **10 reps × 10 seeds**，mean ± 95% CI，first-q µs）。方法：workload 自身 insert 流 age 可寫副本、**per-checkpoint probe**（隨 insert frontier 移動）對**凍結 t=0 hotset** 量。與上面 churn **互補**：churn 證平穩不衰、aging 證非平穩衰。
 
@@ -804,3 +816,75 @@ orig 欄取自已 commit 的 [`results/stats/uncertainty.csv`](results/stats/unc
 - 對照:小 hotset 的 `2d`/`2e_K10` 兩尺寸 e2e 都穩贏(C 2e_K10 −70%/−68%,此為 1gb size-sweep 的 pre-fix 值;C 2e_K10 現知為 not-found 雙峰、§6.2.8,但 size-robust 結論不受影響),size-robust。
 
 **結論(對齊後)**:① **冷啟動 first-query 的效益 size-robust**——18/18 跨尺寸方向一致、1gb 全 robust。② **部署 e2e 的 size 敏感性集中在窄域 workload**:DB 變大會放大 working set→deliver,使 `2f_slru`/`2e_K500`/`layers_92` 在 C 由贏轉輸(robust);**小而準的 hotset(2d / 2e_K10)是唯一兩尺寸 e2e 都穩贏的策略**。
+
+---
+
+## 原生 YCSB 全套重現 (Native YCSB，純原生、非 Python 模擬)
+
+> ✅ **本節與上方所有節的關鍵區別**:上方整個矩陣是 `gen_workload.py` 的 **Python 模擬**(複刻 YCSB 語意);**本節則用原生 YCSB 0.17.0 產生器**產生的 **真實 YCSB A–F trace**(`workloads_refined/traces/`)獨立重跑,執行器為 `run_experiment_ycsb.py` / `churn_ycsb.py` / `cadence_ycsb.py`(**只讀 traces、零 `gen_workload`/舊 `workloads/` 依賴**)。
+>
+> **資料位置**:完整報告與原始 CSV/圖在 **`speculation` branch** 的 `results/ycsb_full/`(`REPORT_YCSB_FULL.md` + `data/` + `figs/`)。此資料**目前僅在 speculation branch,尚未併入 main**(merge 檢查:speculation→main 為乾淨三向合併、非 fast-forward)。日期 2026-07-24;同機 kernel 6.17、nvme0n1、62 GiB RAM。
+>
+> **workload 對照**(原生 YCSB 沒有 `writeproportion`,故寫入類走 churn/aging):YC=100% read zipfian、YCu=uniform、YCh01–50=hotspot-hashed、YCo01–50=hotspot-ordered(共 12 讀取);YA(50/50)/YB(95/5)/YF(rmw)=churn ager;YD(read-latest+insert)/YE(scan+insert)=aging ager。共 **17 workload**(12 讀 + 5 寫)。
+
+### 六項論文主張的原生 YCSB 判定
+
+| # | 論文主張 | 原生 YCSB 重現結果 | 判定 |
+|---|---|---|---|
+| 1 | 常駐 interior 骨架(2d)穩健降低讀取冷啟動首查 | 12 讀取 workload **2d 首查中位 −38%**(mean −33%);10-seed 95% CI **[−46%, −31%]**,排除 0 | **成立** |
+| 2 | 整庫暖快取(2f_slru)首查最快、但 e2e 災難 | 2f 首查最低,但 warm-e2e **+4000%~+7000%**(deliver 吞噬) | **成立** |
+| 3 | 好處來自 **interior 結構**,不是熱葉 | Ablation(10-seed+95%CI):interior 2d −36%/2e −40%(CI 排除 0);leaf_freq −3.6% 與 leaf_rand −4.3% **CI 重疊**(頻率=隨機對照) | **成立** |
+| 4 | RAM 壓力下 targeted 遞送穩定、整庫暖快取崩潰 | 10-cap 掃描(128M→6M):2d delivery **恆 100%**(cap 僅 DB 的 1/17 仍是);2f_slru **線性崩潰 100→3.5%**、首查塌回 baseline | **成立** |
+| 5 | async 遞送 ≫ 同步 pread | 全矩陣 async preproc 遠低於 pread | **成立** |
+| 6 | 效益隨 DB 規模擴大 | 6M-row DB:2d 成本持平(~0.1 ms),首查 **−57%**;2f preproc 仍 **31 ms** trap | **成立** |
+
+**一句話**:論文核心結論(「常駐 interior 骨架 = 穩健、可擴展、抗記憶體壓力的冷啟動槓桿;整庫暖快取 = first-query 陷阱」)在**原生 YCSB A–F 上完整成立**,**不依賴其自訂 workload 產生器**。
+
+### 旗艦圖 Fig 14 — e2e 分解(YC / orig,warm-process)
+
+| strategy | first-q µs | deliver µs | e2e_warm µs | Δ vs baseline |
+|---|--:|--:|--:|--:|
+| baseline | 855 | 0 | 855 | — |
+| layers_5 | 832 | 18 | 851 | −0.5% |
+| **2d** | 510 | 152 | **664** | **−22%** |
+| **layers_92** | 514 | 153 | **667** | **−22%** |
+| 2e_K10 | 513 | 168 | 681 | −20% |
+| 2e_K500 | 188 | 996 | 1 185 | **+39%** ⚠(過度配置回歸) |
+| **2f_slru** | 107 | **41 460** | **41 567** | **+4760%** ⚠(first-q 冠軍、e2e 最大輸家) |
+
+(YCu +4389%、YCh01 +3980% 同型)三個反轉全部重現:2f_slru deliver trap、2e_K500 leaf over-provisioning 回歸、2d/layers_92 甜蜜點(interior-only、deliver ~150µs、e2e −22%)。
+
+### Ablation(Fig 17,10-seed + 95% CI,first-query Δ%)
+
+| workload/layout | 2d(interior) | leaf_freq(頻率) | leaf_rand(對照) |
+|---|--:|--:|--:|
+| YC·Zipfian / orig | **−36.1%** | −3.6% | −4.3% |
+| YC·Zipfian / ta | **−29.6%** | −10.1% | −7.1% |
+| YCu·uniform / orig | **−36.6%** | −3.6% | −4.0% |
+| YCu·uniform / ta | **−28.7%** | −6.6% | −6.4% |
+| YCh01·hotspot / orig | **−42.7%** | −2.7% | −3.9% |
+| YCh01·hotspot / ta | **−28.2%** | −6.0% | −6.0% |
+
+全 6 格一致:interior(2d)每格 −28~−43%(CI 排除 0);leaf_freq 與隨機控制 leaf_rand **每格幾乎等高**(差 <2pp、CI 重疊)——依頻率挑熱葉與隨機挑葉**統計上不可分**。
+
+### RAM 壓力掃描(Fig 16,10 cap)
+
+| cap | 2f_slru delivery | 2f_slru first-q | 2d delivery | 2d first-q |
+|---|--:|--:|--:|--:|
+| 128M | 100.0% | 107 µs | 100% | 515 |
+| 64M | 60.0% | 208 µs | 100% | 515 |
+| 48M | 44.4% | **849 µs** | 100% | 513 |
+| 32M | 28.9% | 860 µs | 100% | 512 |
+| 16M | **13.3%** | 906 µs | 100% | 512 |
+| 6M | **3.5%** | 916 µs | 100% | 524 |
+
+2f_slru delivery 隨 cap 收緊線性崩潰,且一旦跌破 100%(64M→48M)first-q 一步跳到 849µs(逼近 baseline ~930);全 5 個 targeted 策略(含 ~1 MiB 的 2e_K500)在**全 10 cap 都 100% delivery、first-q 平坦**——是「dump 整庫」而非「熱集大小」造成崩潰。
+
+### 其餘 phase 摘要
+
+- **10-seed 穩健性**(Phase D):10 條獨立 zipfian trace,2d 首查 mean **−38.4%**,95% CI **[−46.2%, −30.5%]**,排除 0。
+- **Size-scaling**(Phase E,6M-row/0.82 GiB):2d 首查 −57%(orig −40%)、preproc 持平 ~0.1ms;2f_slru warm-e2e = 31.9 ms(baseline 43×)。2d/2e_K10 是成本–收益曲線膝點。
+- **Aging**(Phase G,YD/YE × 11 checkpoint):衰減 iff 熱點非靜止(2f_slru 在 read-latest 移動熱點衰減、在 scan 靜止熱點全程平坦);結構型 2d/layers_92 兩 workload 全 checkpoint 穩定 ~255µs;content 型 2e 尾端受單 op 敏感(bimodal)。
+- **Cadence**(Phase H,YC):重暖頻率直接決定命中率,判準 `cadence ≤ gap`——命中 ~14µs / 未命中 ~623µs,43× 二元、無過渡,支持 warm-process 部署主張。
+
+> 全部原始 CSV 落盤 `results/ycsb_full/data/`(phaseA 468 cells、phaseB 27、phaseC RAM、phaseD 10×7、phaseE 9、phaseF 3×33、phaseG 462、phaseH 32);圖 `results/ycsb_full/figs/`。詳見 speculation branch `results/ycsb_full/REPORT_YCSB_FULL.md`。
