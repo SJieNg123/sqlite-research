@@ -83,21 +83,13 @@ paper／figure／本檔一律用 **display name**。下表的短碼是 **immutab
 - **op-mix：** 100% read。**Key range：** ids 590,000..609,999（20,000 unique，每 id ×5），**跨過 DB max id 600000**。
 - **分布：** uniform。**hit semantics = MIXED**：上界 609,999 > DB max 600,000 → **~50% not-found**（600,001..609,999 為超範圍負向查詢；seed 1..10 實測皆 ~50,005 hit / ~49,995 miss）。
 - **關鍵機制：** hit 與 miss 走**相同的 B+tree 右緣 interior 路徑**；每個 miss 一律下降到**最右葉**（600000 所在葉）再回報不存在 → 該最右葉吸收全部 ~50k miss 流量、成為**壓倒性單一 hot leaf**（key-range 誘發的 right-boundary hotspot），hit 查詢散落頻率相近的多個真葉。
-- **模擬：** existence check / tail-boundary lookup。**必標註**：其大效益由 ~50% not-found 的 right-boundary probe 集中驅動，**跨 seed 為雙峰（e2e_warm −55%）、與 footprint-matched `2f_top14` 統計不可分**，非 uniform tail 讀取的普適性質（對照見 Tail-Hit）。
+- **模擬：** existence check / tail-boundary lookup。**必標註**：這個 workload 的大效益由 ~50% not-found 的 right-boundary probe 集中驅動、**非** uniform tail 讀取的普適性質（pure-hit 對照組見下方 Tail-Hit）;跨 seed 的實際效益分布與統計顯著性見 [overall_results.md](overall_results.md)。
 
 ### Tail-Hit — Tail-Mixed 的 pure-hit 對照
 - **op-mix：** 100% read。**Key range：** ids 580,001..600,000（20,000 unique，每 id ×5），**全在 DB 範圍內**。
 - **分布：** uniform。**hit semantics = pure hit**（max=600000=db max → **0 not-found**，manifest `HIT_ONLY` 硬 assert 把關）。
-- **用途：** 同 20k key-space、同 tail-region locality、同 uniform ×5，**唯一差別是把 range 收進 DB 範圍**，移除 not-found 最右葉超熱點。回答「拿掉 not-found 集中後，frequency-aware prefetch 還有效嗎？」
-- **結果（orig，10 seeds × 10 reps，warm-process e2e，`2e_K10` 為 tie-break 修正後 `results/c_hit_v2`、其餘 `results/c_hit`）：**
-
-  | strategy | e2e_warm | 這是什麼 |
-  |---|---:|---|
-  | 2d（interior only）| **−28.5%** [−34.9,−19.6] | interior skeleton |
-  | 2f_top14（freq, page tie-break）| **−30.6%** [−37.1,−22.4] | 真實 frequency |
-  | learned_markov_14（LOSO held-out）| **−29.0%** [−36.1,−19.4] | held-out |
-  | 2e_K10（tie-break 修正後）| **−27.2%** [−34.6,−17.7] | == interior skeleton |
-  | 2f_slru | +76.5% | deliver trap |
+- **用途：** 同 20k key-space、同 tail-region locality、同 uniform ×5，**唯一差別是把 range 收進 DB 範圍**，移除 not-found 最右葉超熱點。回答「拿掉 not-found 集中後，frequency-aware prefetch 還有效嗎？」——這正是 C 的 −75% headline 到底來自 not-found 熱點還是普適性質的對照組。
+- **結果**（strategy × Tail-Hit 的效益數字）見 [overall_results.md](overall_results.md)「C_hit control」節。
 
   → **拿掉 not-found 後，穩健效益是 interior skeleton ~−28%；frequency leaf 相對 interior-only 幾乎不加分**（uniform tail 無真實 leaf 熱點）。完整見 [`results/c_hit/FINDINGS.md`](results/c_hit/FINDINGS.md)。
 
@@ -176,10 +168,10 @@ paper／figure／本檔一律用 **display name**。下表的短碼是 **immutab
 
 controlled read 四者正好覆蓋**三個 access regime**：
 
-| regime | workload | 首查機制 | 最佳槓桿 |
+| regime | workload | 首查機制 | 對應的最佳槓桿（機制層面） |
 |---|---|---|---|
-| 無真實 leaf 熱點 | **Uniform-100K、Tail-Hit** | 機率攤到大量 leaf | interior skeleton（2d ~−25~28%），frequency leaf 不加分 |
-| 真實 skew | **Scattered-Zipf** | 集中少數 leaf | frequency leaf 加分（2e_K10 −36%）|
-| key-range 集中 | **Tail-Mixed** 的 not-found probe | ~50% miss 匯聚最右葉 | 首查是 not-found probe 時 2e_K10 可達 ~−70%，跨 seed 雙峰 −55% |
+| 無真實 leaf 熱點 | **Uniform-100K、Tail-Hit** | 機率攤到大量 leaf | interior skeleton；frequency leaf 不加分 |
+| 真實 skew | **Scattered-Zipf** | 集中少數 leaf | frequency leaf 加分 |
+| key-range 集中 | **Tail-Mixed** 的 not-found probe | ~50% miss 匯聚最右葉 | 最右葉超熱、frequency 命中該葉 |
 
-**page-type interior skeleton 才是普適 robust 贏面。** aging 軸（Latest-Aging / Short-Scan Aging）另加一層：static plan 的衰減 iff 熱點非平穩，且非平穩下結構派耐衰、反超頻率派。
+**設計意圖：** 這四個 controlled read workload 是為了讓「哪種 prefetch 槓桿在哪種 access regime 生效」可分離量測；aging 軸（Latest-Aging / Short-Scan Aging）再加一層平穩／非平穩對照。**各槓桿的實際效益數字**見 [overall_results.md](overall_results.md)、**策略本身的定義**見 [overall_strategies.md](overall_strategies.md)。

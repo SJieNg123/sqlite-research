@@ -13,9 +13,9 @@
 
 **方法。** 我們提出一套兩層 cold-start 框架：(1) page-type-aware physical layout reorder（binary 層重寫，將 interior page 集中至 file head）；(2) 基於 mincore 的 targeted madvise prefetch，以**兩個互補的 selection 槓桿**挑頁——**page-type-aware**（選 B+tree interior，本研究的 robust 預設）與 **access-frequency-aware**（選 workload 最 hot 的 leaf，只在有已驗證的穩定/集中熱點時才提供增量）。整套設計不修改 SQLite internal，作為 application-side tool 部署。核心方法是把 prefetch 的 preprocessing **拆解到 OS-syscall 粒度**——冷 `open(db)`（~200 µs、per-layout 常數）與逐頁 `deliver`（隨 hotset 大小）——並以 **pread oracle vs async madvise hint** 兩種模式隔離「選對頁（selection）」與「載得及（delivery）」，再以 **standalone warmer**（另起 process、付冷 open；≈ cold 容器 / scale-from-zero）與 **warm-process / integrated**（app 已在跑、重用 handle、不付冷 open；≈ serverless keep-alive 容器 / edge 常駐 worker；本研究主張）兩個部署模型分別計入 critical-path e2e（本研究處理 empty OS page cache cold-start，區別於 Yi et al. [2026] 的 hotspot-shift buffer cold-start）。據我們所知，這是**首個在 SQLite OS-page-cache cold-start 上、把 prefetch preprocessing 拆解到 open / deliver 兩個 OS-syscall term、並以兩個部署模型對齊 critical path 的 cold-start evaluation methodology**——貢獻在於成本核算的**粒度與對齊**，而非「首次意識到 prefetch 有成本」（InnoDB buffer-pool dump/load、Yi+26 等已意識到，見 §2.3.2）。
 
-**核心發現（first-query 改善 ≠ end-to-end 加速）。** cache-dump 式策略（2f_slru，載整份 resident working set）first-query 最低（**−79 ~ −91%**，A/orig 523→108 µs、C/orig 1087→102 µs），但其 **~0.8–7 ms 的 deliver overhead** 反讓 end-to-end cold start **慢一個量級**——此 trade-off 在既有 prefetch literature 長期被忽略。相對地，targeted prefetch 以**極少 syscall** 取得 first-query **−22 ~ −83%**，而 e2e 勝負**取決於部署模型**：standalone 下 preprocessing 吃掉快 workload 的紅利，warm-process 下 targeted prefetch 三 workload e2e 皆改善。以 **10-seed sweep + bootstrap 95% CI** 校正後，**穩健且普適的贏面是 page-type-aware 的 interior skeleton**——warm-process e2e 在三個 pure-hit workload 上 robust **~−25 ~ −30%**：**A `2d` −25% [−29, −20]、B `2d` −25% [−32, −16]、pure-hit tail 控制 C_hit `2d`/LOSO-held-out learned −28~29%**（皆 CI 不跨 0）。**只有在有真實 Zipfian skew 時，frequency-selected leaves 才進一步把 A 從 ~−25% 推進到 −36%**（A `2e_K10` [−50, −23]）——這是 access-frequency 的 skew bonus、非 interior skeleton 本身。**access-frequency 的 *leaf* 選擇只在有真實熱點時才額外加分**：mixed tail-boundary workload C 上 `2e_K10` 可達更大的 warm e2e reduction，但這**源於 C 的 key-range artifact**——range `[590000,609999]` 超出 DB 最大 key 600000，~50% 是 not-found 高 key，全部落到**最右葉**形成一個真實但 key-range 造成的熱點；效益因此是**雙峰**：cross-seed **−55% [−67,−43]**，其中「首查恰為 not-found probe」的 seed 達 ~−70%、「首查為真 hit」的 seed 回落到 interior-skeleton 的 ~−31%。把 range 收進 DB 範圍的 pure-hit 控制（C_hit）後熱點消失、`2e_K10` 回落到 **−27%**（== 2d/learned）。過程中我們**發現並修正**了 `2e_K10` 的一個 first-op leakage（leaf-count 打平時 `Counter.most_common` 依 insertion order 選最早出現的 leaf、恰與被測 first query 對齊）——改為 trace-order-independent tie-break、重生 hotset 並重測（§6.2.8），修正後 `2e_K10` 在 C_hit == interior skeleton、在 C 暴露上述雙峰。**structural `layers_5` 則在 A/B 落在雜訊內（tie / directional、CI 跨 0），不可恃**。總結：**page-type（interior skeleton）是普適的 robust 贏面（pure-hit workloads `2d` ~−25 ~ −30% warm e2e）；access-frequency leaf 選擇只在有真實 access 熱點時才額外加分**——A 的 Zipfian skew（把 A 推進到 −36%）、或 C 的 not-found 集中（雙峰）——兩槓桿分工，且熱點的來源必須誠實界定。
+**核心發現（first-query 改善 ≠ end-to-end 加速）。** cache-dump 式策略（2f_slru，載整份 resident working set）first-query 最低（**−79 ~ −91%**，Scattered-Zipf/orig 523→108 µs、Tail-Mixed/orig 1087→102 µs），但其 **~0.8–7 ms 的 deliver overhead** 反讓 end-to-end cold start **慢一個量級**——此 trade-off 在既有 prefetch literature 長期被忽略。相對地，targeted prefetch 以**極少 syscall** 取得 first-query **−22 ~ −83%**，而 e2e 勝負**取決於部署模型**：standalone 下 preprocessing 吃掉快 workload 的紅利，warm-process 下 targeted prefetch 三 workload e2e 皆改善。以 **10-seed sweep + bootstrap 95% CI** 校正後，**穩健且普適的贏面是 page-type-aware 的 interior skeleton**——warm-process e2e 在三個 pure-hit workload 上 robust **~−25 ~ −30%**：**Scattered-Zipf `2d` −25% [−29, −20]、Uniform-100K `2d` −25% [−32, −16]、pure-hit tail 控制 Tail-Hit `2d`/LOSO-held-out learned −28~29%**（皆 CI 不跨 0）。**只有在有真實 Zipfian skew 時，frequency-selected leaves 才進一步把 Scattered-Zipf 從 ~−25% 推進到 −36%**（Scattered-Zipf `2e_K10` [−50, −23]）——這是 access-frequency 的 skew bonus、非 interior skeleton 本身。**access-frequency 的 *leaf* 選擇只在有真實熱點時才額外加分**：mixed tail-boundary 的 Tail-Mixed 上 `2e_K10` 可達更大的 warm e2e reduction，但這**源於 Tail-Mixed 的 key-range artifact**——range `[590000,609999]` 超出 DB 最大 key 600000，~50% 是 not-found 高 key，全部落到**最右葉**形成一個真實但 key-range 造成的熱點；效益因此是**雙峰**：cross-seed **−55% [−67,−43]**，其中「首查恰為 not-found probe」的 seed 達 ~−70%、「首查為真 hit」的 seed 回落到 interior-skeleton 的 ~−31%。把 range 收進 DB 範圍的 pure-hit 控制（Tail-Hit）後熱點消失、`2e_K10` 回落到 **−27%**（== 2d/learned）。過程中我們**發現並修正**了 `2e_K10` 的一個 first-op leakage（leaf-count 打平時 `Counter.most_common` 依 insertion order 選最早出現的 leaf、恰與被測 first query 對齊）——改為 trace-order-independent tie-break、重生 hotset 並重測（§6.2.8），修正後 `2e_K10` 在 Tail-Hit == interior skeleton、在 Tail-Mixed 暴露上述雙峰。**structural `layers_5` 則在 Scattered-Zipf/Uniform-100K 落在雜訊內（tie / directional、CI 跨 0），不可恃**。總結：**page-type（interior skeleton）是普適的 robust 贏面（pure-hit workloads `2d` ~−25 ~ −30% warm e2e）；access-frequency leaf 選擇只在有真實 access 熱點時才額外加分**——Scattered-Zipf 的 Zipfian skew（把它推進到 −36%）、或 Tail-Mixed 的 not-found 集中（雙峰）——兩槓桿分工，且熱點的來源必須誠實界定。
 
-**穩健性與範圍。** 結論在五條 robustness 軸下穩定：50k write churn（**讀熱點平穩時** static t=0 hotset 不 decay；熱點非平穩時——YCSB read-latest——凍結的 frequency plan 會衰退而 structural coverage 仍穩，§6.2.7）、sub-working-set RAM pressure、多 process cadence re-warm、上述 10-seed sweep、與 DB 放大 10×（102 MB→~1 GiB）的 size-scaling（targeted 的 first-query 效益 18/18 cell size-robust，而 cache-dump 的 deliver 陷阱隨 DB 變大惡化，窄域 workload C 由贏轉輸）。**範圍界定：本研究所有量測均在單台 commodity x86 桌機（Ryzen 9950X）+ NVMe SSD、單一 Linux kernel 上進行——此為 edge / serverless 部署所用的同一類硬體，但本研究未在特定 FaaS / microVM runtime（Lambda、Firecracker、gVisor 等）內量測，而是 model 其 warm-process cold-data pattern；行動裝置 / IoT 為 SQLite 普及背景、非 evaluated platform，絕對數字與相對排序不應外推至 ARM/UFS/eMMC 等不同 storage stack，需另行驗證（詳見 §6.4）。** 完整數據見 §5 / [overall_results.md](https://github.com/wongzinc/sqlite-research-project-sharing/blob/main/overall_results.md)（全 cell `cold_pct`=0）。
+**穩健性與範圍。** 結論在五條 robustness 軸下穩定：50k write churn（**讀熱點平穩時** static t=0 hotset 不 decay；熱點非平穩時——Latest-Aging（read-latest）——凍結的 frequency plan 會衰退而 structural coverage 仍穩，§6.2.7）、sub-working-set RAM pressure、多 process cadence re-warm、上述 10-seed sweep、與 DB 放大 10×（102 MB→~1 GiB）的 size-scaling（targeted 的 first-query 效益 18/18 cell size-robust，而 cache-dump 的 deliver 陷阱隨 DB 變大惡化，窄域的 Tail-Mixed 由贏轉輸）。**範圍界定：本研究所有量測均在單台 commodity x86 桌機（Ryzen 9950X）+ NVMe SSD、單一 Linux kernel 上進行——此為 edge / serverless 部署所用的同一類硬體，但本研究未在特定 FaaS / microVM runtime（Lambda、Firecracker、gVisor 等）內量測，而是 model 其 warm-process cold-data pattern；行動裝置 / IoT 為 SQLite 普及背景、非 evaluated platform，絕對數字與相對排序不應外推至 ARM/UFS/eMMC 等不同 storage stack，需另行驗證（詳見 §6.4）。** 完整數據見 §5 / [overall_results.md](https://github.com/wongzinc/sqlite-research-project-sharing/blob/main/overall_results.md)（全 cell `cold_pct`=0）。
 
 **Index Terms** —— SQLite, Cold-start latency, Prefetch, Page-type aware, Access-frequency aware, Serverless, Edge database, Warm-process cold-data
 
@@ -37,7 +37,7 @@ SQLite 將整個database以 4 KB page 為單位組織為 B+tree，每筆 query �
 leaf；跨整段 workload 累積，才需 working set 內被走訪到的 interior 子集（本 DB interior 共 92 個，見下）。在 cold-start scenario下——OS page cache 為空、所有 page 皆須自 disk
 fetch，這條 B+tree path 上的每一次 page miss 都觸發一次 5–100 µs 的
 random I/O，使 cold first query 較 warm 狀態慢逾 200 倍。在本研究 600k row
-的reference DB（102 MB；orig/ta 26,331 page、vacuum 25,613 page）上，cold first query baseline 落在 **~523–1087 µs** 區間（A 523 / B 749 / C 1087 µs @orig,
+的reference DB（102 MB；orig/ta 26,331 page、vacuum 25,613 page）上，cold first query baseline 落在 **~523–1087 µs** 區間（Scattered-Zipf 523 / Uniform-100K 749 / Tail-Mixed 1087 µs @orig,
 依 workload 與 layout 而定）。
 
 正如標準 B+tree 的 fanout 算術所預期（高 fanout ⇒ interior:leaf ≈ 1:fanout），**interior
@@ -82,16 +82,16 @@ open；**對應 scale-from-zero 的冷容器**）作為對照——在 standalon
 
 - **(C1) Type-aware layout rewriter（作為 design alternative 評估、非 flagship）**：實作並驗證在 binary 層級 reorder SQLite
   file 並修補所有 page-number reference 的可行性與正確性。實驗下 structural
-  prefetch(layers_5)在 A 取得 **first-query −27%**(523→382 µs);**e2e 取決於部署模型**——
+  prefetch(layers_5)在 Scattered-Zipf 取得 **first-query −27%**(523→382 µs);**e2e 取決於部署模型**——
   warm-process(integrated)下 e2e −14%、standalone(含冷 open)下反而 +30%(見 C3)。**逐格最佳 warm e2e 一律落在 orig(1a)+access-pattern；1c 沒有一格贏過 orig**，故本研究把 layout rewriter 定位為**評估過的 design alternative / negative result**、非推薦的 default stack（普適的 robust 贏面是 C2 的 interior skeleton）。
 - **(C2) 兩個 selection 槓桿的分工——page-type 普適、access-frequency 需熱點**：基於 `mincore()`
   snapshot 的 targeted prefetch 用**極少 syscall** 取得 first-query **−31 ~ −83%**。**穩健且普適的贏面是
-  page-type-aware 的 interior skeleton**：uniform workload B 上與 blind-load 全部 interior 相當(皆約
-  **−44%** first-q)、純 hit 的 tail workload **C_hit** 上 warm-process e2e ~**−30%**(interior-only 2d −28.5%、
-  LOSO learned −29.0%，皆 robust)。**access-frequency 的 leaf 選擇只在有真實 access 熱點時才額外加分**：C 上
-  2e_K10 warm-process e2e **−75%(268 µs)** 是全矩陣最大，但這**專屬於 C 的 mixed tail-boundary 結構**
-  ——C 的 range 有 ~50% 為超出 DB 範圍的 not-found 高 key，全部集中到最右葉形成真實但 key-range 造成的熱點；
-  pure-hit 控制 C_hit 移除該熱點後效益回落到 interior skeleton 的 ~−30%(§6.2.8)。故 C2 的貢獻不是「−75%」這個數字，
+  page-type-aware 的 interior skeleton**：uniform 的 Uniform-100K 上與 blind-load 全部 interior 相當(皆約
+  **−44%** first-q)、純 hit 的 tail workload **Tail-Hit** 上 warm-process e2e ~**−30%**(interior-only 2d −28.5%、
+  LOSO learned −29.0%，皆 robust)。**access-frequency 的 leaf 選擇只在有真實 access 熱點時才額外加分**：Tail-Mixed 上
+  2e_K10 warm-process e2e **−75%(268 µs)** 是全矩陣最大，但這**專屬於 Tail-Mixed 的 mixed tail-boundary 結構**
+  ——Tail-Mixed 的 range 有 ~50% 為超出 DB 範圍的 not-found 高 key，全部集中到最右葉形成真實但 key-range 造成的熱點；
+  pure-hit 控制 Tail-Hit 移除該熱點後效益回落到 interior skeleton 的 ~−30%(§6.2.8)。故 C2 的貢獻不是「−75%」這個數字，
   而是**把 targeted prefetch 的效益乾淨地拆成「普適的 interior skeleton」與「熱點相依的 leaf 加分」兩部分**。
 - **(C3) Preprocessing cost-accounting 框架（兩個部署模型）**：針對 SQLite cold-start read path 提出一套**把 prefetch preprocessing 拆解到 OS-syscall 粒度**的 evaluation methodology——將
   preprocessing 顯式拆成 **冷 open(db)(~200 µs,per-layout 常數)+ 逐頁 deliver(隨 hotset)**、以 pread-oracle/async 兩種模式隔離 selection 與 delivery、
@@ -100,10 +100,10 @@ open；**對應 scale-from-zero 的冷容器**）作為對照——在 standalon
   反讓 e2e **慢一個量級**;而 **warm-process 下 targeted prefetch 的 e2e 三 workload 皆改善**——
   此 cost-accounting 框架揭露的 trade-off 在既有 prefetch literature 中長期被忽略。
 - **(C4) Robustness 五維驗證**：static t=0 hotset **在讀熱點平穩時**不隨 write churn decay
-  (C 上 2e_K10 跨 checkpoint 持平 ~82–86 µs vs baseline ~580);**但熱點若非平穩則會 decay**——YCSB read-latest(YD)下,凍結的 frequency-based plan 隨 insert frontier 前移而衰退,而 structural coverage 仍穩(§6.2.7),把此軸精確化為「**decay 由 hotspot 平穩性決定,頻率派衰、結構派耐**」;cgroup
+  (Tail-Mixed 上 2e_K10 跨 checkpoint 持平 ~82–86 µs vs baseline ~580);**但熱點若非平穩則會 decay**——Latest-Aging（read-latest）下,凍結的 frequency-based plan 隨 insert frontier 前移而衰退,而 structural coverage 仍穩(§6.2.7),把此軸精確化為「**decay 由 hotspot 平穩性決定,頻率派衰、結構派耐**」;cgroup
   `MemoryMax` 壓到 working set 以下(6–16 MB)時,小 hotset(≤2 MB)的 targeted 策略全程 100% delivery、first-q 不受影響,唯 2f_slru(整份 WS dump)崩回 baseline;多 process
   cadence re-warm下,cadence ≤
-  query gap 即可可靠 warm cache;**10-seed workload-instantiation sweep**(同 DB、10 條不同抽樣的 A/B/C)確認 **access-pattern targeted prefetch 三 workload 的 warm e2e 皆 robust**(A 2e_K10 −36%[−50,−23]、B 2d −25%、C 2e_K10 −55%[−67,−43]（雙峰,§6.2.8）,CI 皆不跨 0),而 structural layers_5 在 A/B 落在雜訊內(§6.2.4);並在 **DB 放大 10× 到 ~1 GiB** 下 first-query 效益 size-robust(18/18 cell 跨尺寸方向一致、1gb 全 robust,§6.2.5)。
+  query gap 即可可靠 warm cache;**10-seed workload-instantiation sweep**(同 DB、10 條不同抽樣的 Scattered-Zipf/Uniform-100K/Tail-Mixed)確認 **access-pattern targeted prefetch 三 workload 的 warm e2e 皆 robust**(Scattered-Zipf 2e_K10 −36%[−50,−23]、Uniform-100K 2d −25%、Tail-Mixed 2e_K10 −55%[−67,−43]（雙峰,§6.2.8）,CI 皆不跨 0),而 structural layers_5 在 Scattered-Zipf/Uniform-100K 落在雜訊內(§6.2.4);並在 **DB 放大 10× 到 ~1 GiB** 下 first-query 效益 size-robust(18/18 cell 跨尺寸方向一致、1gb 全 robust,§6.2.5)。
 
 本文後續組織如下：§2 闡述 SQLite cold-start mechanics、本研究採用的
 「warm process, cold data」量測模型，以及 related work 定位；§3 描述測試 DB、workload、benchmark harness、實驗假設與統計方法；§4 分述三類strategy（layout /
@@ -225,7 +225,7 @@ access；Pre-Buffer [Yi+26] 用 Jaccard similarity
 的傳統上。其中 **Leaper [Yang+20]**（LSM-tree 儲存引擎 X-Engine 的 learned
 prefetcher）本質是**預測並預載 hot key range**，效益建立在 workload 存在可學習的
 access skew；當 access 趨近 uniform、無可預測的 hot set 時，這類 hotspot-based
-learned prefetch 即失去著力點——這與本研究在 **Workload B（uniform random）** 上
+learned prefetch 即失去著力點——這與本研究在 **Uniform-100K（uniform random）** 上
 「interior-only 卡在 −43%、再加 top-K hot leaf 也無額外效益」（§5.3）的觀察**同源**：
 uniform 下沒有自然 hot leaf 可學、可預載。**我們在同一 harness 重現了這兩條 lineage 的核心作為 baseline**（重現核心、剝除編排、非跑本尊）：libprefetch 的 offset-sort delivery、與一條 Chen-inspired 的一階 Markov transition baseline——結果與定位見 §6.2.6（前者 Δdeliver 10–16×、只在 deliver 項；後者 held-out 下 ≈ 頻率排名）。另一條相關 lineage 是 **cache admission**
 （如 **CacheLib [Berg+20]** 的 cache-on-second-access）：它與本研究的 frugal prefetch
@@ -384,7 +384,7 @@ DB 102 MB 遠小於主機 RAM (62 GiB)；實驗中亦透過把 cgroup `MemoryMax
 - **Turso / libSQL** —— libSQL 是 SQLite 的 MIT-licensed fork；其招牌是 **embedded replica**：應用端持有一份**本地 SQLite 檔**、持續從 cloud primary 同步，warm read 快到 sub-µs，官方定位為「serverless 環境、multi-tenant SaaS 的自然選擇」，同為 **single-writer**。
 - **Fly.io LiteFS / Litestream** —— LiteFS 用 FUSE 攔截 SQLite 的 WAL commit、以 transaction-aware 的 LTX 格式做 **single-writer／multi-reader** live replication，讓「database 就跑在 app 旁邊的 edge」；其文件明言「OS 會自動把 pages cache 在記憶體、故 **warm** read 幾乎無 slowdown」——**cold（pages 被 reclaim）那一面正是本研究的空白**。姊妹工具 Litestream 則把 WAL 串流到 S3 做災難復原。
 
-**共同 shape**：三者皆 **single-writer + read-heavy + 本地檔跑在本地 NVMe + 緊貼（常 keep-alive 的）運算**——這與本研究的量測平台（commodity x86 + NVMe）與 read workload（A/B/C）**同構**，其 read-heavy 假設也正是本研究只量 read cold-start 的理由。三者對「warm read」的效能宣稱都**預設 pages 已 resident**；一旦運算被 keep-alive 保溫、但本地檔的 OS page cache 因閒置或鄰居 tenant 的 memory 壓力被 reclaim，第一筆 query 就落回本研究量化的 µs 級 B+tree cold traversal。
+**共同 shape**：三者皆 **single-writer + read-heavy + 本地檔跑在本地 NVMe + 緊貼（常 keep-alive 的）運算**——這與本研究的量測平台（commodity x86 + NVMe）與 read workload（Scattered-Zipf/Uniform-100K/Tail-Mixed）**同構**，其 read-heavy 假設也正是本研究只量 read cold-start 的理由。三者對「warm read」的效能宣稱都**預設 pages 已 resident**；一旦運算被 keep-alive 保溫、但本地檔的 OS page cache 因閒置或鄰居 tenant 的 memory 壓力被 reclaim，第一筆 query 就落回本研究量化的 µs 級 B+tree cold traversal。
 
 **跟我們的差別**：D1 / Turso / LiteFS 是**部署平台**，各自解 replication / consistency / failover；**沒有一個**針對「OS page cache 為空時的 first-query latency」做 targeted prefetch，也**沒有**把 prefetch 的 preprocessing 成本計入 critical-path e2e。本研究補的正是這個空白——一套不修改 engine、application-side 的 cost-accounted prefetch，適用於任何「SQLite 讀本地檔、經 OS page cache」的 edge / serverless 部署（embedded replica、co-located 檔、或自架於 VM / 容器上的 SQLite）。
 
@@ -421,28 +421,28 @@ file head前 400 KB，可被 sequential prefetch 一次涵蓋。*
 
 ### 3.2 Workloads
 
-研究選用六種 workload——**四個原始 workload**（A/B/C 讀取型 + D 為 churn 寫入 generator）加上**兩個 YCSB core self-aging workload**（YD/YE）——覆蓋不同的 access pattern 軸：
+研究選用六種 workload——**四個原始 workload**（Scattered-Zipf/Uniform-100K/Tail-Mixed 讀取型 + Mixed-Mutation Churn 寫入 generator）加上**兩個 YCSB core self-aging workload**（Latest-Aging/Short-Scan Aging）——覆蓋不同的 access pattern 軸：
 
 | 名稱 | 特性 | 典型部署 scenario |
 |---|---|---|
-| **A** | Zipfian point read（集中查少數熱門資料）| App 首頁、常開的聯絡人 |
-| **B** | Uniform random point read（uniform 隨機讀）| 隨機抽樣、爬蟲 |
-| **C**（C_mixed）| Mixed tail-boundary lookup（檔尾 region 均勻點讀；range 超出 DB max key → ~50% not-found 高 key，見 §6.2.6 key-range audit）| existence check、稀疏 ID lookup、剛收訊息 |
-| **C_hit** | **Pure-hit uniform-tail control for C**（id∈[580001,600000]，同 20k key-space、tail locality，但全部存在、0 not-found）| §6.2.8：隔離 not-found 熱點以測 tail-read 的普適效益 |
-| **D** | Write-heavy churn generator | 模擬 DB 被持續 write（§6.2.1 churn 實驗）|
-| **YCSB D**（`YD`）| Read-latest：95% read（latest 分布）+ 5% insert，**移動熱點** | user timeline / 最新事件 |
-| **YCSB E**（`YE`）| Short-ranges：95% scan（zipfian）+ 5% insert，平穩熱點 | 訊息佇列尾端連續讀 |
+| **Scattered-Zipf** | Zipfian point read（集中查少數熱門資料）| App 首頁、常開的聯絡人 |
+| **Uniform-100K** | Uniform random point read（uniform 隨機讀）| 隨機抽樣、爬蟲 |
+| **Tail-Mixed** | Mixed tail-boundary lookup（檔尾 region 均勻點讀；range 超出 DB max key → ~50% not-found 高 key，見 §6.2.6 key-range audit）| existence check、稀疏 ID lookup、剛收訊息 |
+| **Tail-Hit** | **Pure-hit uniform-tail control for Tail-Mixed**（id∈[580001,600000]，同 20k key-space、tail locality，但全部存在、0 not-found）| §6.2.8：隔離 not-found 熱點以測 tail-read 的普適效益 |
+| **Mixed-Mutation Churn** | Write-heavy churn generator | 模擬 DB 被持續 write（§6.2.1 churn 實驗）|
+| **Latest-Aging** | Read-latest：95% read（latest 分布）+ 5% insert，**移動熱點** | user timeline / 最新事件 |
+| **Short-Scan Aging** | Short-ranges：95% scan（zipfian）+ 5% insert，平穩熱點 | 訊息佇列尾端連續讀 |
 
-A / B / C 分別涵蓋三個正交的「hotspot分布」dimension（read skew、uniform、file tail
-locality）；D 不直接量 latency，是 §6.2.1 churn 實驗用於製造 layout 漂移
-的 write generator。**YCSB core D/E（registry key `YD`/`YE`，與上面的 churn-generator「D」不同物）為寫入型 self-aging workload**（insert 讓 DB 隨時間長大），走 `run_experiment.py aging` 子命令量 static hotset 隨 aging 的演化（§6.2.7）；YD 的 read-latest **移動熱點**是壓測 static hotset 平穩性假設的關鍵軸。每個 workload 的完整定義（key range、Zipf parameter α、
-ops 數）見 [overall_workloads.md](https://github.com/wongzinc/sqlite-research-project-sharing/blob/main/overall_workloads.md)。**Zipfian workload（A 及 robustness 變體 Z，§A.2）採 Zipf α = 0.99**（rank $r$ 的取樣權重 $\propto 1/r^{0.99}$，即 YCSB 預設 zipfian constant；A 再 scramble 成隨機 permutation 使熱 key 散佈全 key space，Z 不 scramble、熱點落在低 id）。產生器 `workloads/gen_workload.py` 以 **direct power-law 取樣 + permutation scramble** 實作、並**校準自原始 committed workload 檔的分佈**（非 byte-identical 於 YCSB 的 `ScrambledZipfianGenerator`，但 α 數值一致、skew 已對齊；重建細節見 overall_workloads.md）。
+Scattered-Zipf / Uniform-100K / Tail-Mixed 分別涵蓋三個正交的「hotspot分布」dimension（read skew、uniform、file tail
+locality）；Mixed-Mutation Churn 不直接量 latency，是 §6.2.1 churn 實驗用於製造 layout 漂移
+的 write generator。**Latest-Aging / Short-Scan Aging（與上面的 churn generator Mixed-Mutation Churn 不同物）為寫入型 self-aging workload**（insert 讓 DB 隨時間長大），走 `run_experiment.py aging` 子命令量 static hotset 隨 aging 的演化（§6.2.7）；Latest-Aging 的 read-latest **移動熱點**是壓測 static hotset 平穩性假設的關鍵軸。每個 workload 的完整定義（key range、Zipf parameter α、
+ops 數）見 [overall_workloads.md](https://github.com/wongzinc/sqlite-research-project-sharing/blob/main/overall_workloads.md)。**Zipfian workload（Scattered-Zipf 及 robustness 變體 Concentrated-Zipf，§A.2）採 Zipf α = 0.99**（rank $r$ 的取樣權重 $\propto 1/r^{0.99}$，即 YCSB 預設 zipfian constant；Scattered-Zipf 再 scramble 成隨機 permutation 使熱 key 散佈全 key space，Concentrated-Zipf 不 scramble、熱點落在低 id）。產生器 `workloads/gen_workload.py` 以 **direct power-law 取樣 + permutation scramble** 實作、並**校準自原始 committed workload 檔的分佈**（非 byte-identical 於 YCSB 的 `ScrambledZipfianGenerator`，但 α 數值一致、skew 已對齊；重建細節見 overall_workloads.md）。
 
-Workload A 與 B 的 op string 格式與分布參考自 [YCSB-cpp](https://github.com/ls4154/YCSB-cpp)
-（C++ port of YCSB）——A 對應 YCSB-C profile（read-only Zipfian over single
-table），B 對應 YCSB-A 的 read 部分（uniform random）。本研究延用 YCSB 風格
+Scattered-Zipf 與 Uniform-100K 的 op string 格式與分布參考自 [YCSB-cpp](https://github.com/ls4154/YCSB-cpp)
+（C++ port of YCSB）——Scattered-Zipf 對應 YCSB-C profile（read-only Zipfian over single
+table），Uniform-100K 對應 YCSB-A 的 read 部分（uniform random）。本研究延用 YCSB 風格
 的 op string 格式（`read <key>` / `update <key>` / `scan <key> <len>`），讓
-`benchmark_harness` 一行一 op 直接解析。C 與 D 為本研究自行 design（file tail
+`benchmark_harness` 一行一 op 直接解析。Tail-Mixed 與 Mixed-Mutation Churn 為本研究自行 design（file tail
 locality 與 write-heavy churn generator），YCSB 標準 6 個 profile 並無對應。
 
 ### 3.3 Benchmark harness
@@ -570,16 +570,16 @@ harness 在 warmer return 後**立刻**量 first-query（`benchmark_harness.c:14
 
 為直接量這件事,我們在 async 的 madvise/fadvise hint 發完**之後、first-query 之前**插入一段固定 sleep
 （5 / 20 / 50 ms,讓 kernel readahead 有時間落地;sleep 是 app 本來就會花在別處的 wall-time,不計入
-`deliver_us` 也不計入 `fq`），掃 A/C × {layers_5, 2d, 2e_K10}（資料 [`results/deliver_sweep/`](results/deliver_sweep/)）：
+`deliver_us` 也不計入 `fq`），掃 Scattered-Zipf/Tail-Mixed × {layers_5, 2d, 2e_K10}（資料 [`results/deliver_sweep/`](results/deliver_sweep/)）：
 
 | cell | baseline | `fq_pread`（oracle） | `fq_async` @ sleep 0 / 5 / 20 / 50 ms | delivery_pct@0 | gap 被 50ms 補回 |
 |---|---:|---:|---:|---:|---:|
-| A layers_5 | 487 | 176 | 372 / 379 / 365 / **380** | **100%** | **−4%（沒補回）** |
-| A 2d | 487 | 179 | 344 / 363 / 376 / **362** | **100%** | −10% |
-| A 2e_K10 | 487 | 180 | 367 / 357 / 362 / **364** | **100%** | +2% |
-| C 2e_K10 | 1010 | 173 | 176 / 180 / 176 / **178** | **100%** | gap≈0（本就無損失） |
+| Scattered-Zipf layers_5 | 487 | 176 | 372 / 379 / 365 / **380** | **100%** | **−4%（沒補回）** |
+| Scattered-Zipf 2d | 487 | 179 | 344 / 363 / 376 / **362** | **100%** | −10% |
+| Scattered-Zipf 2e_K10 | 487 | 180 | 367 / 357 / 362 / **364** | **100%** | +2% |
+| Tail-Mixed 2e_K10 | 1010 | 173 | 176 / 180 / 176 / **178** | **100%** | gap≈0（本就無損失） |
 
-> 註：此表屬 `deliver_sweep` 批，其 baseline（A 487 / C 1010 µs）與 §5 的 canonical v2 批（A 523 / C 1087）為**不同機器狀態群**，請勿跨表比絕對 µs；gap 結論用的是**同批內** `fq_async − fq_pread` 差，不受跨批漂移影響。
+> 註：此表屬 `deliver_sweep` 批，其 baseline（Scattered-Zipf 487 / Tail-Mixed 1010 µs）與 §5 的 canonical v2 批（Scattered-Zipf 523 / Tail-Mixed 1087）為**不同機器狀態群**，請勿跨表比絕對 µs；gap 結論用的是**同批內** `fq_async − fq_pread` 差，不受跨批漂移影響。
 
 兩個結論：
 
@@ -587,13 +587,13 @@ harness 在 warmer return 後**立刻**量 first-query（`benchmark_harness.c:14
    全部載進 page cache（`delivery_pct=100`)——這些頁**不是「在路上」**,所以給再多時間也沒有東西可等。
    （§3.5 開頭講的 readahead window 封頂只發生在「單一 madvise 蓋一整段 range」的 2a;本研究實際用的
    per-page warmer 逐頁 hint,不受此封頂。）
-2. **Workload A 上殘餘的 `fq_async − fq_pread` gap(~165–196 µs)給 50 ms 也補不回來**(補回率 ≈ 0,
+2. **Scattered-Zipf 上殘餘的 `fq_async − fq_pread` gap(~165–196 µs)給 50 ms 也補不回來**(補回率 ≈ 0,
    落在雜訊內);且兩種模式的 `majflt` 完全相同(layers_5 皆 180)。可見這個 gap **不是 readahead 還沒落地的
    時序假象**,而是「async hint」與「同步 pread」之間一個**真實、持續**的成本差。
 
 > **機制歸因為 labeled conjecture(未直接驗證)**:此 gap 最可能的成因是 pread 的同步循序讀順帶把 kernel
 > readahead window 養熱、讓 query 後續的 cold-leaf fault 更能 overlap,而對確切 hotset 頁逐頁發的一次性
-> `WILLNEED` 不複製這個效果。**但本研究未能直接證實此機制**:確認它需在 A `layers_5` / C `2e_K10` 上掃
+> `WILLNEED` 不複製這個效果。**但本研究未能直接證實此機制**:確認它需在 Scattered-Zipf `layers_5` / Tail-Mixed `2e_K10` 上掃
 > `read_ahead_kb`∈{0,64,512}(預期 ra→0 時 gap 收斂、ra↑時 gap 擴大),而 `read_ahead_kb` 須以 root 寫
 > `/sys/block/*/queue/`,本實驗環境無此權限(ra 固定 128,見 §3.4.1)。故此處只下結論到「gap 為真實成本差、
 > 非時序假象」(由兩種模式 `majflt` 相同 + 50 ms 補回率 ≈ 0 兩項獨立證據支撐,與具體機制無關),其**確切成因
@@ -626,8 +626,8 @@ pure-madvise delivery 的真實下限,不因量測時機而偏悲觀。`fq_pread
 - **彙總統計量**：報 **median**（對 cold-start 的長尾 random-I/O 比 mean 穩健），另記 **p95 / min / stdev**；improvement-% 一律對**同 batch 的 baseline（無 prefetch）**配對計算，避免跨 pipeline 比較。
 - **雜訊控制（壓低 rep 間變異）**：(1) `--cpu` 把量測釘在固定 core（`sched_setaffinity`）；(2) `--warm-cpu-ms` 在計時區外把 amd-pstate 拉到滿頻，消除「最快 cell 受 freq ramp 懲罰最重」的偏差；(3) 每 cell 前全機 `drop-caches` + harness `--verify-hotset` 量 `cold_pct`，**`cold_pct>1%` 的 cell 視為冷清失敗、彙整時剔除**；(4) 逐 run 記錄 `loadavg/memavail`，環境漂移可事後察覺。
 - **顯著性判讀（rep 間變異）**：主要結論的**效應量遠大於 rep 間變異**。例如 first-query −30~90%、e2e 相差一個量級（2f preproc ~7 ms vs first-q ~0.1 ms），不依賴邊際顯著。**落在雜訊內的差異一律不宣稱排名**：例如 2f 在三 layout 間 first-q 差 <3 µs（< 單筆 noise）→ 結論為「layout-agnostic」；RAM sub-WS 施壓下 targeted 策略受壓/unpressured first-q 比值 ≈ 1（噪音內）→ 結論為「不受影響」，而 2f_slru 比值遠大於 1 → 才宣稱「崩潰」（§6.2.2）。
-- **不確定性量化（cross-seed workload sensitivity）**：rep 間變異只反映同一條 query stream 的量測噪音;為量化「換一條同分佈但不同抽樣的 workload，結論會不會變」，我們用 **10 個獨立 random seed** 重生成 A/B/C（同一份 DB、同 reps;產生器 `workloads/gen_workload.py`），各跑一次完整 matrix（10×1018 reps）。對每個 (workload, layout, strategy) 計算**跨 seed 的效應分佈**：per-seed 效應 = 同 seed 內 strategy vs baseline 的 Δ%（配對於同批，消除機器漂移），再報 **bootstrap 95% CI of the mean（10,000 次 resample、percentile method、固定 seed=42）+ 符號一致性 (n/10)**。**統計侷限**：n=10 的 percentile bootstrap CI 在尾端可能 under-cover，故 robust 判定再以 distribution-free 的符號一致性（≥9/10 同號 ≈ sign-test p<0.05）交叉驗證；效應量遠大於 CI 端點偏差，故結論方向不受 CI 方法選擇影響。判定規則：CI 不跨 0 → **robust**；CI 跨 0 但 ≥7/10 同號 → **directional**；否則 **tie（在雜訊內）**（分析腳本 `tools/stats_uncertainty.py`，完整矩陣見 §6.2.4 / [overall_results.md](https://github.com/wongzinc/sqlite-research-project-sharing/blob/main/overall_results.md)）。
-- **機器穩定性對照**：2f_slru 載入整份 working set，其 first-query 與「第一筆查哪個 key」無關。實測跨 10 seed 維持 **125.9–130.2 µs**（極穩），證明 sweep 期間 CPU 無 throttle、跨 seed 的變異來自 workload 抽樣而非機器漂移。據此，**凡單一 workload 點估計與 cross-seed CI 衝突者，一律以 cross-seed CI 為準**（見 §6.2.4 的 A 案例）。
+- **不確定性量化（cross-seed workload sensitivity）**：rep 間變異只反映同一條 query stream 的量測噪音;為量化「換一條同分佈但不同抽樣的 workload，結論會不會變」，我們用 **10 個獨立 random seed** 重生成 Scattered-Zipf/Uniform-100K/Tail-Mixed（同一份 DB、同 reps;產生器 `workloads/gen_workload.py`），各跑一次完整 matrix（10×1018 reps）。對每個 (workload, layout, strategy) 計算**跨 seed 的效應分佈**：per-seed 效應 = 同 seed 內 strategy vs baseline 的 Δ%（配對於同批，消除機器漂移），再報 **bootstrap 95% CI of the mean（10,000 次 resample、percentile method、固定 seed=42）+ 符號一致性 (n/10)**。**統計侷限**：n=10 的 percentile bootstrap CI 在尾端可能 under-cover，故 robust 判定再以 distribution-free 的符號一致性（≥9/10 同號 ≈ sign-test p<0.05）交叉驗證；效應量遠大於 CI 端點偏差，故結論方向不受 CI 方法選擇影響。判定規則：CI 不跨 0 → **robust**；CI 跨 0 但 ≥7/10 同號 → **directional**；否則 **tie（在雜訊內）**（分析腳本 `tools/stats_uncertainty.py`，完整矩陣見 §6.2.4 / [overall_results.md](https://github.com/wongzinc/sqlite-research-project-sharing/blob/main/overall_results.md)）。
+- **機器穩定性對照**：2f_slru 載入整份 working set，其 first-query 與「第一筆查哪個 key」無關。實測跨 10 seed 維持 **125.9–130.2 µs**（極穩），證明 sweep 期間 CPU 無 throttle、跨 seed 的變異來自 workload 抽樣而非機器漂移。據此，**凡單一 workload 點估計與 cross-seed CI 衝突者，一律以 cross-seed CI 為準**（見 §6.2.4 的 Scattered-Zipf 案例）。
 
 ---
 
@@ -660,7 +660,7 @@ MAP_SHARED」是目前測過的全局 best 組合。
   score 從 0.96 → 0.0001（幾乎完美 clustering）；`PRAGMA integrity_check;`
   通過。**惟 1c 是一把雙面刃、非通用預設**：它把 interior 集中到檔頭的代價是把 leaf
   推到較高 offset，會抬高以 cold-leaf-fault 為主之 workload 的 no-prefetch baseline。
-  **在本研究 A/B/C 矩陣中,最佳 warm e2e 一律落在 1a(orig)+ access-pattern prefetch、1c 沒有任何一格贏過 1a**,
+  **在本研究 Scattered-Zipf/Uniform-100K/Tail-Mixed 矩陣中,最佳 warm e2e 一律落在 1a(orig)+ access-pattern prefetch、1c 沒有任何一格贏過 1a**,
   故 1c 實質是探索性的負面結果——預設請用 1a,僅在「確定部署 structural prefetch + 拿不到 access-pattern
   + workload 夠傾斜」三條同時成立的窄場景才考慮 1c（完整 net-win 條件與逐格數據見 §6.1 bullet 3）。
 
@@ -675,8 +675,8 @@ hint 給 OS。差別在「指定哪些 page」：
   - **2c Layers_N**：按 file offset 升序排前 N 個 interior。**等同於
     「B+tree 上 N 層」僅在 1c (type-aware) 成立**（因為 1c 把所有 interior
     集中到 file 頭）；在 1a/1b 是「file中最早出現的 N 個 interior」，跟
-    B+tree tree depth無 1-to-1 對應。實驗下 A/orig 上 **N≥5 即進 plateau ~−30% first-q**
-    (N=1 反而 +31% 較慢);C 則要 N=92(見 §5.3)。
+    B+tree tree depth無 1-to-1 對應。實驗下 Scattered-Zipf/orig 上 **N≥5 即進 plateau ~−30% first-q**
+    (N=1 反而 +31% 較慢);Tail-Mixed 則要 N=92(見 §5.3)。
 - **Access-pattern-based**（access-pattern = 跑一次 workload 後用 `mincore()` dump
   哪些 page resident）
   - **2d Access-pattern interior-only**：只 prefetch resident 的 interior。
@@ -703,46 +703,46 @@ prefetch cost」的關鍵。
 
 ## 5. Experiment and Evaluation
 
-> **本章數據**：async delivery mode,median;baseline A 523 / B 749 / C 1087 µs @orig,全 cell `cold_pct`=0。**e2e 以兩個部署模型並陳**:`e2e_std`(standalone warmer,含冷 open(db))與 **`e2e_warm`(warm-process / integrated，handle 已開、不付 cold open，故 ≈ static `effective_first_query`)**，後者是本研究主張的部署(§3.4)。core:first-query 最低為 **2f_slru(−79~91%)**，但 2f 的 ~0.8–7 ms deliver 使其 e2e 多半不具優勢；**warm-process 下 targeted prefetch(layers_5 / 2d / 2e_K10)在三個 workload 的 e2e 都有改善**。
+> **本章數據**：async delivery mode,median;baseline Scattered-Zipf 523 / Uniform-100K 749 / Tail-Mixed 1087 µs @orig,全 cell `cold_pct`=0。**e2e 以兩個部署模型並陳**:`e2e_std`(standalone warmer,含冷 open(db))與 **`e2e_warm`(warm-process / integrated，handle 已開、不付 cold open，故 ≈ static `effective_first_query`)**，後者是本研究主張的部署(§3.4)。core:first-query 最低為 **2f_slru(−79~91%)**，但 2f 的 ~0.8–7 ms deliver 使其 e2e 多半不具優勢；**warm-process 下 targeted prefetch(layers_5 / 2d / 2e_K10)在三個 workload 的 e2e 都有改善**。
 
 **預期 vs 實際（本章解讀主軸）**：下表先列開工前的預期，§5.1–§5.5 的數據逐一檢驗。**最重要的發現都來自「不符合預期」的格子**，這也是本研究的核心觀察（RQ1–RQ2）。
 
 | # | 原本預期 | 實際結果 | 是否符合 |
 |---|---|---|---|
-| 1 | Prefetch 普遍能改善 cold-start | first-query 普遍改善（−22~89%）；**e2e 取決於部署模型**——standalone warmer（多扣一次冷 open）在快 workload 會輸，但 **warm-process（handle 已開,≈static）下便宜 prefetch 連快 A 都贏(−7~9%)** | **部分出乎意料**：勝負由「成本邊界」決定（§5.5）|
-| 2 | 載越多 page（整份 working set，2f）效益越好 | 2f first-q 最低，但 deliver ~0.8–7 ms 使 **e2e 多半輸**（A/B 慢一個量級；只有 C deliver 小才打平/小贏） | **出乎意料**（§5.5）|
-| 3 | layers_N 有「N=5 universal sweet spot」 | 形狀依 (workload, layout) 而異：A/Z N≥5 plateau、**C 要 N=92**、N=1 反而變慢 | **部分不符**（§5.3）|
-| 4 | 慢 workload 上 access-pattern + 少量 hot leaf 最有效益 | C 上 2e_K10 **first-q −83%、e2e_warm −75%**（seed-1 單一 workload）| **部分符合**（§5.4；但此 hot-leaf 增益專屬 C 的 not-found 熱點——跨 seed 為 −55% 雙峰、且與 footprint-matched `2f_top14` 統計不可分；pure-hit C_hit 上回落到 interior skeleton ~−27~30%，§6.2.8）|
+| 1 | Prefetch 普遍能改善 cold-start | first-query 普遍改善（−22~89%）；**e2e 取決於部署模型**——standalone warmer（多扣一次冷 open）在快 workload 會輸，但 **warm-process（handle 已開,≈static）下便宜 prefetch 連快 Scattered-Zipf 都贏(−7~9%)** | **部分出乎意料**：勝負由「成本邊界」決定（§5.5）|
+| 2 | 載越多 page（整份 working set，2f）效益越好 | 2f first-q 最低，但 deliver ~0.8–7 ms 使 **e2e 多半輸**（Scattered-Zipf/Uniform-100K 慢一個量級；只有 Tail-Mixed deliver 小才打平/小贏） | **出乎意料**（§5.5）|
+| 3 | layers_N 有「N=5 universal sweet spot」 | 形狀依 (workload, layout) 而異：Scattered-Zipf/Concentrated-Zipf N≥5 plateau、**Tail-Mixed 要 N=92**、N=1 反而變慢 | **部分不符**（§5.3）|
+| 4 | 慢 workload 上 access-pattern + 少量 hot leaf 最有效益 | Tail-Mixed 上 2e_K10 **first-q −83%、e2e_warm −75%**（seed-1 單一 workload）| **部分符合**（§5.4；但此 hot-leaf 增益專屬 Tail-Mixed 的 not-found 熱點——跨 seed 為 −55% 雙峰、且與 footprint-matched `2f_top14` 統計不可分；pure-hit Tail-Hit 上回落到 interior skeleton ~−27~30%，§6.2.8）|
 | 5 | RAM 壓力會吃掉 prefetch 效益 | cap 壓到 working set 以下(6–16 MB)：小 hotset targeted first-q 不受影響（delivery 全程 100%），唯 2f_slru（整份 WS）崩回 baseline | **部分符合（依 hotset 大小分歧）**（§6.2.2）|
 
 ### 5.1 Per-workload best methods (overview)
 
-實驗下(layout orig，async；baseline A 523 / B 749 / C 1087 µs),「first-query 最低」與
+實驗下(layout orig，async；baseline Scattered-Zipf 523 / Uniform-100K 749 / Tail-Mixed 1087 µs),「first-query 最低」與
 「e2e best」常常**不是同一個 strategy**,而且 **e2e best 取決於部署模型**:
 
 | workload | first-q 最低 | first-q | e2e best（standalone,含冷 open）| e2e best（warm-process,≈static）|
 |---|---|---:|---|---|
-| **A** (Zipfian) | 2f_slru | **108 µs (−79%)** | baseline（任何 prefetch e2e 皆較慢）| **layers_5 / 2d / 2e_K10 −11~14%**（452–464 µs）|
-| **B** (uniform) | 2f_slru | **107 µs (−86%)** | 2d / 2e_K10 ≈ 打平（−1~+2%）| **layers_5 / 2d / 2e_K10 −29~34%**（494–528 µs）|
-| **C** (C_mixed, ~50% not-found) | 2f_slru | **102 µs (−91%)** | **2e_K10 −54%**（501 µs, seed-1）| **2e_K10 −75%**（268 µs, seed-1; 跨 seed −55% 雙峰, §6.2.8）|
+| **Scattered-Zipf** (Zipfian) | 2f_slru | **108 µs (−79%)** | baseline（任何 prefetch e2e 皆較慢）| **layers_5 / 2d / 2e_K10 −11~14%**（452–464 µs）|
+| **Uniform-100K** (uniform) | 2f_slru | **107 µs (−86%)** | 2d / 2e_K10 ≈ 打平（−1~+2%）| **layers_5 / 2d / 2e_K10 −29~34%**（494–528 µs）|
+| **Tail-Mixed** (~50% not-found) | 2f_slru | **102 µs (−91%)** | **2e_K10 −54%**（501 µs, seed-1）| **2e_K10 −75%**（268 µs, seed-1; 跨 seed −55% 雙峰, §6.2.8）|
 
 > **註**:2f_slru first-q 三 workload 都最低(−79~91%),但其 deliver(載整份 working set)
-> A/B ~7 ms、C ~0.86 ms → **e2e A +1299% / B +879%(warm)** 都遠輸;只有 **C(deliver 小)
-> warm-process e2e −12%** 才小贏。除 C 外，2f 的 e2e 兩模型都輸。詳見 §5.5。
+> Scattered-Zipf/Uniform-100K ~7 ms、Tail-Mixed ~0.86 ms → **e2e Scattered-Zipf +1299% / Uniform-100K +879%(warm)** 都遠輸;只有 **Tail-Mixed(deliver 小)
+> warm-process e2e −12%** 才小贏。除 Tail-Mixed 外，2f 的 e2e 兩模型都輸。詳見 §5.5。
 >
 > **e2e best 依部署模型而定**:**standalone warmer**(另起 process、cold start DB，多花 ~200 µs)下,
-> 只有慢 workload(C)的 2e_K10 贏；**warm-process / integrated**(app 已在跑、重用 handle、不做 cold open, ≈ static 的算法)下,**targeted prefetch 在三個 workload 的 e2e 都贏**(見 §5.5)。
+> 只有慢 workload(Tail-Mixed)的 2e_K10 贏；**warm-process / integrated**(app 已在跑、重用 handle、不做 cold open, ≈ static 的算法)下,**targeted prefetch 在三個 workload 的 e2e 都贏**(見 §5.5)。
 
-![7 種strategy × 3 種 layout 跨 A/B/C 的 first query latency 比較](figures/out/05_strategy_comparison.png)
+![7 種strategy × 3 種 layout 跨 Scattered-Zipf/Uniform-100K/Tail-Mixed 的 first query latency 比較](figures/out/05_strategy_comparison.png)
 
 *圖 5:每個 workload × layout 下各 strategy 的 async first-query (越短越好)。
 first-q 上 2f 全部最低,但 e2e 要看 §5.5 的兩個部署模型，warm-process 下 targeted prefetch 三 workload 皆贏。*
 
-### 5.2 Best combination on Workload A
+### 5.2 Best combination on Scattered-Zipf
 
 **（async delivery mode,median;完整表見 [overall_results.md](https://github.com/wongzinc/sqlite-research-project-sharing/blob/main/overall_results.md)。`open`=冷 open(db)、`deliver`=prefetch syscalls;`e2e_std`=fq+open+deliver、`e2e_warm`=fq+deliver。）**
 
-Workload A、layout orig（µs）:
+Scattered-Zipf、layout orig（µs）:
 
 | 做法 | first-q | open | deliver | e2e_std (vs base) | e2e_warm (vs base) | warm e2e 跨 10 seed (CI, verdict) |
 |---|---:|---:|---:|---:|---:|---:|
@@ -752,13 +752,13 @@ Workload A、layout orig（µs）:
 | 2e_K10 | 363 (−31%) | 231 | 101 | 694 (+33%) | **464 (−11%)** | **−36%** [−50,−23] 10/10 · robust |
 | 2f_slru | 108 (−79%) | 230 | 7217 | 7552 (+1343%) | 7324 (+1299%) | +744% [+662,+870] 10/10 · robust(worse) |
 
-> **觀察**:在 A 這種 baseline 本來就快(~523 µs)的 cell,**standalone warmer 的 cold open db(~230 µs) + deliver 超過 first-query 省下的時間 → `e2e_std` 比 baseline 慢(+30~33%)**；但在 warm-process 模型中,baseline 與prefetch **雙方都不需要 open**,因此prefetch策略能勝出的純粹原因,是其**首查延遲的縮減量(first-query improvement)大於prefetch資料傳遞的開銷(delivery cost)** → **`e2e_warm` 比 baseline 快 11~14%**。`open_us`(~200 µs)只決定 `e2e_std` 與 `e2e_warm` 兩個模型之間的差距,並**不**決定 warm-process 模型內prefetch對 baseline 的勝負(§3.4 / §5.5)。2f 因 deliver ~7 ms,兩模型都遠輸。
+> **觀察**:在 Scattered-Zipf 這種 baseline 本來就快(~523 µs)的 cell,**standalone warmer 的 cold open db(~230 µs) + deliver 超過 first-query 省下的時間 → `e2e_std` 比 baseline 慢(+30~33%)**；但在 warm-process 模型中,baseline 與prefetch **雙方都不需要 open**,因此prefetch策略能勝出的純粹原因,是其**首查延遲的縮減量(first-query improvement)大於prefetch資料傳遞的開銷(delivery cost)** → **`e2e_warm` 比 baseline 快 11~14%**。`open_us`(~200 µs)只決定 `e2e_std` 與 `e2e_warm` 兩個模型之間的差距,並**不**決定 warm-process 模型內prefetch對 baseline 的勝負(§3.4 / §5.5)。2f 因 deliver ~7 ms,兩模型都遠輸。
 
-> ⚠️ **跨-seed 校正（§6.2.4）**:此表為單一 workload(`results/main`),而該抽樣恰好給了 A 一個偏便宜的第一筆查詢。跨 **10 個 seed**,A 上的 **access-pattern prefetch 其實是 robust 的更大勝**——**2d −25%(CI [−29,−20])、2e_K10 −36%([−50,−23]),皆 10/10 seed 改善**;反觀 **structural `layers_5` 的 −9% 並不 robust**(跨 seed −5%[−16,**+4**]、僅 6/10 同號 → **tie**)。亦即單一 workload 在 A 上同時**低估了 targeted、又高估了 layers_5**;robust 的勝負以 §6.2.4 的 cross-seed CI 為準。
+> ⚠️ **跨-seed 校正（§6.2.4）**:此表為單一 workload(`results/main`),而該抽樣恰好給了 Scattered-Zipf 一個偏便宜的第一筆查詢。跨 **10 個 seed**,Scattered-Zipf 上的 **access-pattern prefetch 其實是 robust 的更大勝**——**2d −25%(CI [−29,−20])、2e_K10 −36%([−50,−23]),皆 10/10 seed 改善**;反觀 **structural `layers_5` 的 −9% 並不 robust**(跨 seed −5%[−16,**+4**]、僅 6/10 同號 → **tie**)。亦即單一 workload 在 Scattered-Zipf 上同時**低估了 targeted、又高估了 layers_5**;robust 的勝負以 §6.2.4 的 cross-seed CI 為準。
 
-![Workload A 上 layout × strategy 的效果](figures/out/02_layout_effect.png)
+![Scattered-Zipf 上 layout × strategy 的效果](figures/out/02_layout_effect.png)
 
-*圖 2:Workload A、async first-query,各 layout 的 baseline 與strategy(2f ≈ −79% first-q)。注意 first-query 與 end-to-end 的結果不同(見上表)。*
+*圖 2:Scattered-Zipf、async first-query,各 layout 的 baseline 與strategy(2f ≈ −79% first-q)。注意 first-query 與 end-to-end 的結果不同(見上表)。*
 
 ### 5.3 Workload-dependent benefit ceiling
 
@@ -766,19 +766,19 @@ first-query improvement上限(orig,vs baseline):
 
 | scenario | 只載 interior(layers/2d) | + hot leaves / 全 working set | 原因 |
 |---|---:|---:|---|
-| **A**（熱門集中）| −27~30% | 2e_K500 −64% / 2f −79% | Zipfian skew 使首查機率集中少數 leaf（量測時全頁皆 cold），小 hotset 較易覆蓋，interior-only 即有中段效益 |
-| **B**（uniform 隨機讀）| −44% | 2f −86% | 每筆打 cold leaf，interior-only 卡在 ~−44%,只有整份 dump 才壓得低 |
-| **C**（檔尾高 key、半數 not-found）| −38~39% | **2e_K10 −83%** / 2f −91% | 每筆 cold leaf,但 **「access-pattern」加載 top-K hot leaves 可突破**到 −83%（最右葉吸收 miss 流量成超熱 leaf，§6.2.6） |
+| **Scattered-Zipf**（熱門集中）| −27~30% | 2e_K500 −64% / 2f −79% | Zipfian skew 使首查機率集中少數 leaf（量測時全頁皆 cold），小 hotset 較易覆蓋，interior-only 即有中段效益 |
+| **Uniform-100K**（uniform 隨機讀）| −44% | 2f −86% | 每筆打 cold leaf，interior-only 卡在 ~−44%,只有整份 dump 才壓得低 |
+| **Tail-Mixed**（檔尾高 key、半數 not-found）| −38~39% | **2e_K10 −83%** / 2f −91% | 每筆 cold leaf,但 **「access-pattern」加載 top-K hot leaves 可突破**到 −83%（最右葉吸收 miss 流量成超熱 leaf，§6.2.6） |
 
-![A/B/C 三 workload 在 clean DB 上的 layers_N plateau](figures/out/04_nsweep_plateau.png) 
+![Scattered-Zipf/Uniform-100K/Tail-Mixed 三 workload 在 clean DB 上的 layers_N plateau](figures/out/04_nsweep_plateau.png) 
 
-*（clean DB、layout orig、async first-query；A/B 在 N=5 落底、C 需 N=92。3-layout 版見 Figure 11、churned-DB 版見 Figure 12。）*
+*（clean DB、layout orig、async first-query；Scattered-Zipf/Uniform-100K 在 N=5 落底、Tail-Mixed 需 N=92。3-layout 版見 Figure 11、churned-DB 版見 Figure 12。）*
 
-*圖 4：N（prefetch 多少個 interior page）對 first query 的影響。**A/B 在 N=5 就到 plateau**（B 甚至 N=4 即落底，−47%），**此 plateau 描述的是「跑完整段 workload 的 avg latency / steady-state」**：first-q 時 leaves 跟 interior 同樣是 cold（cold-start protocol DONTNEED 全清），layers_5 在 first-q 只移除 interior fault，仍付一次 leaf fault；**跑開後** hot keys 對應的 leaves 自然 warm-up、interior 才成為唯一反覆需要且 shared 的 bottleneck，所以 prefetch 專攻 interior 就夠。**唯 C 要到 N=92 才壓住** first-q：C 的 hot interior page 落在 file 中段，而 layers_N 按 file offset 升序取前 N 個，小 N 會選到錯的 early-offset page（N=5 才 −5%），要取滿 92 個才蓋到中段的 hot interior（−41%）。Churn 不改變此 plateau 的形狀。*
+*圖 4：N（prefetch 多少個 interior page）對 first query 的影響。**Scattered-Zipf/Uniform-100K 在 N=5 就到 plateau**（Uniform-100K 甚至 N=4 即落底，−47%），**此 plateau 描述的是「跑完整段 workload 的 avg latency / steady-state」**：first-q 時 leaves 跟 interior 同樣是 cold（cold-start protocol DONTNEED 全清），layers_5 在 first-q 只移除 interior fault，仍付一次 leaf fault；**跑開後** hot keys 對應的 leaves 自然 warm-up、interior 才成為唯一反覆需要且 shared 的 bottleneck，所以 prefetch 專攻 interior 就夠。**唯 Tail-Mixed 要到 N=92 才壓住** first-q：Tail-Mixed 的 hot interior page 落在 file 中段，而 layers_N 按 file offset 升序取前 N 個，小 N 會選到錯的 early-offset page（N=5 才 −5%），要取滿 92 個才蓋到中段的 hot interior（−41%）。Churn 不改變此 plateau 的形狀。*
 
-### 5.4 Access-pattern frugality on Workload C
+### 5.4 Access-pattern frugality on Tail-Mixed
 
-不是盲目載前 N 個，而是**先 observation 哪些 page 真的被用到**，再只載那些。實驗，Workload C、layout orig(baseline 1087 µs):
+不是盲目載前 N 個，而是**先 observation 哪些 page 真的被用到**，再只載那些。實驗，Tail-Mixed、layout orig(baseline 1087 µs):
 
 | 做法 | first-q | first-q imp | open | deliver | e2e_std | e2e_warm | warm e2e 跨 10 seed (CI, verdict) |
 |---|---:|---:|---:|---:|---:|---:|---:|
@@ -786,22 +786,22 @@ first-query improvement上限(orig,vs baseline):
 | 只載真正用過的 interior（2d）| 664 | −39% | 234 | 71 | 969 (−11%) | 735 (−32%) | −36% [−39,−33] 10/10 · robust |
 | **+ 最 hot 的 10 個 leaf node（2e_K10）**| **186**※ | **−83%** | 234 | 83 | **501 (−54%)** | **268 (−75%)**※ | **−55%** [−67,−43] · robust·**雙峰**（§6.2.8）|
 
-> **觀察**:C 上「只載 interior」(2d/layers_92) first-q −38~39%、`e2e_warm` 已 −20~32%;
+> **觀察**:Tail-Mixed 上「只載 interior」(2d/layers_92) first-q −38~39%、`e2e_warm` 已 −20~32%;
 > **真正解鎖的是加載 top-10 hot leaves(2e_K10)**，把 first-q 壓到 186 µs(−83%)、
 > **`e2e_warm` 268 µs(−75%)/ `e2e_std` 501 µs(−54%)**，全矩陣最佳 e2e。三者 deliver 都小
 > (~70–200 µs)、冷 open ~220 µs,所以 e2e 由 first-q 決定。**※ 此 186/268 µs 是 `results/main` seed 1 的 single-instantiation**;跨 seed（修正 tie-break 後）為 **−55% [−67,−43] 雙峰**——首查是 not-found probe 的 seed ~−70%（真實最右葉熱點）、是真 hit 的 seed ~−31%（interior skeleton）。**舊的 −70% [−72,−69] tight/robust 是 first-op leakage 把 hit-seed 也灌到 −70% 的假象**（§6.2.8 已修正）。
-> **此 −75% 的量級專屬 C 的 mixed / not-found 結構**（~50% not-found 高 key 集中到最右葉成真實熱點）——pure-hit 控制 **C_hit** 移除該熱點後,tail-read 的普適 targeted 效益是 interior skeleton 的 **~−28% e2e_warm**,修正後 `2e_K10` 在 C_hit 亦回落到 −27%（**§6.2.8**）。
+> **此 −75% 的量級專屬 Tail-Mixed 的 mixed / not-found 結構**（~50% not-found 高 key 集中到最右葉成真實熱點）——pure-hit 控制 **Tail-Hit** 移除該熱點後,tail-read 的普適 targeted 效益是 interior skeleton 的 **~−28% e2e_warm**,修正後 `2e_K10` 在 Tail-Hit 亦回落到 −27%（**§6.2.8**）。
 
 #### 5.4.1 三槓桿 ablation：page-type(interior) 是 robust 槓桿；access-frequency leaf 僅在真熱點時（S1，tie-break 修正後）
 
-2e_K10 把 C 的 first-q 從 2d 的 −43% 再壓到 −63%——多出來那部分，是「page-type 感知」還是「access-frequency 選 hot leaf」？我們把 2e_K10 的 hotset 拆成兩個 selection 槓桿、再加一個對照組（同 layout、同一批跑、**tie-break 修正後** `results/ablation_comp_v2`、10-seed bootstrap CI）:
+2e_K10 把 Tail-Mixed 的 first-q 從 2d 的 −43% 再壓到 −63%——多出來那部分，是「page-type 感知」還是「access-frequency 選 hot leaf」？我們把 2e_K10 的 hotset 拆成兩個 selection 槓桿、再加一個對照組（同 layout、同一批跑、**tie-break 修正後** `results/ablation_comp_v2`、10-seed bootstrap CI）:
 
 - **2d** = 只載 interior（**page-type** 槓桿）
 - **leaf_freq_K10** = 只載 top-10 hot leaves（**access-frequency** 槓桿，= 2e_K10 扣掉 interior）
 - **leaf_rand_K10** = 載「**同型別(leaf_table)、同 10 張、但隨機抽的非 hot leaf**」(對照組)
 - **2e_K10** = interior ∪ hot leaves（合併）
 
-集合上 `2e_K10 = 2d ∪ leaf_freq_K10`。Workload C_mixed、orig（10-seed mean Δ% [95% CI]）:
+集合上 `2e_K10 = 2d ∪ leaf_freq_K10`。Tail-Mixed、orig（10-seed mean Δ% [95% CI]）:
 
 | arm | 隔離的槓桿 | pages | first-q Δ% | e2e_warm Δ% | verdict |
 |---|---|---:|---:|---:|---|
@@ -812,15 +812,15 @@ first-query improvement上限(orig,vs baseline):
 
 **結論（tie-break 修正後，與 pre-fix 相反）：page-type（interior）是 robust 的那根槓桿（2d −36% robust）；access-frequency 的 leaf-only 槓桿 `leaf_freq_K10` 只是 tie（e2e_warm −3%、CI 跨 0）**——它舊版的 −40% **幾乎全部是 first-op leakage**（§6.2.8；leaf-only 沒有 interior path、又只在首查恰為 not-found probe 時才靠最右葉得利 → 標準差極大、非 robust）。隨機 leaf 甚至**淨變慢（+7%）**。合併的 2e_K10 −55% 是雙峰，且（見下 competitive）**與 footprint-matched 的純頻率 dump 統計上不可分**。**即 interior skeleton 既是 robust 貢獻者、也是使 leaf prefetch 有用的前提（leaf 不搭 interior 幾乎無效）——「access-frequency 才是主力」的 pre-fix 結論在修正後不成立。**
 
-> **競品對照（同批）**：C_mixed 上 warm e2e，`2e_K10` **−54.5% [−66.6,−42.2]** vs footprint-matched 純頻率 dump `2f_top14` **−55.2% [−66.8,−43.2]**、`2f_top28` **−58.3% [−68.1,−47.4]**——**CI 幾乎完全重疊，type-aware `2e_K10` 沒有證據勝過純頻率排名**。舊競品章「2e robustly 勝出、從未被 tuned dump 打敗」在 tie-break 修正後**撤回**。
+> **競品對照（同批）**：Tail-Mixed 上 warm e2e，`2e_K10` **−54.5% [−66.6,−42.2]** vs footprint-matched 純頻率 dump `2f_top14` **−55.2% [−66.8,−43.2]**、`2f_top28` **−58.3% [−68.1,−47.4]**——**CI 幾乎完全重疊，type-aware `2e_K10` 沒有證據勝過純頻率排名**。舊競品章「2e robustly 勝出、從未被 tuned dump 打敗」在 tie-break 修正後**撤回**。
 
-> **B / A 對照**（pre-fix 批，方向性）：B(uniform、無 hot leaf) leaf_freq≈leaf_rand≈0，全靠 2d(interior)扛；A 的 leaf_freq 有真實 Zipfian 訊號（把 A 從 2d 的 −25% 推到 2e_K10 −36%）——**只有 A 的 access-frequency 是真訊號**。
+> **Uniform-100K / Scattered-Zipf 對照**（pre-fix 批，方向性）：Uniform-100K(uniform、無 hot leaf) leaf_freq≈leaf_rand≈0，全靠 2d(interior)扛；Scattered-Zipf 的 leaf_freq 有真實 Zipfian 訊號（把 Scattered-Zipf 從 2d 的 −25% 推到 2e_K10 −36%）——**只有 Scattered-Zipf 的 access-frequency 是真訊號**。
 
 layout 槓桿(orig→ta)只改 deliver 成本、不改上述 selection 故事(§6.1「type-aware layout 非淨贏」)。
 
 ![三槓桿 ablation（tie-break 修正後）](figures/out/17_lever_ablation.png)
 
-*圖 17（tie-break 修正後、orig-only；C 取自 `results/ablation_comp_v2`）:三槓桿 ablation。**C 上 leaf_freq（綠）修正後掉到 tie（其 pre-fix 的 −40% 是 first-op leakage）、page-type `2d`（藍）才是 robust 的那根、leaf_rand（灰）淨變慢**;合併 2e_K10（黑）−55% 雙峰。A 的 leaf_freq 有真實（但小）Zipfian 訊號、B 幾乎為 0。*
+*圖 17（tie-break 修正後、orig-only；Tail-Mixed 取自 `results/ablation_comp_v2`）:三槓桿 ablation。**Tail-Mixed 上 leaf_freq（綠）修正後掉到 tie（其 pre-fix 的 −40% 是 first-op leakage）、page-type `2d`（藍）才是 robust 的那根、leaf_rand（灰）淨變慢**;合併 2e_K10（黑）−55% 雙峰。Scattered-Zipf 的 leaf_freq 有真實（但小）Zipfian 訊號、Uniform-100K 幾乎為 0。*
 
 > **命名校正(回應 R2 W4 / CONSENSUS-2 #9)**:本框架其實同時用了**兩個** selection 槓桿——**page-type 感知**(選 interior,扛 uniform B 與 A 的主力)與 **access-frequency 感知**(選 hot leaf,解鎖 C 的 headline)。單用「page-type-aware」命名會低估後者;準確說法是 **type-aware(interior)＋ access-frequency-aware(hot leaf)的複合 targeting**。
 
@@ -830,7 +830,7 @@ layout 槓桿(orig→ta)只改 deliver 成本、不改上述 selection 故事(§
 
 e2e_warm Δ% vs baseline（async、orig、跨 10 seed mean [95% CI]，footprint = 頁數）：
 
-| arm | footprint | A | B | C |
+| arm | footprint | Scattered-Zipf | Uniform-100K | Tail-Mixed |
 |---|---:|---:|---:|---:|
 | **2e_K10**（targeted） | 14–28 | **−38 [−53,−25]** | **−24 [−31,−12]** | **−55 [−67,−42]**† |
 | 2f_top14（ranked dump） | 14 | −33 [−43,−24] | −27 [−34,−16] | **−55 [−67,−43]**† |
@@ -841,15 +841,15 @@ e2e_warm Δ% vs baseline（async、orig、跨 10 seed mean [95% CI]，footprint 
 
 三個結論：
 
-1. **cost-accounting headline 不靠稻草人**：e2e_warm 隨 dump footprint **單調惡化**——full dump 在 A/B 爆到 **+730 ~ +762%**，唯有**小而排序的 partial dump 才贏**（sweet spot 在 N≈14–28）。「dump 整份」輸的不是 dump 機制本身、而是 **dump 太多**；這正是本研究 cost-accounting 要量化的 deliver trade-off。
-2. **broad workload（A/B）：page-type 非必要**——tuned `2f_topN`（純頻率、零 page-type）在 matched footprint 下**追平** `2e_K10`（A `2e_K10` −38% vs `2f_top28` −37%、B −24% vs `2f_top14` −27%，CI 重疊；first-q 亦同）。
-3. **narrow workload（C）：修正後 page-type 也不勝**——tie-break 修正後同批（`results/ablation_comp_v2`）`2e_K10` **−55% [−67,−42]** vs matched `2f_top14` **−55% [−67,−43]**（first-q −63% vs −64%）——**CI 幾乎完全重疊、統計不可分**。舊表的「`2e_K10` −72% robustly 勝 `2f_top14` −57%」是 **first-op leakage** 造成的假象（§6.2.8）。
+1. **cost-accounting headline 不靠稻草人**：e2e_warm 隨 dump footprint **單調惡化**——full dump 在 Scattered-Zipf/Uniform-100K 爆到 **+730 ~ +762%**，唯有**小而排序的 partial dump 才贏**（sweet spot 在 N≈14–28）。「dump 整份」輸的不是 dump 機制本身、而是 **dump 太多**；這正是本研究 cost-accounting 要量化的 deliver trade-off。
+2. **broad workload（Scattered-Zipf/Uniform-100K）：page-type 非必要**——tuned `2f_topN`（純頻率、零 page-type）在 matched footprint 下**追平** `2e_K10`（Scattered-Zipf `2e_K10` −38% vs `2f_top28` −37%、Uniform-100K −24% vs `2f_top14` −27%，CI 重疊；first-q 亦同）。
+3. **narrow workload（Tail-Mixed）：修正後 page-type 也不勝**——tie-break 修正後同批（`results/ablation_comp_v2`）`2e_K10` **−55% [−67,−42]** vs matched `2f_top14` **−55% [−67,−43]**（first-q −63% vs −64%）——**CI 幾乎完全重疊、統計不可分**。舊表的「`2e_K10` −72% robustly 勝 `2f_top14` −57%」是 **first-op leakage** 造成的假象（§6.2.8）。
 
-> **綜合（修正後）**：`2e_K10` 與 tuned dump 在 **A/B/C 全面相當、無一格 robustly 勝**（含修正後的 C）。故 §5.5「targeted > naive full-dump」仍成立且非稻草人勝——**輸的是 dump 太多（deliver）**；但 **type-aware `2e_K10` 沒有證據勝過 footprint-matched 純頻率排名**。機制歸因＝「**小 footprint + frequency ranking**」；page-type 的價值在**保證載入 interior skeleton**（robust、且是 leaf prefetch 生效的前提），不是在 narrow workload 勝過純頻率。完整表見 [overall_results.md](https://github.com/wongzinc/sqlite-research-project-sharing/blob/main/overall_results.md)「競爭性 baseline」節。† C 列同批修正後值。
+> **綜合（修正後）**：`2e_K10` 與 tuned dump 在 **Scattered-Zipf/Uniform-100K/Tail-Mixed 全面相當、無一格 robustly 勝**（含修正後的 Tail-Mixed）。故 §5.5「targeted > naive full-dump」仍成立且非稻草人勝——**輸的是 dump 太多（deliver）**；但 **type-aware `2e_K10` 沒有證據勝過 footprint-matched 純頻率排名**。機制歸因＝「**小 footprint + frequency ranking**」；page-type 的價值在**保證載入 interior skeleton**（robust、且是 leaf prefetch 生效的前提），不是在 narrow workload 勝過純頻率。完整表見 [overall_results.md](https://github.com/wongzinc/sqlite-research-project-sharing/blob/main/overall_results.md)「競爭性 baseline」節。† Tail-Mixed 列同批修正後值。
 
 ![競爭性 baseline：tuned ranked dump vs targeted](figures/out/18_competitive_baseline.png)
 
-*圖 18（tie-break 修正後；C 的 `2e_K10`/`2f_top14/28` 取自 `results/ablation_comp_v2`）：competitive baseline（10-seed mean Δ%、bootstrap 95% CI）。x = dump footprint（頁、log）；`2f_topN`（線）= 純頻率 ranked partial dump，`2e_K10`（★）= page-type＋frequency targeted。**右（e2e_warm）**：footprint 一大、deliver 成本就吃掉一切——full dump（~4400 頁）在 A/B 爆到 +700~800%；小而排序的 dump 才在 0 線下。**★ 在 A/B/C 都落在對應的 partial-dump curve 上——type-aware `2e_K10` 沒有勝過 footprint-matched 純頻率排名（含修正後的 C）**。*
+*圖 18（tie-break 修正後；Tail-Mixed 的 `2e_K10`/`2f_top14/28` 取自 `results/ablation_comp_v2`）：competitive baseline（10-seed mean Δ%、bootstrap 95% CI）。x = dump footprint（頁、log）；`2f_topN`（線）= 純頻率 ranked partial dump，`2e_K10`（★）= page-type＋frequency targeted。**右（e2e_warm）**：footprint 一大、deliver 成本就吃掉一切——full dump（~4400 頁）在 Scattered-Zipf/Uniform-100K 爆到 +700~800%；小而排序的 dump 才在 0 線下。**★ 在 Scattered-Zipf/Uniform-100K/Tail-Mixed 都落在對應的 partial-dump curve 上——type-aware `2e_K10` 沒有勝過 footprint-matched 純頻率排名（含修正後的 Tail-Mixed）**。*
 
 ### 5.5 The preprocessing trade-off （本研究的核心觀察）
 
@@ -869,7 +869,7 @@ e2e_warm Δ% vs baseline（async、orig、跨 10 seed mean [95% CI]，footprint 
 ![純 first-query latency 比較（無 preprocessing 耗時）](figures/out/13_strategy_firstq_bars.png)
 
 *圖 13：純 first-query latency（async,log scale）。**2f SLRU first-q 全部最低**，既
-A/B/C ~102–108 µs(−79~91%)，比 baseline 523–1087 µs 短一個量級。這是 §5.1
+Scattered-Zipf/Uniform-100K/Tail-Mixed ~102–108 µs(−79~91%)，比 baseline 523–1087 µs 短一個量級。這是 §5.1
 「first-q 最低」欄的視覺版本(但 e2e 另有結論，見圖 14)。*
 
 ![End-to-end cold start：兩個部署模型 stacked，跟 baseline 比](figures/out/14_strategy_endtoend_stacked.png)
@@ -877,8 +877,8 @@ A/B/C ~102–108 µs(−79~91%)，比 baseline 523–1087 µs 短一個量級。
 *圖 14：**end-to-end cold start,兩個部署模型**(stacked:first-q + deliver + 灰色冷 open)。
 **warm-process e2e = bar 去掉灰色(= first-q + deliver);standalone e2e = 整條 bar 頂**;
 灰色那段就是「integrate 進 app 即可省掉」的 cold open db 。每根 bar 標的是 **warm-process e2e 改善**
-(綠=贏/紅=輸)。**2f 兩模型都遠超紅線**(A +1299% / B +879%)；但 **warm-process 下 targeted prefetch(layers_5/2d/2e_K10)三個 workload 都在紅線下**(單一 workload:A −11~14%、B −29~34%、C 2e_K10 −75%;C 跨 seed −55% 雙峰,§6.2.8)。
-標 **‡** 的 % (A、B 的 layers_5)代表這個單一 workload 的勝出**落在雜訊內**——10-seed 跨-seed CI 跨 0(§6.2.4),不算 robust;未標 ‡ 的勝負則跨 seed 穩健。即:targeted prefetch 真正跨 seed 守得住的是 **access-pattern(2d/2e)**,structural layers_5 的單格勝出在 A/B 不可恃。*
+(綠=贏/紅=輸)。**2f 兩模型都遠超紅線**(Scattered-Zipf +1299% / Uniform-100K +879%)；但 **warm-process 下 targeted prefetch(layers_5/2d/2e_K10)三個 workload 都在紅線下**(單一 workload:Scattered-Zipf −11~14%、Uniform-100K −29~34%、Tail-Mixed 2e_K10 −75%;Tail-Mixed 跨 seed −55% 雙峰,§6.2.8)。
+標 **‡** 的 % (Scattered-Zipf、Uniform-100K 的 layers_5)代表這個單一 workload 的勝出**落在雜訊內**——10-seed 跨-seed CI 跨 0(§6.2.4),不算 robust;未標 ‡ 的勝負則跨 seed 穩健。即:targeted prefetch 真正跨 seed 守得住的是 **access-pattern(2d/2e)**,structural layers_5 的單格勝出在 Scattered-Zipf/Uniform-100K 不可恃。*
 
 #### 5.5.1 每種 strategy 的 preprocessing overhead
 
@@ -891,7 +891,7 @@ preprocessing 拆成 **open(db)** 與 **deliver** 兩個 term(warmer 分別自�
 | **2d access-pattern（只 interior）**| 只載用過的 interior | ~194–222 µs | ~68–110 µs | open |
 | **2e_K10（interior + 10 hot leaf）**| + 最 hot 的 10 leaf | ~193–222 µs | ~80–124 µs | open |
 | **2e_K500（interior + 500 hot leaf）**| + 最 hot 的 500 leaf | ~220 µs | ~0.5–0.85 ms | deliver |
-| **2f SLRU（重載前次 cache）**| 載整份 resident working set | ~220 µs | **~0.6–7 ms**(A/B ~7ms、C ~0.86ms) | **deliver 主導** |
+| **2f SLRU（重載前次 cache）**| 載整份 resident working set | ~220 µs | **~0.6–7 ms**(Scattered-Zipf/Uniform-100K ~7ms、Tail-Mixed ~0.86ms) | **deliver 主導** |
 
 > **open(db) 是 per-layout 常數(~200 µs)、與策略無關**，它是 standalone 與 warm-process 兩個 e2e
 > 模型的**唯一差**:standalone warmer 另起 process 和 cold start DB；app 已在跑、重用既有 handle 則免。
@@ -899,52 +899,52 @@ preprocessing 拆成 **open(db)** 與 **deliver** 兩個 term(warmer 分別自�
 >
 > **`open_us` 變異與 common-mode 性質（n=810 non-warmup rep）**:整體 median **221 µs**、stdev **17 µs**
 > （CV **8%**）、p95 **231 µs**——分佈緊。關鍵是它**與 strategy、layout 皆無關**:逐 strategy median 全落在
-> **220–222 µs**（stdev 10–21）、逐 layout（orig/ta/vacuum）皆 ~221 µs。workload 間有小幅差異（A 各策略 ~193、
-> B/C ~222 µs,屬跨批機器狀態漂移,§6.2.5），但**同一 cell 內 baseline 與所有 prefetch 策略的 open 相同**——這
+> **220–222 µs**（stdev 10–21）、逐 layout（orig/ta/vacuum）皆 ~221 µs。workload 間有小幅差異（Scattered-Zipf 各策略 ~193、
+> Uniform-100K/Tail-Mixed ~222 µs,屬跨批機器狀態漂移,§6.2.5），但**同一 cell 內 baseline 與所有 prefetch 策略的 open 相同**——這
 > 正是下節 standalone 對齊所依賴的:`open_us` 是冷 open 同一 DB 的固定成本（common-mode）,而**非**某條 prefetch
 > 路徑獨有的稅。
 
 #### 5.5.2 end-to-end 表現（兩個部署模型）
 
-對比快(A)與慢(C),`e2e_std`=fq+open+deliver、`e2e_warm`=fq+deliver:
+對比快(Scattered-Zipf)與慢(Tail-Mixed),`e2e_std`=fq+open+deliver、`e2e_warm`=fq+deliver:
 
 單格為單一 workload(`results/main`);「跨seed」欄為 10-seed warm e2e mean + verdict(§6.2.4)。
 
-| strategy | A e2e_std (base 523) | A e2e_warm | A warm 跨seed | C e2e_std (base 1087) | C e2e_warm | C warm 跨seed |
+| strategy | Scattered-Zipf e2e_std (base 523) | Scattered-Zipf e2e_warm | Scattered-Zipf warm 跨seed | Tail-Mixed e2e_std (base 1087) | Tail-Mixed e2e_warm | Tail-Mixed warm 跨seed |
 |---|---:|---:|---:|---:|---:|---:|
 | Baseline | **523** (—) | **523** (—) | — | **1087** (—) | **1087** (—) | — |
 | 2c layers_5 | 679 (+30%) | **453 (−14%)** | −5% · **tie** | 1352 (+24%) | 1120 (+3%) | +5% · robust(worse) |
 | 2d access-pattern | 678 (+30%) | **452 (−14%)** | **−25% · robust** | 969 (−11%) | **735 (−32%)** | **−36% · robust** |
-| 2e_K10 (+10 leaf) | 694 (+33%) | **464 (−11%)** | **−36% · robust** | 501 (−54%) | **268 (−75%)** | **−70% · robust** |
+| 2e_K10 (+10 leaf) | 694 (+33%) | **464 (−11%)** | **−36% · robust** | 501 (−54%) | **268 (−75%)** | **−55% · robust·雙峰** |
 | 2e_K500 (+500 leaf) | 1311 (+150%) | 1083 (+107%) | +79% · robust(worse) | 915 (−16%) | 680 (−37%) | −31% · robust |
 | **2f SLRU** | 7552 (+1343%) | 7324 (+1299%) | +744% · robust(worse) | 1196 (+10%) | 962 (−12%) | −9% · robust |
 
-> ⚠️ **跨-seed 校正（§6.2.4）**:上表 warm e2e 為單一 workload。經 **10-seed** 驗證,**access-pattern targeted prefetch 三 workload 皆 robust**——**C 2e_K10 −55%[−67,−43]（雙峰,§6.2.8）、A 2e_K10 −36%[−50,−23]、B 2d −25%[−32,−16]**(CI 皆不跨 0、≥9/10 同號);唯 **structural `layers_5` 在 A/B 落在雜訊內**(A −5%[−16,+4] tie、B −1%[−12,+7] directional)。故「targeted prefetch 三 workload e2e 皆改善」的 headline 成立,但其 robustness 來自 **access-pattern(2d/2e)**、而非 structural layers_5。
+> ⚠️ **跨-seed 校正（§6.2.4）**:上表 warm e2e 為單一 workload。經 **10-seed** 驗證,**access-pattern targeted prefetch 三 workload 皆 robust**——**Tail-Mixed 2e_K10 −55%[−67,−43]（雙峰,§6.2.8）、Scattered-Zipf 2e_K10 −36%[−50,−23]、Uniform-100K 2d −25%[−32,−16]**(CI 皆不跨 0、≥9/10 同號);唯 **structural `layers_5` 在 Scattered-Zipf/Uniform-100K 落在雜訊內**(Scattered-Zipf −5%[−16,+4] tie、Uniform-100K −1%[−12,+7] directional)。故「targeted prefetch 三 workload e2e 皆改善」的 headline 成立,但其 robustness 來自 **access-pattern(2d/2e)**、而非 structural layers_5。
 
-**open 是 common-mode、不是 prefetch 稅(standalone 對齊對照)。** 上表 `e2e_std` 對 **bare baseline** 比,在快 workload A 看似 prefetch 普遍變差（layers_5 **+30%**、2e_K10 **+33%**）。但這是把 open **只**算給 prefetch 的假象:一個 standalone 的 **baseline** 同樣得先冷 open 那個 DB。把 baseline 放到同一 standalone 基準——`baseline+open`（open 取 per-workload median **A 230 / C 234 µs**;baseline 本身以 warm-process 量得故 open 未直接測,此值**deduced** 自 prefetch 各策略,因上節已證 `open_us` 與策略無關）——open 在兩邊**相消**(e2e_std 取自 §5.5.2 表的 async `e2e_median`):
+**open 是 common-mode、不是 prefetch 稅(standalone 對齊對照)。** 上表 `e2e_std` 對 **bare baseline** 比,在快 workload Scattered-Zipf 看似 prefetch 普遍變差（layers_5 **+30%**、2e_K10 **+33%**）。但這是把 open **只**算給 prefetch 的假象:一個 standalone 的 **baseline** 同樣得先冷 open 那個 DB。把 baseline 放到同一 standalone 基準——`baseline+open`（open 取 per-workload median **Scattered-Zipf 230 / Tail-Mixed 234 µs**;baseline 本身以 warm-process 量得故 open 未直接測,此值**deduced** 自 prefetch 各策略,因上節已證 `open_us` 與策略無關）——open 在兩邊**相消**(e2e_std 取自 §5.5.2 表的 async `e2e_median`):
 
 | cell | e2e_std | vs **bare** base | vs **base+open**（standalone 對齊） | 對照 e2e_warm vs base |
 |---|---:|---:|---:|---:|
-| **A baseline+open (standalone)** | **753** | — | — | — |
-| A layers_5 | 679 | +30% | **−10%** | −14% |
-| A 2d | 678 | +30% | **−10%** | −14% |
-| A 2e_K10 | 694 | +33% | **−8%** | −11% |
-| **C baseline+open (standalone)** | **1321** | — | — | — |
-| C 2e_K10 | 501 | −54% | **−62%** | −75% |
-| C 2d | 969 | −11% | **−27%** | −32% |
+| **Scattered-Zipf baseline+open (standalone)** | **753** | — | — | — |
+| Scattered-Zipf layers_5 | 679 | +30% | **−10%** | −14% |
+| Scattered-Zipf 2d | 678 | +30% | **−10%** | −14% |
+| Scattered-Zipf 2e_K10 | 694 | +33% | **−8%** | −11% |
+| **Tail-Mixed baseline+open (standalone)** | **1321** | — | — | — |
+| Tail-Mixed 2e_K10 | 501 | −54% | **−62%** | −75% |
+| Tail-Mixed 2d | 969 | −11% | **−27%** | −32% |
 
 > 在同一 standalone 基準下,prefetch 對 baseline 的**絕對**優勢與 warm-process **近乎相同**(代數上 `e2e_std −(base+open)` = `e2e_warm − base` = `deliver + Δfirst-q`,open 不出現;殘差 ≤ 數 µs,源於各策略 open 的 median 微差)——兩個 standalone-對齊欄與 e2e_warm 欄同號、量級一致,只因分母不同（753/1321 vs 523/1087）而百分比略有出入。故 §5.1/§5.5.3 所說「standalone 下快 workload 的 prefetch 紅利被冷 open 抵銷」精確的意思是:prefetch 省下的 first-query 時間**不足以額外 cover 它自己付的那一次 open**（2e_K500/2f 則是 deliver 過重才真輸,與 open 無關),而**非** open 是 prefetch 獨有的開銷——open 只是平移兩個部署模型共同的零點。
 
 #### 5.5.3 three-line takeaway
 
 1. **「重載前次 cache」(2f SLRU) first-q 最低(−79~91%)但 e2e 多半不具優勢**，其 deliver
-   (載整份 working set)A/B ~7 ms 使 e2e 比 baseline 慢一個量級（兩模型皆是）;只有 **C(deliver
+   (載整份 working set)Scattered-Zipf/Uniform-100K ~7 ms 使 e2e 比 baseline 慢一個量級（兩模型皆是）;只有 **Tail-Mixed(deliver
    ~0.86 ms)warm-process e2e −12%** 才小贏。first-q 優秀但會產生 misleading，real cold start 要看 e2e。
 2. **targeted prefetch(layers_5/2d/2e_K10)的 e2e 取決於部署模型**:**standalone**(含 ~200 µs 冷 open)
-   在快 A 輸(+27~29%)、慢 C 贏；**warm-process**(handle 已開、≈ static)**三個 workload 都贏**
-   (單一 workload:A −11~14%、B −29~34%、C 2e_K10 −75%;C 跨 seed 為 −55% 雙峰,§6.2.8)。在 warm-process 中 baseline 與 prefetch **雙方都不付 open**,故勝出的純粹原因是 **first-query improvement > delivery cost**;`open_us` 只決定 standalone 與 warm-process 兩模型之間的差距,不決定 warm 模型內 prefetch 對 baseline 的勝負。
+   在快 Scattered-Zipf 輸(+27~29%)、慢 Tail-Mixed 贏；**warm-process**(handle 已開、≈ static)**三個 workload 都贏**
+   (單一 workload:Scattered-Zipf −11~14%、Uniform-100K −29~34%、Tail-Mixed 2e_K10 −75%;Tail-Mixed 跨 seed 為 −55% 雙峰,§6.2.8)。在 warm-process 中 baseline 與 prefetch **雙方都不付 open**,故勝出的純粹原因是 **first-query improvement > delivery cost**;`open_us` 只決定 standalone 與 warm-process 兩模型之間的差距,不決定 warm 模型內 prefetch 對 baseline 的勝負。
 3. **本研究主張 warm-process**(app 已在跑、prefetch 重用既有 handle):此時 targeted prefetch
-   全面有效益；2f 仍因 deliver 過重不適合 cold-start critical path(只適合 batch、或 C 類小 working set)。
+   全面有效益；2f 仍因 deliver 過重不適合 cold-start critical path(只適合 batch、或 Tail-Mixed 類小 working set)。
    部署形式(integrate vs standalone warmer)就是決定 e2e 表現的關鍵。
 
 > Cadence(圖 8)是同一條 trade-off 的時間版:background warmer 每 cadence 秒 re-warm 一次。
@@ -961,25 +961,25 @@ preprocessing 拆成 **open(db)** 與 **deliver** 兩個 term(warmer 分別自�
 跨整個實驗 matrix 看到的structure性 finding（robustness 驗證在 §6.2）：
 
 1. **N（prefetch 幾個 interior）的形狀因 (workload, layout) 而異**：dense N-sweep
-   (async)顯示 A/Z 在 **N≥5 即 plateau ~−30%**(orig)；**N=1 反而比 baseline 慢
-   ~+31%**(warmer/madvise overhead > coverage)；B 全 plateau **~−47%**(leaf-fault dominate);
-   **C 要 N=92 才到 −40%**(hot interior 在 file 中段、按 offset 取前 N 選錯 page)。
+   (async)顯示 Scattered-Zipf/Concentrated-Zipf 在 **N≥5 即 plateau ~−30%**(orig)；**N=1 反而比 baseline 慢
+   ~+31%**(warmer/madvise overhead > coverage)；Uniform-100K 全 plateau **~−47%**(leaf-fault dominate);
+   **Tail-Mixed 要 N=92 才到 −40%**(hot interior 在 file 中段、按 offset 取前 N 選錯 page)。
    沒有「N=5 universal sweet spot」這種單一結果，best N 跟 layout/workload 綁定。
 2. **沒有 general best strategy**:first-query 上 2f 全部最低(−79~91%)，但看 e2e 時要視
    deliver 大小與部署模型(見 #3、§5.5)。
 3. **e2e 取決於部署模型 + deliver 大小**：**standalone warmer** (另起 process、付 ~200 µs 冷 open)下,
-   快 workload(A)上 targeted prefetch 的 e2e 不優於 baseline(+27~29%)、只有慢 C 贏;但
-   **warm-process / integrated**(app 已在跑、重用 handle、不做 cold open db)下,**targeted prefetch 三個 workload 的 e2e 都有改善**(單一 workload:A −11~14%、B −29~34%、C 2e_K10 −75%)。
-   **這個 headline 經 10-seed sweep 驗證成立,但穩健性來自 access-pattern(2d/2e)而非 structural layers_5**(§6.2.4):跨 seed **A 2e_K10 −36%[−50,−23]、B 2d −25%[−32,−16]、C 2e_K10 −55%[−67,−43]（雙峰,§6.2.8） 皆 robust**;而 **structural layers_5 在 A/B 落在雜訊內**(A tie、B directional)。
-   warm-process 中 baseline 與 prefetch **雙方都不付 open**,故勝出的純粹原因是 **first-query 縮減量 > delivery 開銷**;`open_us` 只決定兩模型之間的差距,不決定 warm 模型內 prefetch 對 baseline 的勝負。type-aware layout 在 實驗下把 A/B 的 baseline **推高**了(A +31%、B +4%)、C 較快(−21%)。
-   **換言之,1c 物理連續性重排是一把雙面刃**:把 interior 集中到檔頭能**小幅放大 structural prefetch(layers_N)在 clustered layout 上的 first-query 改善百分比**(A 上 layers_92 由 orig −30% 增至 clustered −32%),但代價是把 leaf 推到較高 offset、**抬高了以 cold-leaf-fault 為主之 workload 的 no-prefetch baseline**(A 523→658 µs +26%、B 749→770 +3%;唯 file-tail-heavy 的 C 反而 1087→867 −20%)。
-   **關鍵是那個「放大的百分比」是 baseline 被墊高的假象,不是更低的絕對地板**:A 上 layers_92 的 pread first-q 地板在 1c(187 µs)與 1a(187 µs)完全相同,1c 只是把分母(baseline 523→658)墊高才讓 −32% 看起來略大於 1a 的 −30%——在 canonical v2 下這個「放大」只有 ~2 個百分點,更凸顯 1c 不划算。
-   **1c 的明確 net-win 條件(全部需同時成立)**:(i)確定會部署 prefetch、(ii)只能用 structural(layers_N、拿不到 access-pattern residency)、且 (iii)workload 夠傾斜/file-tail-light,使 clustered-interior 的 first-q 絕對增益 > leaf 被推尾造成的 baseline 抬升。**這三條在本研究 A/B/C 任一格都沒同時滿足**:逐格比較**最佳 warm e2e 一律落在 1a(orig)+ access-pattern**(canonical v2:A 452 vs 1c 523、B 509 vs 701、C 268 vs 319 µs),1c 沒有任何一格贏過 orig。
+   快 workload(Scattered-Zipf)上 targeted prefetch 的 e2e 不優於 baseline(+27~29%)、只有慢 Tail-Mixed 贏;但
+   **warm-process / integrated**(app 已在跑、重用 handle、不做 cold open db)下,**targeted prefetch 三個 workload 的 e2e 都有改善**(單一 workload:Scattered-Zipf −11~14%、Uniform-100K −29~34%、Tail-Mixed 2e_K10 −75%)。
+   **這個 headline 經 10-seed sweep 驗證成立,但穩健性來自 access-pattern(2d/2e)而非 structural layers_5**(§6.2.4):跨 seed **Scattered-Zipf 2e_K10 −36%[−50,−23]、Uniform-100K 2d −25%[−32,−16]、Tail-Mixed 2e_K10 −55%[−67,−43]（雙峰,§6.2.8） 皆 robust**;而 **structural layers_5 在 Scattered-Zipf/Uniform-100K 落在雜訊內**(Scattered-Zipf tie、Uniform-100K directional)。
+   warm-process 中 baseline 與 prefetch **雙方都不付 open**,故勝出的純粹原因是 **first-query 縮減量 > delivery 開銷**;`open_us` 只決定兩模型之間的差距,不決定 warm 模型內 prefetch 對 baseline 的勝負。type-aware layout 在 實驗下把 Scattered-Zipf/Uniform-100K 的 baseline **推高**了(Scattered-Zipf +31%、Uniform-100K +4%)、Tail-Mixed 較快(−21%)。
+   **換言之,1c 物理連續性重排是一把雙面刃**:把 interior 集中到檔頭能**小幅放大 structural prefetch(layers_N)在 clustered layout 上的 first-query 改善百分比**(Scattered-Zipf 上 layers_92 由 orig −30% 增至 clustered −32%),但代價是把 leaf 推到較高 offset、**抬高了以 cold-leaf-fault 為主之 workload 的 no-prefetch baseline**(Scattered-Zipf 523→658 µs +26%、Uniform-100K 749→770 +3%;唯 file-tail-heavy 的 Tail-Mixed 反而 1087→867 −20%)。
+   **關鍵是那個「放大的百分比」是 baseline 被墊高的假象,不是更低的絕對地板**:Scattered-Zipf 上 layers_92 的 pread first-q 地板在 1c(187 µs)與 1a(187 µs)完全相同,1c 只是把分母(baseline 523→658)墊高才讓 −32% 看起來略大於 1a 的 −30%——在 canonical v2 下這個「放大」只有 ~2 個百分點,更凸顯 1c 不划算。
+   **1c 的明確 net-win 條件(全部需同時成立)**:(i)確定會部署 prefetch、(ii)只能用 structural(layers_N、拿不到 access-pattern residency)、且 (iii)workload 夠傾斜/file-tail-light,使 clustered-interior 的 first-q 絕對增益 > leaf 被推尾造成的 baseline 抬升。**這三條在本研究 Scattered-Zipf/Uniform-100K/Tail-Mixed 任一格都沒同時滿足**:逐格比較**最佳 warm e2e 一律落在 1a(orig)+ access-pattern**(canonical v2:Scattered-Zipf 452 vs 1c 523、Uniform-100K 509 vs 701、Tail-Mixed 268 vs 319 µs),1c 沒有任何一格贏過 orig。
    故 **1c 在本矩陣中實質是一個探索性的負面結果**——理論上有上述窄場景,但在我們測到的所有 workload 上都被「1a + access-pattern prefetch」支配;**建議預設用 1a,不要部署 1c**,除非確認落在上述三條同時成立的窄場景。
-4. **慢 workload 上「access-pattern + hot leaf」最有效益**：C 上 interior-only(2d/layers_92)
-   first-q −38~39%、warm-process e2e −20~32%；加 top-10 hot leaf(2e_K10) 在 **seed-1 單一 workload** 上 first-q −83%、**warm-process e2e −75%(268 µs)**——但此為 C 的 not-found 熱點案例、跨 seed 為 **−55% 雙峰**、且與 footprint-matched `2f_top14` 統計不可分（§6.2.8），非普適結果。
-5. **2f(整份 working set)e2e 多半不具優勢**:deliver A/B ~7 ms 使 e2e 慢一個量級(兩模型皆是);
-   只有 C(deliver ~0.86 ms)warm-process e2e 才 −12%。適合 batch、不適合 cold-start critical path。
+4. **慢 workload 上「access-pattern + hot leaf」最有效益**：Tail-Mixed 上 interior-only(2d/layers_92)
+   first-q −38~39%、warm-process e2e −20~32%；加 top-10 hot leaf(2e_K10) 在 **seed-1 單一 workload** 上 first-q −83%、**warm-process e2e −75%(268 µs)**——但此為 Tail-Mixed 的 not-found 熱點案例、跨 seed 為 **−55% 雙峰**、且與 footprint-matched `2f_top14` 統計不可分（§6.2.8），非普適結果。
+5. **2f(整份 working set)e2e 多半不具優勢**:deliver Scattered-Zipf/Uniform-100K ~7 ms 使 e2e 慢一個量級(兩模型皆是);
+   只有 Tail-Mixed(deliver ~0.86 ms)warm-process e2e 才 −12%。適合 batch、不適合 cold-start critical path。
 
 ### 6.2 Robustness checks
 
@@ -989,23 +989,23 @@ shared、跨 10 個 workload seed（§6.2.4）、以及 DB 放大 10× 到 ~1 Gi
 #### 6.2.1 Churn evolution（DB 被持續 write 後）
 
 DB 被持續 write（**50k mutation = 10 輪 × 5k**，在 11 個 checkpoint ck0–ck10 上量測，ck0 = t=0 baseline）後，**static t=0 hotset
-完全沒 decay**:實驗量到 C 上 2e_K10_static 跨 checkpoint maintain ~82–86 µs(vs baseline ~580 µs)，ck0→ck10 無上升趨勢；三 layout(orig/vacuum/ta)皆然。
+完全沒 decay**:實驗量到 Tail-Mixed 上 2e_K10_static 跨 checkpoint maintain ~82–86 µs(vs baseline ~580 µs)，ck0→ck10 無上升趨勢；三 layout(orig/vacuum/ta)皆然。
 
-> **適用邊界（重要）**:此「不 decay」成立**是因為 A/B/C 的熱點是平穩的**——churn 的 insert 把新資料放檔尾，但被量測的 read 熱點（C 固定在 [590000,609999]）不動,frozen hotset 永遠匹配。**熱點若非平穩則會 decay**:§6.2.7 的 YCSB D（read-latest,熱點跟著 insert frontier 移動）是此結論的**第一個反例**,把結論精確化為「**decay 由 hotspot 平穩性決定,頻率派衰、結構派耐**」。
+> **適用邊界（重要）**:此「不 decay」成立**是因為 Scattered-Zipf/Uniform-100K/Tail-Mixed 的熱點是平穩的**——churn 的 insert 把新資料放檔尾，但被量測的 read 熱點（Tail-Mixed 固定在 [590000,609999]）不動,frozen hotset 永遠匹配。**熱點若非平穩則會 decay**:§6.2.7 的 Latest-Aging（read-latest,熱點跟著 insert frontier 移動）是此結論的**第一個反例**,把結論精確化為「**decay 由 hotspot 平穩性決定,頻率派衰、結構派耐**」。
 
-> **註（單點尖峰）**:C 的 ck4 在 orig/vacuum 出現單次 265 / 291 µs 尖峰(ta 無)，前後 ck3/ck5 立即回到 ~82–86 µs——係該 checkpoint 的一次性量測擾動、非 decay(decay 會單調上升)；其餘 10/11 checkpoint 全落在 ~80–89 µs。
+> **註（單點尖峰）**:Tail-Mixed 的 ck4 在 orig/vacuum 出現單次 265 / 291 µs 尖峰(ta 無)，前後 ck3/ck5 立即回到 ~82–86 µs——係該 checkpoint 的一次性量測擾動、非 decay(decay 會單調上升)；其餘 10/11 checkpoint 全落在 ~80–89 µs。
 
-![50k churn（10 輪 × 5k，11 個 checkpoint ck0–ck10）下 A/B/C 的 first query 演化](figures/out/07_churn_evolution.png)
+![50k churn（10 輪 × 5k，11 個 checkpoint ck0–ck10）下 Scattered-Zipf/Uniform-100K/Tail-Mixed 的 first query 演化](figures/out/07_churn_evolution.png)
 
-*圖 7：DB 被持續 write 後,static t=0 hot pages 在 A/B/C 三種 workload 上都不 decay
-——**因為 A/B/C 的讀熱點是平穩的**（decay 由 hotspot 平穩性決定;非平穩的 YCSB read-latest 是反例、頻率派衰而結構派耐,§6.2.7）。(主面板 = layout orig;CSV 另含 vacuum/ta)。C 上 2e_K10_static 跨 11 個 checkpoint
-持平 ~82–86 µs;B 上沒有自然 hot leaves，access-pattern 與 structural 打平，但同樣不 decay。*
+*圖 7：DB 被持續 write 後,static t=0 hot pages 在 Scattered-Zipf/Uniform-100K/Tail-Mixed 三種 workload 上都不 decay
+——**因為三者的讀熱點是平穩的**（decay 由 hotspot 平穩性決定;非平穩的 Latest-Aging read-latest 是反例、頻率派衰而結構派耐,§6.2.7）。(主面板 = layout orig;CSV 另含 vacuum/ta)。Tail-Mixed 上 2e_K10_static 跨 11 個 checkpoint
+持平 ~82–86 µs;Uniform-100K 上沒有自然 hot leaves，access-pattern 與 structural 打平，但同樣不 decay。*
 
 #### 6.2.2 RAM pressure（cap 壓到 working set 以下）
 
 RAM pressure 的關鍵不是「cap 多小」，而是**cap 相對 working set 的位置**。本研究的 resident
-working set（跑完 100k ops 後 resident 的 page 數）量到 **A/B ≈ 4.4k page ≈ 17.3 MB、C ≈ 0.46k
-page ≈ 1.8 MB**。早期用的 `MemoryMax=20M` **在 A/B working set 之上**，所以 first-query 的
+working set（跑完 100k ops 後 resident 的 page 數）量到 **Scattered-Zipf/Uniform-100K ≈ 4.4k page ≈ 17.3 MB、Tail-Mixed ≈ 0.46k
+page ≈ 1.8 MB**。早期用的 `MemoryMax=20M` **在 Scattered-Zipf/Uniform-100K working set 之上**，所以 first-query 的
 「20M / unlimited」ratio 全部落在 **0.95–1.07**（圖 6）——那不是「prefetch 抗壓」，而是**根本沒施壓**。
 
 ![RAM-pressure heatmap (20 MB cgroup vs unlimited)](figures/out/06_ram_pressure_heatmap.png)
@@ -1015,7 +1015,7 @@ page ≈ 1.8 MB**。早期用的 `MemoryMax=20M` **在 A/B working set 之上**�
 （unlimited 分母取自**同 session** 的 unconfined run、非 `results/main`，以免跨-session 機器狀態漂移造成 ~0.85 的假象。）*
 
 **把 cap 沿 working set 以下逐級壓**（`{∞, 16M, 12M, 8M, 6M}` = `{∞, 0.92, 0.69, 0.46, 0.35}×WS`，
-workload A/B、**六策略全掃**（layers_5/2d/2e_K10/layers_92/2e_K500/2f_slru）、量 `delivery_pct`＝prefetch
+workload Scattered-Zipf/Uniform-100K、**六策略全掃**（layers_5/2d/2e_K10/layers_92/2e_K500/2f_slru）、量 `delivery_pct`＝prefetch
 過的 page 在 first-query 前的 mincore 殘留率；`tools/ram_pressure.sh`、資料
 [`results/ram_pressure/`](results/ram_pressure/)）後，**策略間出現極大分歧**：
 
@@ -1035,15 +1035,15 @@ workload A/B、**六策略全掃**（layers_5/2d/2e_K10/layers_92/2e_K500/2f_slr
 cap 小好幾個量級、永遠不被 evict；**2f_slru（17.7 MB dump）的 delivery 隨 cap 線性塌**（≈ cap/WS）。
 **下排 first-q（log）**：2f 一旦 delivery 跌破 100%（16M 起），first-q 就從 98 µs **直跳回 baseline
 （紅虛線）並維持**——「整碗端走」式 cache-dump 沒有 graceful degradation，是 all-or-nothing；五條
-targeted 則完全平。B（uniform）同形。*
+targeted 則完全平。Uniform-100K（uniform）同形。*
 
 **結論（呼應全文主軸）**：在記憶體受限的部署下（serverless function 的 cgroup memory cap、或 memory 受限裝置），**「小而準」的 targeted prefetch（≤2 MB hotset）對
 RAM pressure 是 robust by construction**——這裡把**全部五條 targeted 策略**（layers_5/2d/2e_K10/layers_92/2e_K500，
-非只抽樣兩三條）都掃過，每條在 A/B 都**實測** 100% delivery、first-q 全程平（實測、非演繹推論）；
+非只抽樣兩三條）都掃過，每條在 Scattered-Zipf/Uniform-100K 都**實測** 100% delivery、first-q 全程平（實測、非演繹推論）；
 hotset 太小、reclaim 碰不到它，first-query 效益完整保留；
 而**「大而全」的 cache-dump（2f_slru，hotset＝整個 working set）一旦 RAM 低於 working set 就當場崩**——
 **cgroup `MemoryMax` 正是 serverless / 容器平台強制 function 記憶體上限的原生機制，故此軸對 serverless 部署尤其貼題**（對 mobile/IoT 亦相關）；惟本量測是在桌機上以 cgroup 施壓、非在真實 FaaS runtime 內（平台 scope 見 §6.4）。可用量測下限約 **6 MB（0.35×WS）**；4 MB 以下 cold gate 全排除、量不出。
-C（WS 僅 1.8 MB ≈ 量測下限）**無法以 cgroup 施壓 → 其 RAM-robustness 為演繹推論（hotset/WS 小於可量測下限、reclaim 碰不到）、非實測**；要對 file-tail workload 取得真正的 sub-WS datapoint，需構造放大-WS 的 C 變體（future work）。
+Tail-Mixed（WS 僅 1.8 MB ≈ 量測下限）**無法以 cgroup 施壓 → 其 RAM-robustness 為演繹推論（hotset/WS 小於可量測下限、reclaim 碰不到）、非實測**；要對 file-tail workload 取得真正的 sub-WS datapoint，需構造放大-WS 的 Tail-Mixed 變體（future work）。
 
 #### 6.2.3 Multi-process MAP_SHARED
 
@@ -1057,36 +1057,36 @@ C（WS 僅 1.8 MB ≈ 量測下限）**無法以 cgroup 施壓 → 其 RAM-robus
 
 #### 6.2.4 Workload-instantiation sensitivity（10 seeds）
 
-把 A/B/C 各用 **10 個 random seed** 重生成（同一份 DB、同 reps）、各跑一次完整 matrix，量每個被宣稱勝負的**跨-seed 效應 95% CI**（method 見 §3.7；warm-process e2e、async、layout orig）。三個關鍵 finding：
+把 Scattered-Zipf/Uniform-100K/Tail-Mixed 各用 **10 個 random seed** 重生成（同一份 DB、同 reps）、各跑一次完整 matrix，量每個被宣稱勝負的**跨-seed 效應 95% CI**（method 見 §3.7；warm-process e2e、async、layout orig）。三個關鍵 finding：
 
-1. **C 2e_K10 修正 tie-break 後為雙峰、非 tight −70%**：舊值 −70%（CI [−72, −69]、10/10）是 first-op leakage 造成的假 tight；修掉後（§6.2.8）跨 10 seed = **−55%（CI [−67, −43]）**——robust（CI 不跨 0）但**雙峰**：首查為 not-found probe 的 seed ~−70%（真實最右葉熱點），首查為真 hit 的 seed ~−31%（interior skeleton）。pure-hit 控制 C_hit 上 `2e_K10` = **−27%**（== 2d/learned）。
+1. **Tail-Mixed 2e_K10 修正 tie-break 後為雙峰、非 tight −70%**：舊值 −70%（CI [−72, −69]、10/10）是 first-op leakage 造成的假 tight；修掉後（§6.2.8）跨 10 seed = **−55%（CI [−67, −43]）**——robust（CI 不跨 0）但**雙峰**：首查為 not-found probe 的 seed ~−70%（真實最右葉熱點），首查為真 hit 的 seed ~−31%（interior skeleton）。pure-hit 控制 Tail-Hit 上 `2e_K10` = **−27%**（== 2d/learned）。
 
-2. **headline「targeted prefetch 都贏」的 robust 核心是 interior skeleton**：**`2d`（interior-only）跨 seed 在三個 pure-hit workload 都 robust ~−25 ~ −28%**（A 2d −25% [−29,−20]、B 2d −25% [−32,−16]、C_hit 2d −28.5%）；**A 的 Zipfian skew 再讓 `2e_K10` 從 −25% 進到 −36%（[−50, −23]）——這是 frequency 的 skew bonus、非 skeleton**。C 2e_K10 −55% 則因 not-found 雙峰、magnitude 不穩（§6.2.8）。
+2. **headline「targeted prefetch 都贏」的 robust 核心是 interior skeleton**：**`2d`（interior-only）跨 seed 在三個 pure-hit workload 都 robust ~−25 ~ −28%**（Scattered-Zipf 2d −25% [−29,−20]、Uniform-100K 2d −25% [−32,−16]、Tail-Hit 2d −28.5%）；**Scattered-Zipf 的 Zipfian skew 再讓 `2e_K10` 從 −25% 進到 −36%（[−50, −23]）——這是 frequency 的 skew bonus、非 skeleton**。Tail-Mixed 2e_K10 −55% 則因 not-found 雙峰、magnitude 不穩（§6.2.8）。
 
-3. **落在雜訊內的是 structural `layers_5`（A/B），不是 targeted 策略**：A layers_5 warm e2e **−5%（[−16, **+4**]）、僅 6/10 同號 → tie**；B layers_5 **−1%（[−12, **+7**]）→ directional**。即「只載前 N 個 interior」這個 structural 捷思，其 **e2e 效益高度受 workload 抽樣影響**（部分 seed 反而變慢）；access-pattern 的 2d/2e 則無此問題。
+3. **落在雜訊內的是 structural `layers_5`（Scattered-Zipf/Uniform-100K），不是 targeted 策略**：Scattered-Zipf layers_5 warm e2e **−5%（[−16, **+4**]）、僅 6/10 同號 → tie**；Uniform-100K layers_5 **−1%（[−12, **+7**]）→ directional**。即「只載前 N 個 interior」這個 structural 捷思，其 **e2e 效益高度受 workload 抽樣影響**（部分 seed 反而變慢）；access-pattern 的 2d/2e 則無此問題。
 
 | cell（warm e2e, orig） | 單一 workload | 跨 10 seed mean | 95% CI | sign | verdict |
 |---|---:|---:|---:|---:|---|
-| **C 2e_K10**（修正後）| −75%※ | **−55%** | [−67, −43] | 10/10 | **robust·雙峰**（§6.2.8）|
-| C 2d | −31% | −36% | [−39, −33] | 10/10 | robust |
-| A 2e_K10 | −7% | **−36%** | [−50, −23] | 10/10 | robust |
-| A 2d | −8% | **−25%** | [−29, −20] | 10/10 | robust |
-| B 2d | −31% | −25% | [−32, −16] | 9/10 | robust |
-| B 2e_K10 | −29% | −25% | [−32, −15] | 9/10 | robust |
-| **A layers_5** | −9% | **−5%** | [−16, +4] | 6/10 | **tie** |
-| **B layers_5** | −34% | **−1%** | [−12, +7] | 8/10 | directional |
+| **Tail-Mixed 2e_K10**（修正後）| −75%※ | **−55%** | [−67, −43] | 10/10 | **robust·雙峰**（§6.2.8）|
+| Tail-Mixed 2d | −31% | −36% | [−39, −33] | 10/10 | robust |
+| Scattered-Zipf 2e_K10 | −7% | **−36%** | [−50, −23] | 10/10 | robust |
+| Scattered-Zipf 2d | −8% | **−25%** | [−29, −20] | 10/10 | robust |
+| Uniform-100K 2d | −31% | −25% | [−32, −16] | 9/10 | robust |
+| Uniform-100K 2e_K10 | −29% | −25% | [−32, −15] | 9/10 | robust |
+| **Scattered-Zipf layers_5** | −9% | **−5%** | [−16, +4] | 6/10 | **tie** |
+| **Uniform-100K layers_5** | −34% | **−1%** | [−12, +7] | 8/10 | directional |
 
-> ※ C 2e_K10 的「單一 workload −75%」是 `results/main` seed 1 的點估計，而 seed 1 的首查 key 590000（最小 key＝最低 offset leaf）在修正前後的 tie-break 都恰好被覆蓋——是 seed-1 的巧合；跨 seed 的誠實值是雙峰 −55%（§6.2.8）。B 2e_K10 為修正後值。
+> ※ Tail-Mixed 2e_K10 的「單一 workload −75%」是 `results/main` seed 1 的點估計，而 seed 1 的首查 key 590000（最小 key＝最低 offset leaf）在修正前後的 tie-break 都恰好被覆蓋——是 seed-1 的巧合；跨 seed 的誠實值是雙峰 −55%（§6.2.8）。Uniform-100K 2e_K10 為修正後值。
 
-**方法學教訓**：**單一 workload 的點估計可能不具代表性**。原 `results/main` 恰好替 workload A 抽到一個「便宜的第一筆查詢」（baseline first-q ~520 µs，vs 跨 seed 典型 ~900 µs），因而**低估**了 A 上 targeted prefetch 的真實效益（報 −7~9%，實際跨 seed −25~36%），同時**高估**了 B layers_5（報 −34%，實際 ~0）。兩個方向的偏差都只有靠多 seed 才看得出來——這正是本次修訂補做 10-seed sweep 的價值。完整 54-cell × 3-metric 跨-seed 表見 [overall_results.md](https://github.com/wongzinc/sqlite-research-project-sharing/blob/main/overall_results.md)。
+**方法學教訓**：**單一 workload 的點估計可能不具代表性**。原 `results/main` 恰好替 Scattered-Zipf 抽到一個「便宜的第一筆查詢」（baseline first-q ~520 µs，vs 跨 seed 典型 ~900 µs），因而**低估**了 Scattered-Zipf 上 targeted prefetch 的真實效益（報 −7~9%，實際跨 seed −25~36%），同時**高估**了 Uniform-100K layers_5（報 −34%，實際 ~0）。兩個方向的偏差都只有靠多 seed 才看得出來——這正是本次修訂補做 10-seed sweep 的價值。完整 54-cell × 3-metric 跨-seed 表見 [overall_results.md](https://github.com/wongzinc/sqlite-research-project-sharing/blob/main/overall_results.md)。
 
 #### 6.2.5 DB-size scaling（102 MB → ~1 GiB，hot set 遠小於 DB）
 
-前述結果都在 102 MB reference DB 上。為驗證「當 DB **遠大於** hot working set 時 prefetch 是否還靈」，我們把 DB 放大到 **6,000,000 row（~1 GiB、263,991 page）**，用**同一份 seed-1 query stream**（即原始 workload）讓 `orig`(100 MB) 與 `1gb` **在同一批次** rep-major 量測（A/B/C/Z × 6 strategy），並把 §6.2.4 的 10-seed 不確定性分析**原樣套到 1gb**（A/B/C × 10 seed）。兩個 finding：
+前述結果都在 102 MB reference DB 上。為驗證「當 DB **遠大於** hot working set 時 prefetch 是否還靈」，我們把 DB 放大到 **6,000,000 row（~1 GiB、263,991 page）**，用**同一份 seed-1 query stream**（即原始 workload）讓 `orig`(100 MB) 與 `1gb` **在同一批次** rep-major 量測（Scattered-Zipf/Uniform-100K/Tail-Mixed/Concentrated-Zipf × 6 strategy），並把 §6.2.4 的 10-seed 不確定性分析**原樣套到 1gb**（Scattered-Zipf/Uniform-100K/Tail-Mixed × 10 seed）。兩個 finding：
 
-1. **冷啟動 first-query 的 prefetch 效益 size-robust**：18/18 個 (workload×strategy) cell 跨尺寸**方向一致、且 1gb 全部 `robust`**（CI 不跨 0）。`2f_slru` 在兩個尺寸下 first-query 各自收斂到一個穩定 floor（1gb 批 ~96–98 µs、orig 批 ~123–127 µs——兩批屬不同機器狀態、僅跨批比相對量，見 §6.4 與下方註）——first-query 只看 hot working set、**與 DB 大小無關**；小 hotset 的 **2d / 2e_K10 在 1gb 改善反而更大**（A 2d first-q −35%→−55%），因為同一批 hot key 散到 6M-row DB 的更多 page、no-prefetch baseline 的冷讀更分散更貴，targeted prefetch 相對更划算。`2e_K500/A` 甚至從 100 MB 的 `directional` 在 1gb 收成 `robust`（大 DB 讓效應更乾淨）。
+1. **冷啟動 first-query 的 prefetch 效益 size-robust**：18/18 個 (workload×strategy) cell 跨尺寸**方向一致、且 1gb 全部 `robust`**（CI 不跨 0）。`2f_slru` 在兩個尺寸下 first-query 各自收斂到一個穩定 floor（1gb 批 ~96–98 µs、orig 批 ~123–127 µs——兩批屬不同機器狀態、僅跨批比相對量，見 §6.4 與下方註）——first-query 只看 hot working set、**與 DB 大小無關**；小 hotset 的 **2d / 2e_K10 在 1gb 改善反而更大**（Scattered-Zipf 2d first-q −35%→−55%），因為同一批 hot key 散到 6M-row DB 的更多 page、no-prefetch baseline 的冷讀更分散更貴，targeted prefetch 相對更划算。`2e_K500/Scattered-Zipf` 甚至從 100 MB 的 `directional` 在 1gb 收成 `robust`（大 DB 讓效應更乾淨）。
 
-2. **部署 e2e 的 size 敏感性集中在窄域 workload C**：C 的 resident working set 隨 DB 變大而**膨脹**（483→**984** page，窄域 key 在大 DB 散得更開），deliver 成本翻倍，把幾個「靠少量 deliver 取勝」的策略**由贏轉輸**且跨 10 seed `robust`：**`2f_slru/C` warm e2e −9% → +139%**（100 MB 唯一能讓 cache-dump 在 e2e 取勝的格，到 1 GB 確定變大輸）、`2e_K500/C` −31% → +35%、`layers_92/C` −21% → +7%。對照之下，**access-pattern 的 2d / 2e_K10 兩尺寸 e2e 都穩贏**（C 2e_K10 −70% / −68%；此為 1gb size-sweep 的 pre-fix 值，C 2e_K10 現知為 not-found 雙峰、§6.2.8，但「小 hotset 跨尺寸不隨 DB 變大而輸」的 size 結論不受影響）。
+2. **部署 e2e 的 size 敏感性集中在窄域 Tail-Mixed**：Tail-Mixed 的 resident working set 隨 DB 變大而**膨脹**（483→**984** page，窄域 key 在大 DB 散得更開），deliver 成本翻倍，把幾個「靠少量 deliver 取勝」的策略**由贏轉輸**且跨 10 seed `robust`：**`2f_slru/Tail-Mixed` warm e2e −9% → +139%**（100 MB 唯一能讓 cache-dump 在 e2e 取勝的格，到 1 GB 確定變大輸）、`2e_K500/Tail-Mixed` −31% → +35%、`layers_92/Tail-Mixed` −21% → +7%。對照之下，**access-pattern 的 2d / 2e_K10 兩尺寸 e2e 都穩贏**（Tail-Mixed 2e_K10 −70% / −68%；此為 1gb size-sweep 的 pre-fix 值，Tail-Mixed 2e_K10 現知為 not-found 雙峰、§6.2.8，但「小 hotset 跨尺寸不隨 DB 變大而輸」的 size 結論不受影響）。
 
 即本研究主張的「小而準 targeted prefetch」在 DB 放大 10× 後**依然成立**，並**更突顯** cache-dump 式 2f 的 deliver 陷阱會**隨 DB 規模惡化**。（機器狀態：1gb 批跑在 full-boost 乾淨態，`2f_slru` anchor 跨 10 seed 維持 98–100 µs、內部極穩；其絕對 µs 自成一個尺度，與 §5 / §6.2.4 的 ~126 µs 批屬不同機器狀態、**僅跨批比相對量**——詳見 §6.4 與 [overall_results.md「資料可比性」](https://github.com/wongzinc/sqlite-research-project-sharing/blob/main/overall_results.md)。資料：`results/size_1gb/`、`results/seeds_1gb/`、`results/stats/uncertainty_1gb.csv`。）
 
@@ -1094,42 +1094,42 @@ C（WS 僅 1.8 MB ≈ 量測下限）**無法以 cgroup 施壓 → 其 RAM-robus
 
 *圖 15：1gb 與 orig 各 **10 seed** 的跨-seed 效應（strategy vs 同 seed baseline 的 Δ%）± bootstrap **95% CI**；
 實心 = robust（CI 不跨 0）、空心 = tie/directional。因效應是同 seed 相對量，機器狀態漂移自動抵消、兩尺寸可直接比。
-**上排 first-query**：18 格全為負、兩尺寸方向一致 → 冷啟動效益 **size-robust**（orig `2e_K500/A` 的 directional
-在 1gb 還收斂成 robust）。**下排 warm-process e2e**：size 敏感集中在窄域 **workload C** —— `2f_slru/C` 由 −9%(orig)
-翻成 **+139%**(1gb)、`2e_K500/C` −31%→+35%、`layers_92/C` −21%→+7%（由贏轉輸）；A/B 的 `2f` 兩尺寸都是
+**上排 first-query**：18 格全為負、兩尺寸方向一致 → 冷啟動效益 **size-robust**（orig `2e_K500/Scattered-Zipf` 的 directional
+在 1gb 還收斂成 robust）。**下排 warm-process e2e**：size 敏感集中在窄域 **Tail-Mixed** —— `2f_slru/Tail-Mixed` 由 −9%(orig)
+翻成 **+139%**(1gb)、`2e_K500/Tail-Mixed` −31%→+35%、`layers_92/Tail-Mixed` −21%→+7%（由贏轉輸）；Scattered-Zipf/Uniform-100K 的 `2f` 兩尺寸都是
 +700~930% 大輸（頂部箭頭標值）。對照之下 access-pattern 的 `2d`/`2e_K10` 兩尺寸 e2e 皆穩贏。*
 
 #### 6.2.6 Prior-art baseline arms（在同一 harness 重現 libprefetch / learned 核心）
 
 為了把本研究的定位釘在既有做法之上，我們在**同一 harness** 重現兩條 prior-art lineage 的**核心**（重現核心、剝除編排、非跑對方系統本尊；資料 `results/baselines_v2`，方法見 `DESIGN_lp.md` / `DESIGN_learned.md`）：
 
-- **libprefetch（VanDeBogart+09）的 delivery-order 核心**（`lp_sorted`/`lp_shuf`）：hotset 內容≡`2f_slru`、只差 warmer pread **遞送順序**。主度量 Δdeliver（fq 為 control、兩 arm 相等）：**NVMe 上 offset 排序遞送快 10–16×**（A 15.6× / B 15.1× / C 10.5×），效應**全在 deliver、fq 不變**。診斷（rusage File system inputs）顯示兩 arm 讀**相同裝置位元組（~18 MB ≈ working set）**,排除了「讀取資料量不同」。此結果**與 sequential readahead + 隱式 request coalescing 一致**（offset 排序遞送快 10–16×）——但因**未取 block trace / request-count**,我們不單獨宣稱已證明 request 數量、request 大小或 coalescing 機制本身。async(fadvise) 無此效應 → 懲罰專屬同步 pread（正是 libprefetch 模型）。這把「libprefetch 的 seek 收益在 NVMe 上消失」精確化為「**推測由 readahead + 隨機讀懲罰承載,但同樣只在 deliver 項、不進 first-query**」。
+- **libprefetch（VanDeBogart+09）的 delivery-order 核心**（`lp_sorted`/`lp_shuf`）：hotset 內容≡`2f_slru`、只差 warmer pread **遞送順序**。主度量 Δdeliver（fq 為 control、兩 arm 相等）：**NVMe 上 offset 排序遞送快 10–16×**（Scattered-Zipf 15.6× / Uniform-100K 15.1× / Tail-Mixed 10.5×），效應**全在 deliver、fq 不變**。診斷（rusage File system inputs）顯示兩 arm 讀**相同裝置位元組（~18 MB ≈ working set）**,排除了「讀取資料量不同」。此結果**與 sequential readahead + 隱式 request coalescing 一致**（offset 排序遞送快 10–16×）——但因**未取 block trace / request-count**,我們不單獨宣稱已證明 request 數量、request 大小或 coalescing 機制本身。async(fadvise) 無此效應 → 懲罰專屬同步 pread（正是 libprefetch 模型）。這把「libprefetch 的 seek 收益在 NVMe 上消失」精確化為「**推測由 readahead + 隨機讀懲罰承載,但同樣只在 deliver 項、不進 first-query**」。
 
-- **learned-prefetcher lineage（Chen+21 formulation 啟發）的輕量 transition baseline**（`learned_markov`，**非重現** neural model）：一階 Markov page-transition、從 START 做 finite-horizon expected-visit。**latency 僅在單一 held-out fold 上評估**（test seed 1、train seeds 2–10）；**另以跨 10 個 test seed 的 offline LOSO** 分析 first-query page coverage（`results/loso/coverage.csv`）——完整 10-fold latency sweep 未跑,故 latency 為單 fold、coverage 為 10-fold。實測（單 fold）**async fq/e2e 三 workload 都 ≈ `2f_topN`**（A 391/474 vs 391/473；C 186/267 vs 185/268）→ 此 transition baseline 冷啟動的可用輸出落在**頻率排名**範圍。Jaccard 需**區分兩個 frequency 對象**：在**同一訓練資料**上 `J(learned_markov, frequency_train)=1.0`（`frequency_train` = 同一批 traces 2–10 的正規化 visit frequency；此 3 層固定深度 B+tree 每頁單一深度 → expected-visit = frequency，是**觀測性質**、非「learned 必等於 frequency」的普遍宣稱）；但**對 held-out 量測種子**(seed 1)則 `J(learned_markov, 2f_topN_test)=0.47 / 0.56`（A/B），即 out-of-sample 的頻率排名**會改變**。兩者不矛盾——模型在訓練資料上塌縮到 marginal frequency，held-out ranking 仍有位移。Workload E（range scan）未支援（非 3-page episode）。
-  > **C 的 caveat（勿讀成「learned 在 C 有效」）**：C 是 [590000, 609999] 均勻點讀，但**初始 DB 最大 key 僅 600000 → 恰半數（9,999 / 20,000 unique key）為 not-found 高 key 查詢**（每 seed 實測 ~50% miss）。所有 miss 查詢在 B+tree 上都沿**右緣**下降到**最右葉**（600000 所在葉）再回報不存在，故該最右葉吸收全部 ~50k miss 流量、是**遙遙領先的單一 hot leaf**；hit 查詢（真 key ∈ [590000, 600000]）則散落在頻率相近的多個真葉。這正好解釋 offline coverage 的雙峰：**miss first-op 一律覆蓋（5/5，全落最右 hot leaf）、hit first-op 少覆蓋（1/5，視 tie-break 是否選中該真葉）**——合計跨 10 test seed **6/10 覆蓋**（`results/loso/coverage.csv`），是 selection 之外的**key-range artifact**、非 learned 的 selection 能力。C 的 leaf score 是**平的**（每真 key 恰 5 次），`learned_markov` 與 `2f_topN` 在統一 tie-break（score desc, page asc）下選出**相同 hotset** → 延遲必然相等（186≈185；對照 v1 版的 659 vs 178 大 gap，差別純來自統一 tie-break）。**coverage 只能「預測」而非「量到」兩個 latency regime**：seed 1（first-op key 590000、hit、恰覆蓋）實測 186；not-covered 桶的 ~660（interior-only 地板）是 **coverage 推導的預測**——10-fold latency sweep 未跑，latency 只在 seed 1 量到。held-out hotset **precision**：**C = 100%**（整組 hot leaf 都被首查用到）、**A/B = 43%**。對照 A/B 則 first-op **0/10 覆蓋**（其首查 leaf 不在 top-14），但 interior 骨架撐住 → fq 仍 ≈ 2f_topN。此即 learned 在 C「有效」是 key-range/tie-break 假象、在 A/B「≈頻率」是 interior 貢獻的雙重證據。
+- **learned-prefetcher lineage（Chen+21 formulation 啟發）的輕量 transition baseline**（`learned_markov`，**非重現** neural model）：一階 Markov page-transition、從 START 做 finite-horizon expected-visit，採 leave-one-seed-out（LOSO）protocol。**完整 10-fold LOSO latency sweep 已跑**（`results/learned_10fold`，2026-07-30：對每個 test seed N∈1..10 於 9-seed 補集訓練、於 held-out seed N 上量，reference arm `2f_top14/28`/`2e_K10`/no-prefetch 同 fold paired-measured，n=10 reps、async+pread、Scattered-Zipf/Uniform-100K/Tail-Mixed × orig；全 300 prefetch cell delivery=100%、全 330 cell cold_pct=0），並以同 10 seed 的 offline LOSO 另分析 first-query page coverage（`results/loso/coverage.csv`）。**兩個 finding**：(1) 改善**真實且統計穩健**——每 arm 的 CI 在三 workload 皆不跨 0，`learned_markov` 冷 first-query fq_median 降 **−37% ~ −69%**（Scattered-Zipf learned_14 −39.6±3.6%、Uniform-100K −36.6±9.8%、Tail-Mixed −65.4±13.3%；warm e2e 約 Scattered-Zipf −30% / Uniform-100K −27% / Tail-Mixed −57%），delivery 100%、cache 真冷。(2) **相對簡單的 frequency top-N 沒有額外收益**——`learned_markov` 在 Uniform-100K/Tail-Mixed 與 footprint-matched `2f_topN`/`2e_K10` 打平（CI 大幅重疊），在 **Scattered-Zipf 甚至更差**（−40% vs 頻率/hot arm `2f_top28`/`2e_K10` 的 −51%）。一階 Markov 的複雜度打不贏同 budget 的靜態頻率 dump → 此 transition baseline 冷啟動的可用輸出落在**頻率排名**範圍（早先「marginal-collapse 更優」的宣稱已撤回）。**舊的單 fold（僅 test seed 1）系統性高估**：10-fold 分佈顯示 seed 1 是**最樂觀**的 held-out（Scattered-Zipf/Uniform-100K rank 1/10、Tail-Mixed rank 3/10，且 Tail-Mixed sd 200 µs 高度 seed 敏感），故以 10-fold mean+CI 為準。Jaccard 需**區分兩個 frequency 對象**：在**同一訓練資料**上 `J(learned_markov, frequency_train)=1.0`（`frequency_train` = 同一批 traces 2–10 的正規化 visit frequency；此 3 層固定深度 B+tree 每頁單一深度 → expected-visit = frequency，是**觀測性質**、非「learned 必等於 frequency」的普遍宣稱）；但**對 held-out 量測種子**(seed 1)則 `J(learned_markov, 2f_topN_test)=0.47 / 0.56`（Scattered-Zipf/Uniform-100K），即 out-of-sample 的頻率排名**會改變**。兩者不矛盾——模型在訓練資料上塌縮到 marginal frequency，held-out ranking 仍有位移。Short-Scan Aging（range scan）未支援（非 3-page episode）。
+  > **Tail-Mixed 的 caveat（勿讀成「learned 在 Tail-Mixed 有效」）**：Tail-Mixed 是 [590000, 609999] 均勻點讀，但**初始 DB 最大 key 僅 600000 → 恰半數（9,999 / 20,000 unique key）為 not-found 高 key 查詢**（每 seed 實測 ~50% miss）。所有 miss 查詢在 B+tree 上都沿**右緣**下降到**最右葉**（600000 所在葉）再回報不存在，故該最右葉吸收全部 ~50k miss 流量、是**遙遙領先的單一 hot leaf**；hit 查詢（真 key ∈ [590000, 600000]）則散落在頻率相近的多個真葉。這正好解釋 offline coverage 的雙峰：**miss first-op 一律覆蓋（5/5，全落最右 hot leaf）、hit first-op 少覆蓋（1/5，視 tie-break 是否選中該真葉）**——合計跨 10 test seed **6/10 覆蓋**（`results/loso/coverage.csv`），是 selection 之外的**key-range artifact**、非 learned 的 selection 能力。Tail-Mixed 的 leaf score 是**平的**（每真 key 恰 5 次），`learned_markov` 與 `2f_topN` 在統一 tie-break（score desc, page asc）下選出**相同 hotset** → 延遲必然相等（186≈185；對照 v1 版的 659 vs 178 大 gap，差別純來自統一 tie-break）。**coverage 預測的兩個 latency regime,10-fold latency sweep（`results/learned_10fold`）已量到**：first-op 恰覆蓋的 seed（如 seed 1、first-op key 590000、hit）落在 hot-leaf 地板 ~186 µs，not-covered 的 seed 回到 interior-only 地板——Tail-Mixed 跨 10 fold learned_14 mean 336 µs（range 180–629、sd 200）正是此雙峰。held-out hotset **precision**：**Tail-Mixed = 100%**（整組 hot leaf 都被首查用到）、**Scattered-Zipf/Uniform-100K = 43%**。對照 Scattered-Zipf/Uniform-100K 則 first-op **0/10 覆蓋**（其首查 leaf 不在 top-14），但 interior 骨架撐住 → fq 仍 ≈ 2f_topN。此即 learned 在 Tail-Mixed「有效」是 key-range/tie-break 假象、在 Scattered-Zipf/Uniform-100K「≈頻率」是 interior 貢獻的雙重證據。
 
-#### 6.2.7 YCSB D/E self-aging：hotspot 平穩性決定 decay（§6.2.1 的第一個反例）
+#### 6.2.7 Latest-Aging / Short-Scan Aging self-aging：hotspot 平穩性決定 decay（§6.2.1 的第一個反例）
 
-§6.2.1 證明平穩熱點下 static hotset 不 decay。**YCSB D（read-latest,熱點跟著 insert frontier 移動 = 非平穩）** 提供第一個反例。用 self-aging 路徑（workload 自身 insert 流 age 可寫副本、**per-checkpoint probe** 反映當下 frontier、對凍結 t=0 hotset 量 first-query；10 ckpt × **10 reps × 10 seeds**，`results/aging_v2`，mean±95%CI）：
+§6.2.1 證明平穩熱點下 static hotset 不 decay。**Latest-Aging（read-latest,熱點跟著 insert frontier 移動 = 非平穩）** 提供第一個反例。用 self-aging 路徑（workload 自身 insert 流 age 可寫副本、**per-checkpoint probe** 反映當下 frontier、對凍結 t=0 hotset 量 first-query；10 ckpt × **10 reps × 10 seeds**，`results/aging_v2`，mean±95%CI）：
 
-| static t=0 hotset | YD（read-latest,非平穩）ck0→ck10 µs | YE（zipfian,平穩）ck0→ck10 µs |
+| static t=0 hotset | Latest-Aging（read-latest,非平穩）ck0→ck10 µs | Short-Scan Aging（zipfian,平穩）ck0→ck10 µs |
 |---|---|---|
 | baseline | 538 → 570 | 550 → 601 |
 | **2e_K10_static**（access-freq）| **267 → 382（−50% → −33%）衰減** | 260 → 273（−53% → −55%）**不衰** |
 | layers_92_static（structural）| **252 → 270（robust,+7%）,從 ck1 起反超 2e** | 260 → 292（微升,+12%）|
 
-- **頻率派衰、結構派耐並反超**:YD 上 access-frequency `2e_K10_static` 收益從 −50% 衰到 −33%（erodes ~half、非歸零）,而 structural `layers_92_static` 幾乎不衰,且**從 ck1 起反超頻率派**（~250–278 vs ~310–420）。機制:頻率 hotset 綁定「哪些 key 熱」（非平穩下失效）,結構 skeleton 綁定「樹長什麼樣」（漂移緩慢）。**YE（zipfian 平穩）則 `2e_K10` 不衰、全程仍優**——證明 decay 是**非平穩性**的性質、非 aging 本身。
+- **頻率派衰、結構派耐並反超**:Latest-Aging 上 access-frequency `2e_K10_static` 收益從 −50% 衰到 −33%（erodes ~half、非歸零）,而 structural `layers_92_static` 幾乎不衰,且**從 ck1 起反超頻率派**（~250–278 vs ~310–420）。機制:頻率 hotset 綁定「哪些 key 熱」（非平穩下失效）,結構 skeleton 綁定「樹長什麼樣」（漂移緩慢）。**Short-Scan Aging（zipfian 平穩）則 `2e_K10` 不衰、全程仍優**——證明 decay 是**非平穩性**的性質、非 aging 本身。
 - **維度並存（勿當矛盾）**:`layers_*` 在 cross-seed first-query *level* 上不可恃（§6.2.4 tie/directional）,卻在 aging *robustness* 軸上最耐久——兩個不同軸的結論並存。此結果把 §6.2.1 精確化為「**static t=0 hotset 是否 decay 由 hotspot 平穩性決定;read-latest / append-heavy workload 下頻率派衰、結構 skeleton 耐**」,並直接導出 §6.3 的 read-latest guidance。
 
 #### 6.2.8 Pure-hit control + fixed access-frequency arm：三個 access regime
 
-§6.2.6 的 key-range audit 指出 C（mixed tail-boundary）的 range `[590000,609999]` 超出 DB max key 600000 → **~50% 為 not-found 高 key**，全部沿右緣落到**最右葉**。這引出兩個問題：(a) 拿掉這個非預期的 not-found 集中後，frequency-aware prefetch 還有效嗎？(b) `2e_K10` 的 leaf 選擇本身是否乾淨？我們用一個 **pure-hit control** 加一個 **tie-break 修正 + 重測**同時回答。
+§6.2.6 的 key-range audit 指出 Tail-Mixed（mixed tail-boundary）的 range `[590000,609999]` 超出 DB max key 600000 → **~50% 為 not-found 高 key**，全部沿右緣落到**最右葉**。這引出兩個問題：(a) 拿掉這個非預期的 not-found 集中後，frequency-aware prefetch 還有效嗎？(b) `2e_K10` 的 leaf 選擇本身是否乾淨？我們用一個 **pure-hit control** 加一個 **tie-break 修正 + 重測**同時回答。
 
-**Pure-hit uniform-tail control（C_hit）。** `id ∈ [580001,600000]`，同 20k key-space、tail locality、uniform ×5，但**全部存在、0 not-found**。orig，10 seeds × 10 reps。
+**Pure-hit uniform-tail control（Tail-Hit）。** `id ∈ [580001,600000]`，同 20k key-space、tail locality、uniform ×5，但**全部存在、0 not-found**。orig，10 seeds × 10 reps。
 
-**tie-break 修正（不只是揭露，是修掉）。** 原 `gen_hotleaves` 用 `Counter.most_common` 挑 top-K leaf，ties 依 **insertion order → 最早出現的 leaf → 恰含被測 first-op leaf**（first-op leakage：C_hit 上 `2e_K10 leaves == most_common(10) == first-10-seen`，coverage 10/10 vs page-tie-break baselines 0/10）。改成 deterministic **`(-count, pageno)`**（與 `gen_freqdump` 一致、trace-order 無關；regression test 打亂 workload 行序 → hotset 不變），重生所有受影響 hotset 並重測（commit `de4490f` + `a493768`；舊 hotset 歸檔 `legacy_same_trace_first_seen_tiebreak`，pre-fix 量測留在 `results/{main,unified_v2,seeds,c_hit}`）。
+**tie-break 修正（不只是揭露，是修掉）。** 原 `gen_hotleaves` 用 `Counter.most_common` 挑 top-K leaf，ties 依 **insertion order → 最早出現的 leaf → 恰含被測 first-op leaf**（first-op leakage：Tail-Hit 上 `2e_K10 leaves == most_common(10) == first-10-seen`，coverage 10/10 vs page-tie-break baselines 0/10）。改成 deterministic **`(-count, pageno)`**（與 `gen_freqdump` 一致、trace-order 無關；regression test 打亂 workload 行序 → hotset 不變），重生所有受影響 hotset 並重測（commit `de4490f` + `a493768`；舊 hotset 歸檔 `legacy_same_trace_first_seen_tiebreak`，pre-fix 量測留在 `results/{main,unified_v2,seeds,c_hit}`）。
 
-**修正後 C_hit（10 seeds，warm e2e，vs same-seed baseline，皆 robust）：**
+**修正後 Tail-Hit（10 seeds，warm e2e，vs same-seed baseline，皆 robust）：**
 
 | strategy | first-q | e2e_warm | 這是什麼 |
 |---|---:|---:|---|
@@ -1141,23 +1141,23 @@ C（WS 僅 1.8 MB ≈ 量測下限）**無法以 cgroup 施壓 → 其 RAM-robus
 
 修正把 `2e_K10` 從舊的 **−69.6%（artifact）拉回 −27.2%**，落進 2d/2f_top14/learned 同一 band——**pure-hit tail 上 access-frequency 的 leaf 選擇相對 interior skeleton 幾乎不加分**（沒有真實 leaf 熱點）。
 
-**修正後 C（mixed，10 seeds，orig，warm e2e）：`2e_K10` 從舊的 −70% [−72,−69]（tight）變成 −55% [−67,−43]（robust 但雙峰）**：
+**修正後 Tail-Mixed（mixed，10 seeds，orig，warm e2e）：`2e_K10` 從舊的 −70% [−72,−69]（tight）變成 −55% [−67,−43]（robust 但雙峰）**：
 - **miss-first-op 的 seed（首查本身是 not-found probe）→ ~−70%**：probe 沿右緣落到吸收 ~50k miss 的最右葉，那是**真實的 #1 熱點**、tie-break 無關。
-- **hit-first-op 的 seed（首查是真 key）→ ~−31%**：回落到 interior skeleton，與 C_hit 一致。
+- **hit-first-op 的 seed（首查是真 key）→ ~−31%**：回落到 interior skeleton，與 Tail-Hit 一致。
 
-即 C 的 −70% 只在「**首查恰好是 not-found probe**」時成立；首查是真 hit 時就是 interior-skeleton 水準。舊的 −70% tight/robust 是 first-op leakage 把 hit-seed 也灌到 −70% 的假象。
+即 Tail-Mixed 的 −70% 只在「**首查恰好是 not-found probe**」時成立；首查是真 hit 時就是 interior-skeleton 水準。舊的 −70% tight/robust 是 first-op leakage 把 hit-seed 也灌到 −70% 的假象。
 
 **三個 access regime（本研究的 control 揭示）：**
 
 | regime | workload | `2e_K10` warm e2e | 機制 |
 |---|---|---:|---|
-| **無真實 leaf 熱點** | B、C_hit（及 C 的 hit-first-op）| **~−25 ~ −29%** | interior skeleton 主導；frequency leaf 幾乎不加分 |
-| **真實 popularity skew** | A | **−36%** [−50,−23] | frequency-aware leaf 提供額外收益 |
-| **key-range 造成的集中** | C 的 miss-first-op | **~−70%** | negative probe 匯聚最右葉、形成極端熱點 |
+| **無真實 leaf 熱點** | Uniform-100K、Tail-Hit（及 Tail-Mixed 的 hit-first-op）| **~−25 ~ −29%** | interior skeleton 主導；frequency leaf 幾乎不加分 |
+| **真實 popularity skew** | Scattered-Zipf | **−36%** [−50,−23] | frequency-aware leaf 提供額外收益 |
+| **key-range 造成的集中** | Tail-Mixed 的 miss-first-op | **~−70%** | negative probe 匯聚最右葉、形成極端熱點 |
 
-C（mixed）整體 = 其 hit(regime 1) 與 miss(regime 3) first-op 的混合 → −55% 雙峰。
+Tail-Mixed（mixed）整體 = 其 hit(regime 1) 與 miss(regime 3) first-op 的混合 → −55% 雙峰。
 
-**結論。** 修正後 `2e_K10` 是乾淨的 arm：pure-hit tail 上 **== interior skeleton（~−27%）**，在 C 上誠實地暴露 not-found 熱點的雙峰。**page-type（interior skeleton）是普適 robust 贏面；access-frequency 的 *leaf* 選擇只在有真實 access 熱點時才生效**——A 的 skew，或 C 的 not-found 集中。完整分析見 [results/c_hit/FINDINGS.md](https://github.com/wongzinc/sqlite-research-project-sharing/blob/main/results/c_hit/FINDINGS.md)、`results/tiebreak_fix`、`results/c_hit_v2`。
+**結論。** 修正後 `2e_K10` 是乾淨的 arm：pure-hit tail 上 **== interior skeleton（~−27%）**，在 Tail-Mixed 上誠實地暴露 not-found 熱點的雙峰。**page-type（interior skeleton）是普適 robust 贏面；access-frequency 的 *leaf* 選擇只在有真實 access 熱點時才生效**——Scattered-Zipf 的 skew，或 Tail-Mixed 的 not-found 集中。完整分析見 [results/c_hit/FINDINGS.md](https://github.com/wongzinc/sqlite-research-project-sharing/blob/main/results/c_hit/FINDINGS.md)、`results/tiebreak_fix`、`results/c_hit_v2`。
 
 ### 6.3 Practical recommendations
 
@@ -1165,17 +1165,17 @@ C（mixed）整體 = 其 hit(regime 1) 與 miss(regime 3) first-op 的混合 →
 
 | scenario | 建議做法 | First-q improvement | End-to-end（warm-process / standalone）|
 |---|---|---|---|
-| **tail-region 讀取(檔尾資料,baseline 高)** | **interior skeleton(2d / layers_92)**;有真實 access 熱點時再加 hot leaves | −37~39%(C_hit) | **warm e2e ~−30%**(pure-hit C_hit robust:2d −28.5% / LOSO learned −29.0%)——interior skeleton 是這裡的普適贏面(§6.2.8) |
-| **mixed / existence-check(含大量 not-found 或高度集中查詢)** | access-pattern 2e_K10(interior + hot leaves) | **−83%**(C 單一 workload) | **當首查是 not-found probe 時 warm e2e 可達 ~−70%**(negative probe 匯聚最右葉超熱)——但 C 跨 seed 為 **−55% 雙峰**(首查是真 hit 時回落到 interior skeleton ~−31%);tie-break 已修正,普適 tail-read 效益請用 interior skeleton(§6.2.8) |
-| uniform 隨機讀(uniform) | structural layers_5 / 2d | −42~43%(B) | **warm e2e −29~34%** / std ≈ 打平 |
-| **快 workload(熱門集中,baseline 已快)** | **access-pattern 2d / 2e_K10**(robust);避免單用 structural layers_5 | −22~26%(A) | **warm e2e:targeted 跨 seed −25~36%(robust);layers_5 −5% 落在雜訊內(tie)**。standalone 下 +27~29% 反而較慢 |
+| **tail-region 讀取(檔尾資料,baseline 高)** | **interior skeleton(2d / layers_92)**;有真實 access 熱點時再加 hot leaves | −37~39%(Tail-Hit) | **warm e2e ~−30%**(pure-hit Tail-Hit robust:2d −28.5% / LOSO learned −29.0%)——interior skeleton 是這裡的普適贏面(§6.2.8) |
+| **mixed / existence-check(含大量 not-found 或高度集中查詢)** | access-pattern 2e_K10(interior + hot leaves) | **−83%**(Tail-Mixed 單一 workload) | **當首查是 not-found probe 時 warm e2e 可達 ~−70%**(negative probe 匯聚最右葉超熱)——但 Tail-Mixed 跨 seed 為 **−55% 雙峰**(首查是真 hit 時回落到 interior skeleton ~−31%);tie-break 已修正,普適 tail-read 效益請用 interior skeleton(§6.2.8) |
+| uniform 隨機讀(uniform) | structural layers_5 / 2d | −42~43%(Uniform-100K) | **warm e2e −29~34%** / std ≈ 打平 |
+| **快 workload(熱門集中,baseline 已快)** | **access-pattern 2d / 2e_K10**(robust);避免單用 structural layers_5 | −22~26%(Scattered-Zipf) | **warm e2e:targeted 跨 seed −25~36%(robust);layers_5 −5% 落在雜訊內(tie)**。standalone 下 +27~29% 反而較慢 |
 | **read-latest / append-heavy(熱點跟寫入 frontier 移動,如 event/log store)** | **structural skeleton(layers_92 / 2d) 或週期性 hotset refresh**;避免單靠凍結的 access-frequency hotset | — | frozen 頻率 hotset 隨 aging **衰 ~half**、結構 skeleton 耐衰並反超(§6.2.7) |
-| Batch / 平均 latency 場景 | 重載前次 cache(2f SLRU) | −79~91%(first-q) | **e2e 多半不具優勢**(deliver ~0.8–7ms);僅適合 batch、或 C 類小 working set(warm e2e −12%) |
+| Batch / 平均 latency 場景 | 重載前次 cache(2f SLRU) | −79~91%(first-q) | **e2e 多半不具優勢**(deliver ~0.8–7ms);僅適合 batch、或 Tail-Mixed 類小 working set(warm e2e −12%) |
 | 多 process shared DB | shared cache + background warmer，cadence ≤ query 間隔 | cost固定、效益乘 process 數 | cadence=1s maintain first-q ~26µs |
 
 > 三條原則:(1)**2f SLRU 的 first-q 最低但 e2e 多半不具優勢**（deliver 太重）,不適合 cold-start critical path;
-> (2)**access-pattern targeted prefetch 在 warm-process 下三個 workload 的 e2e 都有改善**（§6.2.4）——**穩健且普適的贏面是 page-type interior skeleton `2d`**：A 2d −25%、B 2d −25%、pure-hit C_hit 2d/learned −28%（皆 robust）;**access-frequency 的 leaf 加分只在有真實熱點時才額外生效**：A 的 skew 讓 2e_K10 進到 −36%、C 的 not-found 集中造成雙峰;C 2e_K10 跨 seed 為 **−55% 雙峰**（首查是 not-found probe 時 ~−70%、是真 hit 時 ~−31%），非 tight robust——tie-break 已修正（§6.2.8）;
-> (3)**structural `layers_5`(只載前 N 個 interior)的 e2e 效益不穩**——在 A/B 跨 seed 落在雜訊內(tie/directional),要用就搭 access-pattern,別單靠它。
+> (2)**access-pattern targeted prefetch 在 warm-process 下三個 workload 的 e2e 都有改善**（§6.2.4）——**穩健且普適的贏面是 page-type interior skeleton `2d`**：Scattered-Zipf 2d −25%、Uniform-100K 2d −25%、pure-hit Tail-Hit 2d/learned −28%（皆 robust）;**access-frequency 的 leaf 加分只在有真實熱點時才額外生效**：Scattered-Zipf 的 skew 讓 2e_K10 進到 −36%、Tail-Mixed 的 not-found 集中造成雙峰;Tail-Mixed 2e_K10 跨 seed 為 **−55% 雙峰**（首查是 not-found probe 時 ~−70%、是真 hit 時 ~−31%），非 tight robust——tie-break 已修正（§6.2.8）;
+> (3)**structural `layers_5`(只載前 N 個 interior)的 e2e 效益不穩**——在 Scattered-Zipf/Uniform-100K 跨 seed 落在雜訊內(tie/directional),要用就搭 access-pattern,別單靠它。
 
 ### 6.4 Limitations
 
@@ -1194,18 +1194,18 @@ C（mixed）整體 = 其 hit(regime 1) 與 miss(regime 3) first-op 的混合 →
   成本差、非時序假象」不受影響,另有兩種模式 `majflt` 相同 + 50 ms 補不回兩項獨立證據)。
 - **async delivery 損失非量測時序假象（§3.5.1）**:harness 在 warmer return 後立刻量 first-query。
   我們用 intermediate-delivery sweep(hint 後插 5/20/50 ms sleep 再 query)驗證:hotset 在 sleep=0 就
-  100% 落地,且 Workload A 殘餘的 `fq_async − fq_pread` gap(~165–196 µs)給 50 ms 也補不回(兩種模式
+  100% 落地,且 Scattered-Zipf 殘餘的 `fq_async − fq_pread` gap(~165–196 µs)給 50 ms 也補不回(兩種模式
   majflt 相同)。故 §5 的 async e2e 數字**不因緊湊時序而偏悲觀**;`fq_pread` 是 async「光等」到不了的理想線。
-- **Workload coverage**：A/B/C 是合成的三種 access pattern;**workload-instantiation 敏感度已用 10-seed sweep 量化**(§6.2.4,access-pattern targeted prefetch 跨 seed robust、structural layers_5 在 A/B 落雜訊內)。但這 10 seed 仍是同三種「分佈家族」的不同抽樣;real world 行為可能更複雜（mixed read/write、time-of-day 變化、跨分佈家族),留待後續驗證。
+- **Workload coverage**：Scattered-Zipf/Uniform-100K/Tail-Mixed 是合成的三種 access pattern;**workload-instantiation 敏感度已用 10-seed sweep 量化**(§6.2.4,access-pattern targeted prefetch 跨 seed robust、structural layers_5 在 Scattered-Zipf/Uniform-100K 落雜訊內)。但這 10 seed 仍是同三種「分佈家族」的不同抽樣;real world 行為可能更複雜（mixed read/write、time-of-day 變化、跨分佈家族),留待後續驗證。
 - **未測「真正 cold reboot」cold start**：受限於 sudo 權限與機器shared，沒做「每筆量都 reboot」的嚴格 cold start。harness `--sqlite-open-timing=after-cold`
   可以模擬部分（重 open SQLite handle）。
-- **Platform scope = commodity x86 + NVMe（edge/serverless 硬體級；未進 FaaS runtime、mobile 未量測）**：所有實驗在同一台 Ryzen 9950X + NVMe、單一 kernel(6.17) 上跑。此為 **edge / serverless 部署所用的同一類 commodity 硬體**，故實證結論 scope 於此類平台；但有兩個未涵蓋的方向：(1) 本研究**未在特定 FaaS / microVM runtime（Lambda、Firecracker、gVisor、容器）內量測**——真實 runtime 的 cgroup 限制、I/O 隔離與 neighbor 干擾可能改變絕對 µs（在 FaaS-like cgroup / 容器環境重跑關鍵 cell 是 future work，§7）；(2) 行動裝置/IoT 是 SQLite 普及與本問題的 motivation 背景,但 mobile 的 storage stack 在多個維度與本平台不同——UFS/eMMC 的 I/O latency 與 queue 行為、不同的 `read_ahead_kb` 預設、ARM page size、以及更受限的 RAM——這些都可能改變 selection–delivery 的 trade-off 點。本研究**未在 ARM/UFS/eMMC 上量測**,故絕對 µs 與策略間相對排序均不應外推至 mobile;一台 ARM/UFS SBC 上重跑 A/C × {baseline, 2e_K10} 的關鍵 cell 是直接的後續驗證(future work)。
+- **Platform scope = commodity x86 + NVMe（edge/serverless 硬體級；未進 FaaS runtime、mobile 未量測）**：所有實驗在同一台 Ryzen 9950X + NVMe、單一 kernel(6.17) 上跑。此為 **edge / serverless 部署所用的同一類 commodity 硬體**，故實證結論 scope 於此類平台；但有兩個未涵蓋的方向：(1) 本研究**未在特定 FaaS / microVM runtime（Lambda、Firecracker、gVisor、容器）內量測**——真實 runtime 的 cgroup 限制、I/O 隔離與 neighbor 干擾可能改變絕對 µs（在 FaaS-like cgroup / 容器環境重跑關鍵 cell 是 future work，§7）；(2) 行動裝置/IoT 是 SQLite 普及與本問題的 motivation 背景,但 mobile 的 storage stack 在多個維度與本平台不同——UFS/eMMC 的 I/O latency 與 queue 行為、不同的 `read_ahead_kb` 預設、ARM page size、以及更受限的 RAM——這些都可能改變 selection–delivery 的 trade-off 點。本研究**未在 ARM/UFS/eMMC 上量測**,故絕對 µs 與策略間相對排序均不應外推至 mobile;一台 ARM/UFS SBC 上重跑 Scattered-Zipf/Tail-Mixed × {baseline, 2e_K10} 的關鍵 cell 是直接的後續驗證(future work)。
 
 ---
 
 ## 7. Future Work
 
-- **In-runtime serverless / edge validation**：本研究在 edge / serverless 的**同一類硬體**（x86 + NVMe）上 model warm-process cold-data pattern，但未進真實 runtime。直接的後續驗證是把 A/C × {baseline, 2e_K10} 關鍵 cell 放進 **FaaS-like 環境**重跑——本機無 kvm/root 故 Firecracker microVM 走不了，但**容器 + cgroup 記憶體上限**（對應 FaaS memory cap，§6.2.2 已用同機制施壓）可行，能給 serverless 宣稱一個真正落在受限 runtime 內的 datapoint；有 kvm 的機器上再補 Firecracker / gVisor 與 Lambda 端到端量測，並在 Turso embedded replica / LiteFS 之上驗證同一 cold-data 現象。
+- **In-runtime serverless / edge validation**：本研究在 edge / serverless 的**同一類硬體**（x86 + NVMe）上 model warm-process cold-data pattern，但未進真實 runtime。直接的後續驗證是把 Scattered-Zipf/Tail-Mixed × {baseline, 2e_K10} 關鍵 cell 放進 **FaaS-like 環境**重跑——本機無 kvm/root 故 Firecracker microVM 走不了，但**容器 + cgroup 記憶體上限**（對應 FaaS memory cap，§6.2.2 已用同機制施壓）可行，能給 serverless 宣稱一個真正落在受限 runtime 內的 datapoint；有 kvm 的機器上再補 Firecracker / gVisor 與 Lambda 端到端量測，並在 Turso embedded replica / LiteFS 之上驗證同一 cold-data 現象。
 - **Type-aware Physical Segregation (Level 2)**：把 type-aware layout 從
   filesystem 層下放到 NVMe SSD 層（用 NVMe Stream Directives 把 interior /
   leaf 分到不同 SSD line/namespace），讓 SSD GC / wear leveling 不會打亂
@@ -1240,8 +1240,8 @@ page**。我們用 **prefetch（提前 load）** 把它們先放進 memory。**�
 用極少 syscall 取得 first-query −22 ~ −83%；但 **end-to-end 取決於部署模型**。我們把 preprocessing
 拆成「cold open(db)(~200 µs,per-layout 常數)」與「deliver(隨 hotset)」,並以兩個模型呈現:
 **standalone warmer**(另起 process、cold open db)與 **warm-process / integrated**(app 已在跑、重用 handle、
-不做 cold open db，即本研究主張的部署)。**在 warm-process 下,access-pattern targeted prefetch(2d/2e_K10)的 e2e 經 10-seed 校正後跨 seed robust**——C 2e_K10 **−55%[−67,−43]**（雙峰,§6.2.8）(單一 workload 報 −75%、268µs)、A 2e_K10 **−36%[−50,−23]**、B 2d **−25%[−32,−16]**(95% CI 皆不跨 0);唯 **structural layers_5 在 A/B 落在雜訊內(tie/directional、CI 跨 0)、不可恃**;
-2f 則因 deliver ~0.8–7 ms 而 e2e 多半不具優勢(只有 C 的小 working set 例外)。這些結果在 50k write churn、sub-working-set RAM pressure（cap 壓到 6–16 MB）、cadence re-warm、10-seed workload sweep、與 DB 放大到 ~1 GiB（§6.2.5）五條 robustness 軸下穩定
+不做 cold open db，即本研究主張的部署)。**在 warm-process 下,access-pattern targeted prefetch(2d/2e_K10)的 e2e 經 10-seed 校正後跨 seed robust**——Tail-Mixed 2e_K10 **−55%[−67,−43]**（雙峰,§6.2.8）(單一 workload 報 −75%、268µs)、Scattered-Zipf 2e_K10 **−36%[−50,−23]**、Uniform-100K 2d **−25%[−32,−16]**(95% CI 皆不跨 0);唯 **structural layers_5 在 Scattered-Zipf/Uniform-100K 落在雜訊內(tie/directional、CI 跨 0)、不可恃**;
+2f 則因 deliver ~0.8–7 ms 而 e2e 多半不具優勢(只有 Tail-Mixed 的小 working set 例外)。這些結果在 50k write churn、sub-working-set RAM pressure（cap 壓到 6–16 MB）、cadence re-warm、10-seed workload sweep、與 DB 放大到 ~1 GiB（§6.2.5）五條 robustness 軸下穩定
 (所有 cell `cold_pct`=0)。
 
 更重要的observation：**「重載前次 cache」(2f SLRU) first-q 看似最低(−79~91%)是 misleading**，其 deliver ~0.8–7 ms 比 first-q(~105 µs)大一個量級,**real e2e cold start
@@ -1268,7 +1268,7 @@ warm-process 不含」這兩層 trade-off，在既有 prefetch literature 中很
 
 | Resource | Where | 用途 |
 |---|---|---|
-| **YCSB-cpp** | https://github.com/ls4154/YCSB-cpp | Workload A/B 的格式 / 分布 reference（YCSB-C Zipfian、YCSB-A uniform）——我們延續 YCSB 的 op string 風格作為 workload file 格式（見 §3.2） |
+| **YCSB-cpp** | https://github.com/ls4154/YCSB-cpp | Scattered-Zipf/Uniform-100K 的格式 / 分布 reference（YCSB-C Zipfian、YCSB-A uniform）——我們延續 YCSB 的 op string 風格作為 workload file 格式（見 §3.2） |
 | SQLite | https://www.sqlite.org/ | 被研究的 DB engine（讀path、B+tree、page cache 行為）|
 | FEMU | https://github.com/MoatLab/FEMU | Future Work §7 提到的 SSD-level evaluation 平台 |
 | MySQL InnoDB buffer pool preload | https://dev.mysql.com/doc/refman/8.0/en/innodb-preload-buffer-pool.html | §2.3.2 對照——engine-internal「整份 buffer pool dump/load」的生產實作，與本研究 2f SLRU 同 pattern |
@@ -1293,7 +1293,7 @@ warm-process 不含」這兩層 trade-off，在既有 prefetch literature 中很
 | [Gaffney+22] | Gaffney, K. P., Prammer, M., Brasfield, L., Hipp, D. R., Kennedy, D., Patel, J. M. "SQLite: Past, Present, and Future." *PVLDB* 15(12):3535–3547 (2022). DOI: 10.14778/3554821.3554842 | §1 + §2.1 + §2.3.3 multi-purpose anchor——SQLite 創始團隊（Hipp / Kennedy / Brasfield @ sqlite.org）+ UW-Madison 合著的最新權威 SQLite evaluation。§1 引用其 ubiquity 統計（>1T database）；§2.1 引用為 SQLite 架構標準描述；§2.3.3 引用其 SSB evaluation 方法論——**他們明確 `SELECT *` 預熱 buffer pool**，是「cold-start 在 SQLite 學術literature中被系統性排除」的直接證據 |
 | [Crotty+22] | Crotty, A., Leis, V., Pavlo, A. "Are You Sure You Want to Use MMAP in Your Database Management System?" *CIDR* (2022) | §2.3.5 anchor——對 file-backed mmap-as-DBMS-substrate 的系統性批判（eviction control 喪失、無 async I/O、I/O 錯誤難處理、fast NVMe scalability 不足）。**重要的是**：其 §6 結論明確列出 "maybe use mmap" 的兩項條件，既 read-only + fits in memory，本研究 cold-start use case 完全符合；§3.4 承認 mmap "lower total memory consumption" 的優勢。**Crotty+22 不僅不否定我們，反而 explicitly 背書我們的 design choice** |
 | [Leis+23] | Leis, V., Alhomssi, A., Ziegler, T., Loeck, Y., Dietrich, C. "Virtual-Memory Assisted Buffer Management." *SIGMOD* (2023) | §2.3.5——Crotty+22 的後續回應。anonymous mmap + DBMS-controlled `madvise(DONTNEED)` eviction + custom Linux kernel module (exmap) 解 TLB shootdown 跟 page allocator scalability。我們用同 family OS primitive 但操作 frequency 低 4 個量級以上（cold-start 一次 ~92 calls vs 他們的 >1M ops/s），碰不到他們解的 bottleneck |
-| [Yang+20] | Yang, L., Wu, H., Zhang, T., Cheng, X., Li, F., Zou, L., Wang, Y., Chen, R., Wang, J., Huang, G. "Leaper: A Learned Prefetcher for Cache Invalidation in LSM-tree based Storage Engines." *PVLDB* 13(11):1976–1989 (2020) | §2.3.2——LSM-tree 儲存引擎 (X-Engine) 的 learned prefetcher，預測並預載 **hot key range**；其 hotspot-based 機制依賴 access skew，本研究借以對照 Workload B (uniform) 無自然 hot set 可學的 ceiling (§5.3) |
+| [Yang+20] | Yang, L., Wu, H., Zhang, T., Cheng, X., Li, F., Zou, L., Wang, Y., Chen, R., Wang, J., Huang, G. "Leaper: A Learned Prefetcher for Cache Invalidation in LSM-tree based Storage Engines." *PVLDB* 13(11):1976–1989 (2020) | §2.3.2——LSM-tree 儲存引擎 (X-Engine) 的 learned prefetcher，預測並預載 **hot key range**；其 hotspot-based 機制依賴 access skew，本研究借以對照 Uniform-100K (uniform) 無自然 hot set 可學的 ceiling (§5.3) |
 | [Berg+20] | Berg, B., Berger, D. S., McAllister, S., Grosof, I., Gunasekar, S., Lu, J., Uhlar, M., Carrig, J., Beckmann, N., Harchol-Balter, M., Ganger, G. R. "The CacheLib Caching Engine: Design and Experiences at Scale." *USENIX OSDI* (2020), pp. 753–768 | §2.3.2——Facebook/CMU 的 production caching engine；其 **cache admission**（cache-on-second-access）與本研究的 frugal prefetch 互補（收進 cache vs 提前載入），同以避免盲目佔用 cache 為目標 |
 | [Leis+18] | Leis, V., Haubenschild, M., Kemper, A., Neumann, T. "LeanStore: In-Memory Data Management Beyond Main Memory." *ICDE* (2018), pp. 185–196. DOI: 10.1109/ICDE.2018.00026 | §2.3.5——pointer-swizzling buffer manager，[Leis+23] vmcache 的前身；與本研究同屬 mmap / buffer-management lineage，但其為 DBMS-substrate 用途，本研究僅將 mmap 作 prefetch hint 通道、不取代 SQLite pager |
 | [Shahrad+20] | Shahrad, M., Fonseca, R., Goiri, Í., Chaudhry, G., Batum, P., Cooke, J., Laureano, E., Tresness, C., Russinovich, M., Bianchini, R. "Serverless in the Wild: Characterizing and Optimizing the Serverless Workload at a Large Cloud Provider." *USENIX ATC* (2020), pp. 205–218 | §1 motivation——對真實 production FaaS（Azure Functions）workload 的首個完整量測，證實平台以 **keep-alive + pre-warming 主動保溫執行環境**以重用，是「warm process, cold data」部署模型在現代雲端架構中普遍且重要的直接證據 |
@@ -1311,25 +1311,25 @@ warm-process 不含」這兩層 trade-off，在既有 prefetch literature 中很
 *圖 3：前 50 筆 query 的累計時間。Prefetch 把「cold→warm」的過渡時間整段
 壓掉；第 50 筆之後所有方法都 converge 到 ~1.5 µs/query。*
 
-### A.2 Workload Z robustness check（低 id hotspot 變體）
+### A.2 Concentrated-Zipf robustness check（低 id hotspot 變體）
 
-![Workload Z：低 id hotspot 的 Zipfian 變體](figures/out/09_zlowkey_nsweep.png)
+![Concentrated-Zipf：低 id hotspot 的 Zipfian 變體](figures/out/09_zlowkey_nsweep.png)
 
 *圖 9：把 hotspot 從 [8, 99997] 移到 [1, 1000]（低 id 區段）的 robustness
-check。N-sweep 形狀跟 Workload A 同形（同在 N≈4–5 落底、之後 plateau；plateau 量級相近，
-Z 略淺、個別 N 差最多 ~10–12pp）——「hotspot 落在哪個 key 區段」不是 prefetch 效益的主要變因。*
+check。N-sweep 形狀跟 Scattered-Zipf 同形（同在 N≈4–5 落底、之後 plateau；plateau 量級相近，
+Concentrated-Zipf 略淺、個別 N 差最多 ~10–12pp）——「hotspot 落在哪個 key 區段」不是 prefetch 效益的主要變因。*
 
 ### A.3 Interior:leaf 比例掃描（3a/3b ratio variants）
 
 ![Interior:leaf 比例掃描（3a/3b ratio variants）](figures/out/10_ratio_sweep.png)
 
-*圖 10：Load interior 跟 hot leaf 的比例（K=10/40/50/92/100/500）。**K 才是主要變因，ratio 不是**，A 上 K=500 才追平、C 上 K=10 就 saturate。*
+*圖 10：Load interior 跟 hot leaf 的比例（K=10/40/50/92/100/500）。**K 才是主要變因，ratio 不是**，Scattered-Zipf 上 K=500 才追平、Tail-Mixed 上 K=10 就 saturate。*
 
 ### A.4 Dense N=0..92 sweep（rigor pass）
 
 完整數據 + 兩張 9-cell grid 圖在 [figures/out/11_nsweep_full.png](https://github.com/wongzinc/sqlite-research-project-sharing/blob/main/figures/out/11_nsweep_full.png)
-（clean DB, A/B/C × 1a/1b/1c）跟 [figures/out/12_nsweep_full_churn.png](https://github.com/wongzinc/sqlite-research-project-sharing/blob/main/figures/out/12_nsweep_full_churn.png)
-（churn DB, A/B/C）。Sparse 6-pt 跟 dense 93-pt slice的對照、9/12 cell 結論
+（clean DB, Scattered-Zipf/Uniform-100K/Tail-Mixed × 1a/1b/1c）跟 [figures/out/12_nsweep_full_churn.png](https://github.com/wongzinc/sqlite-research-project-sharing/blob/main/figures/out/12_nsweep_full_churn.png)
+（churn DB, Scattered-Zipf/Uniform-100K/Tail-Mixed）。Sparse 6-pt 跟 dense 93-pt slice的對照、9/12 cell 結論
 不變但 3 個 sweet spot 被漏掉的分析，見 [overall_strategies.md](https://github.com/wongzinc/sqlite-research-project-sharing/blob/main/overall_strategies.md) 2c bullet 跟
 [overall_workloads.md](https://github.com/wongzinc/sqlite-research-project-sharing/blob/main/overall_workloads.md) 「已完成的覆蓋」表。
 
@@ -1343,7 +1343,7 @@ Z 略淺、個別 N 差最多 ~10–12pp）——「hotspot 落在哪個 key 區
 | **InnoDB buffer pool dump/load** | MySQL Manual (production) | Shutdown/startup buffer pool warming | Whole buffer pool dump (blind full reload) | **Process-level only** (dump/load as a phase) | **Yes** (engine-internal) | Standalone (restart) | 同屬「整份重載」pattern，但 **不拆解 open/deliver**；我們做到 OS-syscall 級粒度且不修改 engine |
 | **Yi+26 (Pre-Buffer)** | Data Sci. Eng. '26 | Buffer cold-start after **hotspot shift** (hit-rate recovery) | Jaccard similarity + workload-aware prefetching | Acknowledged but **not separated** from query latency | **Yes** (DBMS internal) | Background thread + Direct I/O | 他們解 **hotspot-shift recovery**（秒級）；我們解 **OS page cache empty**（μs 級 first-query）。成本會計的粒度（open/deliver 拆解）是我們獨有 |
 | **Chen+21 (ML Prefetcher)** | ICDE '21 | ML-based next-page prediction (DNN/CNN/RNN/LSTM) | Learned from **warm-start traces** | **Absent in eval** (only precision/recall, no latency impact) | **Yes** (MySQL) | Inline inference | 他們用 8–20M 參數模型，eval 只報 prediction accuracy，**未量測 prefetch I/O cost 對 latency 的衝擊**；我們顯式量化 syscall cost |
-| **Leaper (Yang+20)** | PVLDB '20 | Learned prefetcher for LSM-tree (X-Engine) | Hot key range prediction (access skew) | N/A | **Yes** (X-Engine) | Inline | 依賴 access skew；在 **uniform workload (B)** 無 hot set 可學 → 失效（與我們 B 的 ceiling 觀察同源） |
+| **Leaper (Yang+20)** | PVLDB '20 | Learned prefetcher for LSM-tree (X-Engine) | Hot key range prediction (access skew) | N/A | **Yes** (X-Engine) | Inline | 依賴 access skew；在 **uniform workload (Uniform-100K)** 無 hot set 可學 → 失效（與我們 Uniform-100K 的 ceiling 觀察同源） |
 | **Oh+15 (SQLite/PPL)** | PVLDB '15 | Mobile SQLite **write throughput** / write amplification | N/A (write path optimization) | N/A | **Deep fork** (B+tree/pager/journaling all modified) | Standalone | **完全正交**：write path vs read cold-start；**深度修改 engine** vs 我們完全不改；**custom PCM HW** vs commodity |
 | **Kang+13 (X-FTL)** | SIGMOD '13 | Mobile SQLite transactional write on flash | N/A (FTL-level) | N/A | **Yes** (FTL) | Kernel/FTL | **介入層在 FTL**，與我們的 application-side + OS page cache 正交 |
 | **Gaffney+22 (SQLite Eval)** | PVLDB '22 | Comprehensive SQLite evaluation (OLTP/OLAP) | N/A (eval methodology) | N/A | No (evaluation) | Warm buffer pool (`SELECT *` preheat) | **明確用 `SELECT *` 預熱排除 cold-start**；我們專注在他們系統性排除的空白 |

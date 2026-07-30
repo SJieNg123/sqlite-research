@@ -5,9 +5,9 @@
 本檔列出**每個策略 × 每個 workload × 每個 layout 的 實驗結果**（對照
 [overall_workloads.md](overall_workloads.md) 的 workload 定義）。
 
-> ⚠️ **Workload 出處（先讀，最重要）**：本檔下方**整個結果矩陣**——Scattered-Zipf / Uniform-100K / Tail-Mixed / Tail-Hit / Concentrated-Zipf（舊代號 A/B/C/C\_hit/Z）、Latest-Aging / Short-Scan Aging（舊代號 YD/YE，即下方「YCSB D/E self-aging」節）、以及 churn/cadence/size 各節——**全部是 `workloads/gen_workload.py` 產生的 Python 模擬**：複刻 YCSB 的*語意*（Zipf / uniform / read-latest / short-scan），**並非原生 YCSB trace**，名稱中的「YCSB」僅指語意來源。
+> ⚠️ **Workload 出處（先讀）**：本檔下方**整個結果矩陣**（A/B/C 矩陣、Z、Latest-Aging/Short-Scan Aging 即「YCSB D/E self-aging」節、churn/cadence/size 各節）量測的都是 `workloads/gen_workload.py` 的 **Python 模擬** workload；文末 **[原生 YCSB 全套重現](#原生-ycsb-全套重現-native-ycsb純原生非-python-模擬)** 節則是**原生 YCSB A–F** 的獨立重跑。兩線**資料來源不同、切勿混為一談**。
 >
-> 用**原生 YCSB A–F**（真實 YCSB 0.17.0 產生器）獨立重跑的驗證，另見文末新節 **[原生 YCSB 全套重現](#原生-ycsb-全套重現-native-ycsb純原生非-python-模擬)**。兩條線結論一致，但**資料來源不同、切勿混為一談**。
+> 每個 workload 的定義、分布指紋、hit 語意與命名對照，見 **[overall_workloads.md](overall_workloads.md)**——本檔只列結果、不重述 workload 是什麼。
 
 > 本檔所有數字來自 **統一 pipeline**（`run_experiment.py` 家族,全 cell `cold_pct`=0）。跨批只比相對量（impr% / 跨-seed Δ% / ratio），絕對 µs 不跨批逐格對（見「資料可比性」）。
 
@@ -122,7 +122,7 @@
 | ta | 2e_K500 | 608 | 21% | 38 | 1633 | 1403 | 548 |
 | ta | 2f_slru | 106 | 86% | 100 | 7596 | 7359 | 111 |
 
-### Workload C (C_mixed) — Mixed Tail-boundary Lookup (~50% not-found)
+### Workload C (C_mixed)
 
 | layout | strategy | fq_async | impr% | deliv% | e2e_std | e2e_warm | oracle(pread) |
 |---|---|--:|--:|--:|--:|--:|--:|
@@ -402,7 +402,7 @@ hotset 內容≡`2f_slru`（checksum 同），只差 warmer pread **遞送順序
 - **效益真實且統計穩健**：三 workload 每臂 CI 皆排除 0；learned_markov 冷 first-query −37%~−69%（依 workload）。
 - **learned_markov 不勝簡單 frequency top-N**：B/C 與 `2f_topN`/`2e_K10` 打平（CI 大幅重疊）、**A 反而較差**（−40% vs 2f_top28/2e_K10 −51%）。一階 Markov 的複雜度買不到勝過同 budget static frequency dump 的效益（沿用「learned ≈ 2f_topN」；舊「marginal-collapse 更優」宣稱已撤回）。
 - **單 fold（test seed 1）系統性高估**：10-fold 分佈顯示 seed 1 是**最樂觀的 held-out seed**——A/B 為 10 折中最快（rank 1/10）、C 近最快（3/10）。C 對 seed 極敏感（sd 200µs、range 180–629µs），單 fold 幾無意義。詳 [`results/learned_10fold/FINDINGS.md`](results/learned_10fold/FINDINGS.md)。
-- **C 的 caveat（key-range artifact）**：C 的 key range [590000,609999] **超出初始 DB 最大 key 600000 → 半數(9,999/20,000 unique)為 not-found 高 key**（每 seed ~50% miss）。miss 查詢全沿右緣落到**最右葉**、該葉吸收 ~50k miss 流量成為壓倒性單一 hot leaf；hit 查詢散在頻率相近的真葉。offline coverage 的雙峰因此拆解為 **miss first-op 5/5 覆蓋、hit first-op 1/5 覆蓋**（合計 **6/10**，`results/loso/coverage.csv`）。C leaf score 平（每真 key 恰 5 次），learned/2f_topN 統一 tie-break 選同 hotset → fq 必等（186≈185）。**coverage 預測 latency regime、10-fold 已證實**（seed 1 hit+覆蓋實測 186µs；10-fold mean 336µs（sd 200、range 180–629）證實非覆蓋 fold 落在較高 interior 地板——正是 coverage 的推導方向，見 `results/learned_10fold/`）。held-out precision：**C=100%、A/B=43%**。A/B first-op 0/10 覆蓋但 interior 撐住。**勿讀成「learned 在 C 有效」。**
+- **C 的 caveat（key-range artifact）**：C 的半數 key 為 not-found 高 key、全落最右葉成為壓倒性單一 hot leaf；hit 查詢散在頻率相近的真葉（此 key-range 機制見 [overall_workloads.md](overall_workloads.md)「Tail-Mixed」）。offline coverage 的雙峰因此拆解為 **miss first-op 5/5 覆蓋、hit first-op 1/5 覆蓋**（合計 **6/10**，`results/loso/coverage.csv`）。C leaf score 平（每真 key 恰 5 次），learned/2f_topN 統一 tie-break 選同 hotset → fq 必等（186≈185）。**coverage 預測 latency regime、10-fold 已證實**（seed 1 hit+覆蓋實測 186µs；10-fold mean 336µs（sd 200、range 180–629）證實非覆蓋 fold 落在較高 interior 地板——正是 coverage 的推導方向，見 `results/learned_10fold/`）。held-out precision：**C=100%、A/B=43%**。A/B first-op 0/10 覆蓋但 interior 撐住。**勿讀成「learned 在 C 有效」。**
 - **Jaccard**（hotset 相似度、離線分析、非性能）：區分兩個 frequency 對象——**同一訓練資料** `J(learned_markov, frequency_train)=1.0`（traces 2–10 塌縮到 marginal frequency；此 3 層固定深度 tree 的觀測性質、非普遍宣稱）；**held-out 量測種子** `J(learned_markov, 2f_topN_test)` A/B N14 0.47/0.56、**C 1.0**（out-of-sample ranking 位移，C 因 leaf score 全平仍 =1.0）。兩者不矛盾。
 - **Workload E 未支援**（scan 非 3-page episode，`gen_pageseq` fail-loud）。
 
@@ -507,7 +507,7 @@ C_hit（`id∈[580001,600000]`、同 20k key-space、tail locality、uniform ×5
 
 ## YCSB D/E self-aging（read-latest 熱點非平穩 → static hotset decay）
 
-> ⚠️ **Python 模擬、非原生 YCSB**：此節 YD（Latest-Aging）/ YE（Short-Scan Aging）由 `workloads/gen_workload.py` 產生，複刻 YCSB D（read-latest）/ E（short-scan）之*語意*，**並非原生 YCSB trace**。原生 YCSB A–F 的獨立重現另見文末[原生 YCSB 全套重現](#原生-ycsb-全套重現-native-ycsb純原生非-python-模擬)。
+> ⚠️ YD（Latest-Aging）/ YE（Short-Scan Aging）是 **Python 模擬、非原生 YCSB**；其定義、read-latest／short-scan 語意與 hotset 移動見 [overall_workloads.md](overall_workloads.md)。原生 YCSB A–F 另見文末[原生 YCSB 全套重現](#原生-ycsb-全套重現-native-ycsb純原生非-python-模擬)。
 
 > 資料 `results/aging_v2/aging_ci.csv`（10 checkpoints × **10 reps × 10 seeds**，mean ± 95% CI，first-q µs）。方法：workload 自身 insert 流 age 可寫副本、**per-checkpoint probe**（隨 insert frontier 移動）對**凍結 t=0 hotset** 量。與上面 churn **互補**：churn 證平穩不衰、aging 證非平穩衰。
 
