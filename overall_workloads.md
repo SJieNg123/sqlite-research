@@ -69,23 +69,23 @@ paper／figure／本檔一律用 **display name**。下表的短碼是 **immutab
 
 > ⚠️ 這五個是 `workloads/gen_workload.py` 產生的 **Python trace**，複刻 YCSB 的*語意*（Zipf / uniform / tail），**非原生 YCSB trace**。真原生 YCSB 見下方「Real-YCSB」與「原生 YCSB 全套」節。各 10 seeds（Concentrated-Zipf 僅 1 seed，僅供 figure）。
 
-### Scattered-Zipf（alias A）
+### Scattered-Zipf
 - **op-mix：** 100% read。**Key domain：** ids 1..100,000（全在 DB max 600000 內，**0 not-found**）。
 - **分布：** scrambled Zipf α=0.99——rank→亂序 permutation，**熱 key 散佈全 key range**。~23k unique；top-1 key ~7.8% 流量、top-100 吃 ~42%。
 - **模擬：** 有真實 skew 的寬 working-set（常開熱資料）。skew 把 first-query 機率集中在少數 leaf → 小的 frequency-derived hotset 較可能覆蓋首查 → **targeted prefetch 的最佳舞台**（frequency leaf 有加分）。
 
-### Uniform-100K（alias B）
+### Uniform-100K
 - **op-mix：** 100% read。**Key domain：** ids 1..100,000（**0 not-found**）。
 - **分布：** uniform random。~63k unique、無自然熱點，最熱 key 也只 7–8 次。
 - **模擬：** 無熱點的 OLTP／批次掃描。uniform 把 first-query 機率攤到大量 leaf → 小 leaf hotset 期望覆蓋率低 → **量 targeted prefetch 的下界**（靠 interior skeleton）。
 
-### Tail-Mixed（alias C / C_mixed）
+### Tail-Mixed
 - **op-mix：** 100% read。**Key range：** ids 590,000..609,999（20,000 unique，每 id ×5），**跨過 DB max id 600000**。
 - **分布：** uniform。**hit semantics = MIXED**：上界 609,999 > DB max 600,000 → **~50% not-found**（600,001..609,999 為超範圍負向查詢；seed 1..10 實測皆 ~50,005 hit / ~49,995 miss）。
 - **關鍵機制：** hit 與 miss 走**相同的 B+tree 右緣 interior 路徑**；每個 miss 一律下降到**最右葉**（600000 所在葉）再回報不存在 → 該最右葉吸收全部 ~50k miss 流量、成為**壓倒性單一 hot leaf**（key-range 誘發的 right-boundary hotspot），hit 查詢散落頻率相近的多個真葉。
 - **模擬：** existence check / tail-boundary lookup。**必標註**：其大效益由 ~50% not-found 的 right-boundary probe 集中驅動，**跨 seed 為雙峰（e2e_warm −55%）、與 footprint-matched `2f_top14` 統計不可分**，非 uniform tail 讀取的普適性質（對照見 Tail-Hit）。
 
-### Tail-Hit（alias C_hit）— Tail-Mixed 的 pure-hit 對照
+### Tail-Hit — Tail-Mixed 的 pure-hit 對照
 - **op-mix：** 100% read。**Key range：** ids 580,001..600,000（20,000 unique，每 id ×5），**全在 DB 範圍內**。
 - **分布：** uniform。**hit semantics = pure hit**（max=600000=db max → **0 not-found**，manifest `HIT_ONLY` 硬 assert 把關）。
 - **用途：** 同 20k key-space、同 tail-region locality、同 uniform ×5，**唯一差別是把 range 收進 DB 範圍**，移除 not-found 最右葉超熱點。回答「拿掉 not-found 集中後，frequency-aware prefetch 還有效嗎？」
@@ -101,7 +101,7 @@ paper／figure／本檔一律用 **display name**。下表的短碼是 **immutab
 
   → **拿掉 not-found 後，穩健效益是 interior skeleton ~−28%；frequency leaf 相對 interior-only 幾乎不加分**（uniform tail 無真實 leaf 熱點）。完整見 [`results/c_hit/FINDINGS.md`](results/c_hit/FINDINGS.md)。
 
-### Concentrated-Zipf（alias Z，僅供 figure，1 seed）
+### Concentrated-Zipf（僅供 figure，1 seed）
 - **op-mix：** 100% read。**Key domain：** ids 1..1,000（**0 not-found**）。
 - **分布：** Zipf α=0.99 **不 scramble**（rank == key）→ 熱 key 落在低 id、群聚；1000 unique、top-1 key ~13%。
 - **用途：** hotspot-location 對照——與 Scattered-Zipf 對比，證明 N-sweep plateau 形狀不隨熱點位置改變。
@@ -110,7 +110,7 @@ paper／figure／本檔一律用 **display name**。下表的短碼是 **immutab
 
 ## Real-YCSB headline（原生 YCSB 0.17.0，有量 latency）
 
-### YCSB-read headline（alias YC，main branch）
+### YCSB-read headline（main branch）
 - **來源：** 真原生 YCSB 0.17.0 產生器（`workload_fixed/`），**非 `gen_workload.py`**。string key 映射到 dense rowid 1..600000。provenance：`workloads/workload_yc_1.txt.manifest.json`。
 - **op-mix：** 100% read，zipfian，`insertorder=hashed`，`recordcount=600000`，`ops=80000`，**notfound=0**。
 - **角色：** headline（上摘要、講故事的那組）改用學術界公認標準工具產生，使分布不是手調的。跑通 harness、已接進 registry。
@@ -121,14 +121,14 @@ paper／figure／本檔一律用 **display name**。下表的短碼是 **immutab
 
 ## YCSB 重建 — aging（`gen_workload.py`，含寫入、有量 latency）
 
-> ⚠️ **命名：** Latest-Aging / Short-Scan Aging（alias `YD`/`YE`）是 **YCSB-D/E 語意的 deterministic Python 重建**，**不是**官方 YCSB-D/E trace，也**不是**上面「Mixed-Mutation Churn」。兩者含 `insert`（從 600001 起、超過 DB max，使 DB 隨時間 aging），首 op 強制 `read`（供唯讀 TTFQ probe）。各 10 seeds。
+> ⚠️ **命名：** Latest-Aging / Short-Scan Aging 是 **YCSB-D/E 語意的 deterministic Python 重建**，**不是**官方 YCSB-D/E trace，也**不是**上面「Mixed-Mutation Churn」。兩者含 `insert`（從 600001 起、超過 DB max，使 DB 隨時間 aging），首 op 強制 `read`（供唯讀 TTFQ probe）。各 10 seeds。
 
-### Latest-Aging（alias YD）— read-latest
+### Latest-Aging — read-latest
 - **op-mix（seed 1 實測）：** `read` 95,108 + `insert` 4,892（≈95/5）。
 - **分布：** `requestdistribution=latest`——讀熱點集中最近插入 key（Zipf α=0.99 對 recency rank、`key = cur_max − zipf_rank`）。reads unique ~37k、57% 落在 >600000 新插入區 → **移動的 hotset**（非平穩）。
 - **模擬：** timeline／最新事件——寫入不斷產生新熱 key。壓測 static/history 派預取（A/B/C/Z 靜態熱點沒有的軸）。
 
-### Short-Scan Aging（alias YE）— short-ranges
+### Short-Scan Aging — short-ranges
 - **op-mix（seed 1 實測）：** `scan` 94,975 + `insert` 5,024 + `read` 1（≈95/5）。
 - **分布：** scan start = scrambled Zipf α=0.99 over [1..600000]（散佈，同 Scattered-Zipf）；scan length uniform [1,100]、mean 50.5——**靜止熱點（平穩）**。
 - **模擬：** 短範圍掃描（訊息佇列尾端連續讀）+ 5% 插入 aging。作為 Latest-Aging 的**平穩對照**。
@@ -139,7 +139,7 @@ paper／figure／本檔一律用 **display name**。下表的短碼是 **immutab
 
 ## Mutation schedule（不量 latency）
 
-### Mixed-Mutation Churn（alias CHURN）
+### Mixed-Mutation Churn
 - **這不是被量測的 workload**，而是**製造 DB 演化壓力**的 mutation schedule。
 - **op-mix：** 重複 10-op block `[rmw, insert, update, update, read, rmw, insert, update, scan, read]`；harness 把 `readmodifywrite` **remap 成 DELETE**（見 [project-churn-rmw-delete-remap](memory/project-churn-rmw-delete-remap.md)）。inserts 從 600001 起；rmw/update/read/scan 的 key uniform-without-replacement over [1,600000]；scan count 128。
 - **用途：** 在被量測的 read probe 之間灌入 INSERT/UPDATE/DELETE，讓 layout 隨時間漂移；churn 實驗用它在 checkpoint 之間 aging DB，再用 Tail-Mixed 量 cold-start latency 隨 churn 的漂移。
