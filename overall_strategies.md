@@ -1,5 +1,7 @@
 # Overall Strategies — 現有策略總覽
 
+> **最後更新：2026-07-30**（learned_markov 對齊完整 10-fold LOSO；新增原生 YCSB 驗證節）
+
 > 本檔講「每個策略是什麼 + 目前最新結果」。想知道「怎麼測出來的」（共用 benchmark_harness、cold-start 機制、結構派 vs 歷史派前置、每策略確切 post-cold-script），見 [strategies_explained.md](strategies_explained.md)。權威全表見 [overall_results.md](overall_results.md)。
 
 > **數字基準（本檔統一，canonical v2）：** 延遲策略均來自**同一批 `results/unified_v2`**（A/B/C × orig/vacuum/ta，async 10 / pread 10，全機 drop-caches、`cold_pct`=0）＋ prior-art baselines `results/baselines_v2`（背靠背同機器狀態、共享 2f_slru 錨點）。**這是新的絕對值來源，不需跨批換算。** 與舊 `results/main` 的差異是**加法性的 CPU 路徑漂移（非標量乘法）**：慢路徑 baseline 幾乎不變（A 523 vs 529，−1%），只有快的 CPU-bound 路徑受影響（2f_slru async 108 vs 127，−18 µs / −15%）。**絕對 µs 不可跨批比較**；錨點讀數記錄於 `results/unified_v2`。`first-q` = async fq_median；`e2e_warm` = deliver + fq（warm-process）。
@@ -132,21 +134,23 @@
 
 #### learned-style — `learned_markov`（Chen-inspired transition baseline）+ `frequency`
 
-**Chen 等（ICDE 2021）formulation 啟發**的輕量 baseline（**非重現**）：保留「歷史 trace 學 page 轉移、預測下一批頁 + held-out」，把不可得 neural model 換成透明**一階 Markov**；未重現 Decision Module/背景執行緒/neural 架構；只用 page-access context。實作 `strategies/learned/`：每 query 獨立 episode `START→root→interior→leaf→END`（僅 op 內 transition）、`P(q|p)=count/Σ`、從 START 做 **finite-horizon expected-visit**（horizon=max深度+1，非 stationary）；hotset 取 `_scores.csv` top-N。**held-out**：latency 只在**單一 fold**（test seed 1、train seeds 2..10，硬 assert `test∉train`）量測；**first-query coverage 另做跨 10 test seed 的 offline LOSO**（`results/loso/coverage.csv`）——完整 10-fold latency sweep 未跑。`frequency_train` 為**獨立 code path** 分析臂（取 `_marginal.csv`，對象是同一批訓練 traces）。footprint 對齊 `2f_topN`。commit `a98e673`（8 validation gate 全過）。
+**Chen 等（ICDE 2021）formulation 啟發**的輕量 baseline（**非重現**）：保留「歷史 trace 學 page 轉移、預測下一批頁 + held-out」，把不可得 neural model 換成透明**一階 Markov**；未重現 Decision Module/背景執行緒/neural 架構；只用 page-access context。實作 `strategies/learned/`：每 query 獨立 episode `START→root→interior→leaf→END`（僅 op 內 transition）、`P(q|p)=count/Σ`、從 START 做 **finite-horizon expected-visit**（horizon=max深度+1，非 stationary）；hotset 取 `_scores.csv` top-N。**held-out（完整 10-fold LOSO latency 已跑，`results/learned_10fold/`，2026-07-30）**：每 test seed N∈1..10 在 9-seed 補集訓練、量測 held-out seed N（硬 assert `test∉train`）；n=10、async+pread、A/B/C×orig、300 prefetch 格 delivery=100%、330 格 `cold_pct`=0。`frequency_train` 為**獨立 code path** 分析臂（取 `_marginal.csv`，對象是同一批訓練 traces）。footprint 對齊 `2f_topN`。commit `a98e673`（8 validation gate 全過）。
 
-**async fq / e2e_warm（orig）：**
+**10-fold fq_median rel% vs no-prefetch baseline（±95% CI、t df=9、n=10）：**
 
-| | learned_markov_14 | 2f_top14 | 2e_K10 |
-|---|---:|---:|---:|
-| A | 391 / 474 | 391 / 473 | 356 / 458 |
-| B | 414 / 496 | 415 / 497 | 414 / 519 |
-| C | 186 / 267 | 185 / 268 | 186 / 268 |
+| workload | learned_markov_14 | learned_markov_28 | 2f_top28 | 2e_K10 |
+|---|---:|---:|---:|---:|
+| A | −39.6 ±3.6 | −40.1 ±3.4 | **−50.6 ±14.9** | **−50.8 ±14.9** |
+| B | −36.6 ±9.8 | −38.0 ±10.3 | −36.9 ±8.3 | −36.6 ±8.6 |
+| C | −65.4 ±13.3 | −68.9 ±12.9 | −69.9 ±11.8 | −64.0 ±14.7 |
+
+（warm-process e2e 同排序、幅度較小：A ≈ −30% / B ≈ −27% / C ≈ −57%。詳 [`results/learned_10fold/FINDINGS.md`](results/learned_10fold/FINDINGS.md)。）
 
 **Jaccard（hotset 相似度，離線分析、非性能指標）：** 需區分兩個 frequency 對象——`frequency_train`（learned 的同一批訓練 traces 2–10）vs `2f_topN_test`（held-out 量測種子 seed 1）。**同一訓練資料上** `J(learned_markov, frequency_train)=1.000`（全 workload/N，塌縮到 marginal frequency）；**對 held-out 種子** `J(learned_markov, 2f_topN_test)` A/B N14 0.47/0.56、N28 0.22、**C=1.00**（out-of-sample 頻率排名會變，A/B 明顯位移；C 因 leaf score 全平而仍 =1.0）。兩者不矛盾。
 
-- **learned_markov 三 workload 的 async fq/e2e 都 ≈ 2f_topN（逐格幾乎相同）** — 此 transition baseline 在冷啟動 regime 的可用輸出，落在 `2f_topN` 已覆蓋的頻率排名範圍。
+- **效益真實且統計穩健、但不勝 frequency top-N**：三 workload 每臂 10-fold CI 皆排除 0（−37~−69%）；learned 與 `2f_topN`/`2e_K10` 在 B/C 打平（CI 大幅重疊）、**A 反而較差**（−40% vs 2f_top28/2e_K10 −51%）。一階 Markov 的複雜度買不到勝過同 budget static frequency dump 的效益。**舊「單 fold（test seed 1）」量測系統性高估**——seed 1 為 10 折中最快（A/B rank 1/10、C 近最快），已由 10-fold 均值+CI 取代。
 - **learned_markov 與 frequency_train 選同一組頁（J=1.0，同一訓練資料）**：當前 3 層固定深度 tree 的**觀測性質**（每頁單一深度 → expected-visit score = 正規化 visit frequency），由兩條獨立 code path 算出 — **非**普遍宣稱、不外推其他模型。對 held-out 量測種子（`2f_topN_test`）則 J 掉到 0.47/0.56（A/B），即 out-of-sample ranking 會位移。
-- **C 的 caveat（key-range artifact，勿讀成「learned 在 C 有效」）**：C 的 key range [590000,609999] **超出初始 DB 最大 key 600000 → 半數(9,999/20,000)為 not-found 高 key**，全部沿右緣落到**最右葉**，該葉吸收 ~50k miss 流量成為壓倒性單一 hot leaf。offline coverage 的雙峰因此拆解為 **miss first-op 5/5 覆蓋、hit first-op 1/5 覆蓋**（合計跨 10 test seed **6/10**，`results/loso/coverage.csv`）。C leaf score 平（每真 key 恰 5 次），兩 arm 統一 tie-break 選同 hotset → fq 必等（186≈185）。**coverage 只能預測、非量到 latency regime**：seed 1(hit、覆蓋)實測 186，not-covered 的 ~660(interior 地板)是**推導預測**（10-fold latency 未跑）。held-out precision：C=100%、A/B=43%。A/B first-op 0/10 覆蓋但 interior 撐住。**勿讀成「learned 在 C 有效」。**
+- **C 的 caveat（key-range artifact，勿讀成「learned 在 C 有效」）**：C 的 key range [590000,609999] **超出初始 DB 最大 key 600000 → 半數(9,999/20,000)為 not-found 高 key**，全部沿右緣落到**最右葉**，該葉吸收 ~50k miss 流量成為壓倒性單一 hot leaf。offline coverage 的雙峰因此拆解為 **miss first-op 5/5 覆蓋、hit first-op 1/5 覆蓋**（合計跨 10 test seed **6/10**，`results/loso/coverage.csv`）。C leaf score 平（每真 key 恰 5 次），兩 arm 統一 tie-break 選同 hotset → fq 必等（186≈185）。**10-fold 已證實 coverage 的預測方向**：seed 1（hit、覆蓋）實測 186µs，10-fold C mean **336µs**（sd 200、range 180–629）——非覆蓋 fold 落在較高 interior 地板。held-out precision：C=100%、A/B=43%。A/B first-op 0/10 覆蓋但 interior 撐住。**勿讀成「learned 在 C 有效」。**
 - **Workload E 未支援**：range scan 非 3-page episode，`gen_pageseq` 對 scan fail-loud（需真正 range 頁序列重建）。
 
 ---
@@ -189,7 +193,7 @@ Memory:   MAP_SHARED (4a)       ← 多 process 自動受惠（prefetch 成本 O
 | Prefetch | 2f SLRU | first-q −79~91%（最低），deliver 太重 → e2e 多半不利（C 例外 −12%）|
 | Prefetch | 3a/3b ratio（K40/K92）| K（leaf 數）才是主軸；A×ta×K92 有 +19% hump |
 | Baseline-v2 | lp_sorted / lp_shuf（libprefetch）| **offset 排序遞送 Δdeliver 10–16×**，全在 deliver、fq 不變 |
-| Baseline-v2 | learned_markov（Chen-inspired）| async fq/e2e **≈ 2f_topN**；hotset≡frequency(J=1.0，tree 性質)；E 未支援 |
+| Baseline-v2 | learned_markov（Chen-inspired，10-fold LOSO）| −37~69%、CI 排除 0；**≈ 2f_topN（A 反而較差）**；hotset≡frequency(J=1.0，tree 性質)；E 未支援 |
 | Memory | 4a MAP_SHARED | 成本 O(1)、效益隨 process 數放大（RAM 實驗）|
 | Memory | 4b Private buffer pool | 對照（process 多時 RAM 爆量）|
 

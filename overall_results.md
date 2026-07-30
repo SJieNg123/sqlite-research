@@ -1,5 +1,7 @@
 # Overall Results — 策略 × Workload 結果矩陣
 
+> **最後更新：2026-07-30**（learned_markov 完整 10-fold LOSO；原生 YCSB 全套重現節；補 Churn Phase F）
+
 本檔列出**每個策略 × 每個 workload × 每個 layout 的 實驗結果**（對照
 [overall_workloads.md](overall_workloads.md) 的 workload 定義）。
 
