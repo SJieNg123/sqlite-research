@@ -189,7 +189,7 @@ Memory:   MAP_SHARED (4a)       ← 多 process 自動受惠（prefetch 成本 O
 | Layout | 1c type-aware | A/B baseline 推高（+26/+3%）、C 較快（−20%）|
 | Prefetch | 2c Layers N | A −27~30% / B −44% / C −38%（需 N=92）；最佳 N 與 layout 耦合 |
 | Prefetch | 2d interior-only | A −30 / B −44 / C −39%；**e2e_warm 三 workload 皆改善（−14~32%）**|
-| Prefetch | 2e interior+top-K | **C：K=10 first-q −83%（e2e_warm 268 µs / −75%）**；A 需 K=500 −64% |
+| Prefetch | 2e interior+top-K | C 跨 seed **−55% 雙峰**（single-inst −75% = not-found+seed-1 artifact、非普適）；A 需 K=500（−64%）；C_hit interior −27% |
 | Prefetch | 2f SLRU | first-q −79~91%（最低），deliver 太重 → e2e 多半不利（C 例外 −12%）|
 | Prefetch | 3a/3b ratio（K40/K92）| K（leaf 數）才是主軸；A×ta×K92 有 +19% hump |
 | Baseline-v2 | lp_sorted / lp_shuf（libprefetch）| **offset 排序遞送 Δdeliver 10–16×**，全在 deliver、fq 不變 |
