@@ -884,6 +884,7 @@ orig 欄取自已 commit 的 [`results/stats/uncertainty.csv`](results/stats/unc
 
 - **10-seed 穩健性**(Phase D):10 條獨立 zipfian trace,2d 首查 mean **−38.4%**,95% CI **[−46.2%, −30.5%]**,排除 0。
 - **Size-scaling**(Phase E,6M-row/0.82 GiB):2d 首查 −57%(orig −40%)、preproc 持平 ~0.1ms;2f_slru warm-e2e = 31.9 ms(baseline 43×)。2d/2e_K10 是成本–收益曲線膝點。
+- **Churn**(Phase F,YA/YB/YF 的 update 流當 ager、量測 YC):以改列流翻動頁面,static 結構骨架(2e_K10_static / layers_92_static)首查優勢在 churn 下**大致保持**(vs baseline,11 checkpoint)。
 - **Aging**(Phase G,YD/YE × 11 checkpoint):衰減 iff 熱點非靜止(2f_slru 在 read-latest 移動熱點衰減、在 scan 靜止熱點全程平坦);結構型 2d/layers_92 兩 workload 全 checkpoint 穩定 ~255µs;content 型 2e 尾端受單 op 敏感(bimodal)。
 - **Cadence**(Phase H,YC):重暖頻率直接決定命中率,判準 `cadence ≤ gap`——命中 ~14µs / 未命中 ~623µs,43× 二元、無過渡,支持 warm-process 部署主張。
 
