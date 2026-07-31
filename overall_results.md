@@ -825,7 +825,7 @@ orig 欄取自已 commit 的 [`results/stats/uncertainty.csv`](results/stats/unc
 
 > ✅ **本節與上方所有節的關鍵區別**:上方整個矩陣是 `gen_workload.py` 的 **Python 模擬**(複刻 YCSB 語意);**本節則用原生 YCSB 0.17.0 產生器**產生的 **真實 YCSB A–F trace**(`workloads_refined/traces/`)獨立重跑,執行器為 `run_experiment_ycsb.py` / `churn_ycsb.py` / `cadence_ycsb.py`(**只讀 traces、零 `gen_workload`/舊 `workloads/` 依賴**)。
 >
-> **資料位置**:完整報告與原始 CSV/圖在 **`speculation` branch** 的 `results/ycsb_full/`(`REPORT_YCSB_FULL.md` + `data/` + `figs/`)。此資料**目前僅在 speculation branch,尚未併入 main**(merge 檢查:speculation→main 為乾淨三向合併、非 fast-forward)。日期 2026-07-24;同機 kernel 6.17、nvme0n1、62 GiB RAM。
+> **資料位置**:完整報告與原始 CSV/圖在 **`speculation` branch** 的 `results/ycsb_full/`(`REPORT_YCSB_FULL.md` + `data/` + `figs/`)。此資料的 replay set 與彙總結果**已 file-level 凍結入 main**(`git checkout speculation -- …` 檔案級匯入、**非 branch merge**;provenance、trace/converter/DB 幾何與 per-file SHA256 見 repo 根 `NATIVE_YCSB_MANIFEST.json`;原始 per-rep CSV 與 PDF 依 manifest `excluded_evidence` 留在 speculation)。日期 2026-07-24;同機 kernel 6.17、nvme0n1、62 GiB RAM。
 >
 > **workload 對照**(原生 YCSB 沒有 `writeproportion`,故寫入類走 churn/aging):YC=100% read zipfian、YCu=uniform、YCh01–50=hotspot-hashed、YCo01–50=hotspot-ordered(共 12 讀取);YA(50/50)/YB(95/5)/YF(rmw)=churn ager;YD(read-latest+insert)/YE(scan+insert)=aging ager。共 **17 workload**(12 讀 + 5 寫)。
 
@@ -833,7 +833,7 @@ orig 欄取自已 commit 的 [`results/stats/uncertainty.csv`](results/stats/unc
 
 | # | 論文主張 | 原生 YCSB 重現結果 | 判定 |
 |---|---|---|---|
-| 1 | 常駐 interior 骨架(2d)穩健降低讀取冷啟動首查 | 12 讀取 workload **2d 首查中位 −38%**(mean −33%);10-seed 95% CI **[−46%, −31%]**,排除 0 | **成立** |
+| 1 | 常駐 interior 骨架(2d)穩健降低讀取冷啟動首查 | **breadth**:12 讀取 configuration **2d 首查中位 −38%**(mean −33%)、**11/12 favorable**(YCo05 +22% 為唯一例外);**seed-robustness**(另一維度):canonical YCSB-C 10-seed mean **−38.4%**、95% CI **[−46.2,−30.5]** 排除 0(此 CI 屬 YCSB-C 單一 workload) | **成立** |
 | 2 | 整庫暖快取(2f_slru)首查最快、但 e2e 災難 | 2f 首查最低,但 warm-e2e **+4000%~+7000%**(deliver 吞噬) | **成立** |
 | 3 | 好處來自 **interior 結構**,不是熱葉 | Ablation(10-seed+95%CI):interior 2d −36%/2e −40%(CI 排除 0);leaf_freq −3.6% 與 leaf_rand −4.3% **CI 重疊**(頻率=隨機對照) | **成立** |
 | 4 | RAM 壓力下 targeted 遞送穩定、整庫暖快取崩潰 | 10-cap 掃描(128M→6M):2d delivery **恆 100%**(cap 僅 DB 的 1/17 仍是);2f_slru **線性崩潰 100→3.5%**、首查塌回 baseline | **成立** |
@@ -884,8 +884,9 @@ orig 欄取自已 commit 的 [`results/stats/uncertainty.csv`](results/stats/unc
 
 ### 其餘 phase 摘要
 
-- **讀取矩陣 breadth**(Phase A,12 讀取 workload × 3 layout):2d 首查中位 **−38%**(mean −33%,range [−45%, +22%]);layout 皆穩健(YC orig −40% / vacuum −39% / type-aware −28%);唯一異常 **YCo05 +22%**——其 baseline 首查本就異常低(597 vs ~900 µs),2d 與 2e 同步 +22%,為 workload 特性非策略 artifact。
-- **10-seed 穩健性**(Phase D):10 條獨立 zipfian trace,2d 首查 mean **−38.4%**,95% CI **[−46.2%, −30.5%]**,排除 0。
+- **讀取矩陣 breadth**(Phase A,12 讀取 configuration × 3 layout):2d 首查中位 **−38%**(mean −33%,range [−45%, +22%]);**11/12 favorable**——唯一例外 **YCo05**(`YCSB-Ch-ordered-05`)**+22%**,其 baseline 首查本就異常低(597 vs ~900 µs),2d 與 2e 同步 +22%,為 workload 特性非策略 artifact;layout 皆穩健(YC orig −40% / vacuum −39% / type-aware −28%)。**此為 breadth,非 seed CI**。
+- **10-seed 穩健性**(Phase D):canonical YCSB-C(`native_ycsb_c_read_zipf`)10 條獨立 zipfian trace,2d 首查 mean **−38.4%**,95% CI **[−46.2%, −30.5%]**,排除 0。**此 CI 屬 YCSB-C 單一 workload 的 seed 分佈,不可讀成 12-config breadth 的 CI**。
+- **邊界(native YCSB 的機制界定)**:原生 YCSB 證實 **skeleton-first**——在所測 native configuration 下 **frequency-selected leaf ≈ random leaf**(hot-leaf 幾乎不加分);hot-leaf bonus 需 **verified physical leaf concentration**(真實實體葉集中),**而非僅 logical Zipf skew**。native YCSB 的 zipfian request 分佈是 logical skew,散到 dense-rowid DB 的多個實體葉後未形成單一超熱葉,故 leaf-frequency 這根槓桿在此不生效;controlled Tail-Mixed 的 −70% 尖峰來自 key-range 造成的 physical 集中(最右葉),是不同機制(§6.2.8)。
 - **Size-scaling**(Phase E,6M-row/0.82 GiB):2d 首查 −57%(orig −40%)、preproc 持平 ~0.1ms;2f_slru warm-e2e = 31.9 ms(baseline 43×)。2d/2e_K10 是成本–收益曲線膝點。
 - **Churn**(Phase F,YA/YB/YF 的 update 流當 ager、量測 YC):以改列流翻動頁面,static 結構骨架(2e_K10_static / layers_92_static)首查優勢在 churn 下**大致保持**(vs baseline,11 checkpoint)。
 - **Aging**(Phase G,YD/YE × 11 checkpoint):衰減 iff 熱點非靜止(2f_slru 在 read-latest 移動熱點衰減、在 scan 靜止熱點全程平坦);結構型 2d/layers_92 兩 workload 全 checkpoint 穩定 ~255µs;content 型 2e 尾端受單 op 敏感(bimodal)。

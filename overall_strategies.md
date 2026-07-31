@@ -203,14 +203,14 @@ Memory:   MAP_SHARED (4a)       ← 多 process 自動受惠（prefetch 成本 O
 
 ## 原生 YCSB 驗證（speculation branch `results/ycsb_full/`）
 
-> 上表所有策略以 `gen_workload.py`（Python 模擬 YCSB 語意）量測。另用**原生 YCSB 0.17.0 產生器**的真實 A–F trace（`workloads_refined/traces/`，執行器 `run_experiment_ycsb.py` / `churn_ycsb.py` / `cadence_ycsb.py`，只讀 traces）**獨立重跑整套**，驗證策略行為不依賴自訂產生器。資料與完整報告在 **speculation branch** `results/ycsb_full/`（`REPORT_YCSB_FULL.md`，2026-07-24 同機、**尚未併入 main**）；涵蓋 17 workload（12 讀 + 5 寫→churn/aging）、10 seed、6M-row、RAM 壓力掃描、churn/aging/cadence。**論文六項核心主張在原生 YCSB 上全部成立。**
+> 上表所有策略以 `gen_workload.py`（Python 模擬 YCSB 語意）量測。另用**原生 YCSB 0.17.0 產生器**的真實 A–F trace（`workloads_refined/traces/`，執行器 `run_experiment_ycsb.py` / `churn_ycsb.py` / `cadence_ycsb.py`，只讀 traces）**獨立重跑整套**，驗證策略行為不依賴自訂產生器。資料與完整報告**已 file-level 凍結入 main** `results/ycsb_full/`（`REPORT_YCSB_FULL.md`，2026-07-24 同機；trace/converter/DB 幾何與 per-file SHA256 見 repo 根 `NATIVE_YCSB_MANIFEST.json`；為 `git checkout` 檔案級匯入、**非 branch merge**；原始 per-rep CSV 與 PDF 留在 speculation，見 manifest `excluded_evidence`）；涵蓋 17 workload（12 讀 + 5 寫→churn/aging）、10 seed、6M-row、RAM 壓力掃描、churn/aging/cadence。**論文六項核心主張在原生 YCSB 上全部成立。**
 >
 > workload 對照（原生 YCSB 無 `writeproportion`，寫入類走 churn/aging）：YC=100% read zipfian、YCu=uniform、YCh/YCo01–50=hotspot hashed/ordered（共 12 讀）；YA(50/50)/YB(95/5)/YF(rmw)=churn；YD(read-latest)/YE(scan)=aging。
 
 | 策略 | 原生 YCSB 驗證結果 |
 |---|---|
 | 2c layers_92 | interior 骨架；YC/orig e2e_warm **−22%**；aging 兩 workload 全 checkpoint 穩定 ~255µs |
-| **2d interior-only** | **主結論**：12 讀取 workload first-q 中位 **−38%**（10-seed 95% CI [−46,−31]，排除 0）；6M-row **−57%**；RAM 6M cap（DB 的 1/17）仍 **100% delivery**；e2e_warm −22% |
+| **2d interior-only** | **主結論**：**breadth** — 12 讀取 configuration first-q 中位 **−38%**（**11/12 favorable**，`YCSB-Ch-ordered-05`（YCo05）+22% 為唯一例外）；**seed-robustness** — canonical YCSB-C（`native_ycsb_c_read_zipf`）10 seed mean **−38.4%**、95% CI **[−46.2,−30.5]** 排除 0（**此 CI 屬 YCSB-C 單一 workload、非 12-config 的 CI**）；6M-row **−57%**；RAM 6M cap（DB 的 1/17）仍 **100% delivery**；e2e_warm −22% |
 | 2e interior+top-K | K10 ≈ 2d（加葉無可測增益）；**K500 e2e +39% 過度配置回歸**（deliver 膨脹）；aging content 型尾端 bimodal |
 | 2f SLRU | first-q 最低（−87~90%）但 **warm-e2e +4000~7000%**（deliver 41 ms trap）；RAM 壓力 delivery 線性崩潰 100→3.5%、first-q 塌回 baseline |
 | S1 消融 leaf_freq / leaf_rand | 全 6 格（3 分布 ×2 layout）**頻率挑葉 ≈ 隨機挑葉**（差 <2pp、CI 重疊）→ 熱葉「頻率」不是槓桿，interior 結構才是 |

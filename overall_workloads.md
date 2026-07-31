@@ -56,10 +56,12 @@ paper／figure／本檔一律用 **display name**。下表的短碼是 **immutab
 | Tail-Mixed | `read_tail_mixed_20k` | C, C_mixed | controlled read | ✅ |
 | Tail-Hit | `read_tail_hit_20k` | C_hit | controlled read（對照）| ✅ |
 | Concentrated-Zipf | `read_zipf_concentrated_1k` | Z | controlled read（僅圖）| ✅ |
-| （headline）YCSB-read | — | YC | real-YCSB 讀取 headline | ✅ |
-| Latest-Aging | `py_ycsb_d_latest_aging` | YD | YCSB 重建（aging）| ✅ |
-| Short-Scan Aging | `py_ycsb_e_short_scan_aging` | YE | YCSB 重建（aging）| ✅ |
+| YCSB-C（headline）| `native_ycsb_c_read_zipf` | YC | native-YCSB 讀取 headline | ✅ |
+| Latest-Aging | `py_ycsb_d_latest_aging` | YD | **Python** YCSB-D 重建（aging）| ✅ |
+| Short-Scan Aging | `py_ycsb_e_short_scan_aging` | YE | **Python** YCSB-E 重建（aging）| ✅ |
 | Mixed-Mutation Churn | `mutation_churn_schedule` | CHURN | mutation schedule | ❌ 不量 latency |
+
+> **native vs Python D/E（勿混）**：上表 `YD`/`YE` 資料層 alias 綁定的是 **Python 重建** `py_ycsb_d_latest_aging`（Latest-Aging）/ `py_ycsb_e_short_scan_aging`（Short-Scan Aging）。**原生 YCSB-D/E**（native-YCSB-generated suite；canonical `native_ycsb_d_read_latest` / `native_ycsb_e_short_scan`，見 `NATIVE_YCSB_MANIFEST.json`）是**不同 workload**、**不使用 `YD`/`YE` alias**（bare `YD`/`YE` 僅為 Python 線的歷史相容 alias）。
 
 **Workload 格式：** `benchmark_harness` 每行一 op：`read <id>` / `update <id>` / `insert <id>` / `scan <id> <len>` / `readmodifywrite <id>`（op string 格式參照 [YCSB-cpp](https://github.com/ls4154/YCSB-cpp)）。
 
@@ -140,7 +142,7 @@ paper／figure／本檔一律用 **display name**。下表的短碼是 **immutab
 
 ## 原生 YCSB 全套（speculation branch，17 workload）
 
-除了 main 上的 headline YC，另有一套**完整原生 YCSB A–F 重現**，資料與報告在 **`speculation` branch** `results/ycsb_full/`（`REPORT_YCSB_FULL.md`，2026-07-24 同機、**尚未併入 main**；為獨立機器狀態，絕對 µs 只批內比、相對量跨表比）。執行器 `run_experiment_ycsb.py` / `churn_ycsb.py` / `cadence_ycsb.py`（只讀 `workloads_refined/traces/`）。共 **17 workload**（原生 YCSB 無 `writeproportion`，寫入類走 churn/aging）：
+除了 headline YC，另有一套 **native-YCSB-generated suite**（原生 YCSB 0.17.0 產生器；標準 YCSB-A/B/C/D/E/F 為 standard workload，YCSB-Cu 與各 hotspot hashed/ordered 變體為 generated 客製 configuration），資料與報告**已 file-level 凍結入 main** `results/ycsb_full/`（`REPORT_YCSB_FULL.md`，2026-07-24 同機；per-file SHA256 與 provenance 見 repo 根 `NATIVE_YCSB_MANIFEST.json`；`git checkout` 檔案級匯入、**非 branch merge**；為獨立機器狀態，絕對 µs 只批內比、相對量跨表比）。執行器 `run_experiment_ycsb.py` / `churn_ycsb.py` / `cadence_ycsb.py`（只讀 `workloads_refined/traces/`）。共 **17 workload**（原生 YCSB 無 `writeproportion`，寫入類走 churn/aging）：
 
 | 原生 YCSB | 操作組合 | 角色 |
 |---|---|---|

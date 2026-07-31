@@ -1,0 +1,329 @@
+#!/usr/bin/env python3
+"""churn.py — churn-checkpoint experiment (figs 07 + 12); the `run_experiment.py churn` subcommand.
+
+Measurement is strictly via the shared pipeline (run_experiment.run_baseline / run_one:
+full-machine drop-caches + in-harness --verify-hotset + warmer delivery). Churn is applied by
+running the harness in WRITE mode (page_churn_write slices) on a writable copy of the DB — that
+is DB mutation (setup), not measurement.
+
+Outputs (results/churn/):
+  churn_evolution.csv  workload,layout,checkpoint,strategy,first_query_us   (fig 07)
+  churn_nsweep.csv     workload,layout,N,first_query_us                     (fig 12, final churned DB)
+"""
+import csv, shutil, statistics, subprocess, sys
+from pathlib import Path
+import run_experiment_ycsb as R
+
+# the base churn stream was renamed to seeded copies (_1.._10) when the 10-seed
+# sweep was added; _1 is the original (seed 1), the one results/churn was built
+# from. Prefer the unseeded name if it ever exists again, else fall back to _1.
+_CHURN_UNSEEDED = R.ROOT / "workloads_refined/traces/workload_churn_write.txt"
+CHURN_SRC = _CHURN_UNSEEDED if _CHURN_UNSEEDED.exists() else R.ROOT / "workloads_refined/traces/workload_churn_write.txt"
+OPS_PER   = 5000
+NSWEEP_N  = [1, 2, 3, 5, 8, 13, 21, 34, 46, 64, 92]   # for fig 12 (+ baseline=0)
+
+
+class _Args:                      # mimic run_experiment argparse for the measurement helpers
+    cpu = 2; warm_cpu_ms = 10; mem_limit = "none"
+_HARNESS_ARGS = _Args()
+
+
+def add_parser(sub):
+    ap = sub.add_parser("churn", help="churn-checkpoint experiment (DB mutated between measurements)",
+                        description="Static t=0 hotset re-measured across churn checkpoints.")
+    ap.add_argument("--workload", default="A,B,C", help="workload key(s): comma-list of A,B,C,Z,YD,YE")
+    ap.add_argument("--db", default="orig,vacuum,ta", help="db key(s): comma-list of orig,vacuum,ta")
+    ap.add_argument("--checkpoints", type=int, default=10, help="churn checkpoints (x OPS_PER mutations each)")
+    ap.add_argument("--reps", type=int, default=3, help="measurement reps per checkpoint (median)")
+    ap.add_argument("--outdir", default=str(R.ROOT / "results/churn"))
+    ap.add_argument("--dry-run", action="store_true", help="print the plan, run nothing")
+    ap.set_defaults(func=cmd_churn)
+
+
+def make_chunks(chunks_dir, n_ckpt, src=CHURN_SRC):
+    """Slice a write stream into n_ckpt contiguous OPS_PER-op chunk files. Defaults
+    to the shared CHURN_SRC (the `churn` experiment); the `aging` experiment passes
+    a YCSB D/E workload's own file so its insert stream ages the DB in place."""
+    chunks_dir.mkdir(parents=True, exist_ok=True)
+    lines = [l for l in open(src).read().splitlines() if l.strip()]
+    out = []
+    for i in range(n_ckpt):
+        seg = lines[i * OPS_PER:(i + 1) * OPS_PER]
+        p = chunks_dir / f"churn_chunk_{i}.txt"
+        p.write_text("\n".join(seg) + "\n")
+        out.append(p)
+    return out
+
+
+def apply_churn(workdb, chunkfile, recdir):
+    """Mutate workdb by running a churn slice through the harness in write mode."""
+    cmd = [str(R.BH), "--db", str(workdb), "--workload", str(chunkfile),
+           "--output", str(recdir / "churn_ops.csv"), "--record-dir", str(recdir),
+           "--cold-advice", "none", "--cpu", "2"]   # write mode (no --readonly/--require-read-first)
+    subprocess.run(cmd, capture_output=True, text=True, timeout=900)
+
+
+def _med_fq(fn, reps):
+    """Run a measurement <reps> times, return median first_query_us (None if all failed)."""
+    vals = []
+    for _ in range(reps):
+        m = fn()
+        if m and m["first_query_us"] is not None:
+            vals.append(m["first_query_us"])
+    return statistics.median(vals) if vals else None
+
+
+def cmd_churn(args):
+    workloads = [x for x in args.workload.split(",") if x]
+    layouts   = [x for x in args.db.split(",") if x]
+    R._check_keys("workload", workloads, R.WORKLOADS)
+    R._check_keys("db", layouts, R.DBS)
+    n_ckpt, reps = args.checkpoints, args.reps
+    out = Path(args.outdir)
+    workdir = out / "work"
+
+    if args.dry_run:
+        print(f"churn: {workloads} x {layouts}, {n_ckpt} checkpoints x {OPS_PER} ops, "
+              f"{reps} reps/ckpt; nsweep N={NSWEEP_N} on the final churned DB.")
+        print(f"  -> {out/'churn_evolution.csv'} + {out/'churn_nsweep.csv'}")
+        return 0
+
+    workdir.mkdir(parents=True, exist_ok=True)
+    chunks = make_chunks(workdir / "chunks", n_ckpt)
+    evo_rows, nsweep_rows = [], []   # evo: (w,layout,ckpt,strategy,fq); nsweep: (w,layout,N,fq)
+    for layout in layouts:
+        db0 = R.resolve_pointer(R.DBS[layout])
+        classify = R.load_classify(layout)
+        for w in workloads:
+            wl = R.WORKLOADS[w]
+            workdb = workdir / f"churn_{w}_{layout}.db"
+            shutil.copy2(db0, workdb)
+            recdir = workdir / f"rec_{w}_{layout}"; recdir.mkdir(exist_ok=True)
+            # static t=0 hotsets: 2e is workload-dependent; layers_92 is structural
+            hot_2e = workdir / f"static_2e_{w}_{layout}.csv"
+            R.build_hotset(R.select_pages(R.resolve_strategy("2e_K10"), w, layout, classify), classify, hot_2e)
+            hot_l92 = workdir / f"static_l92_{w}_{layout}.csv"
+            R.build_hotset(R.select_pages(R.resolve_strategy("layers_92"), w, layout, classify), classify, hot_l92)
+
+            for ck in range(n_ckpt + 1):
+                base = _med_fq(lambda: R.run_baseline(workdb, wl, recdir, _HARNESS_ARGS, verify_hotset=hot_2e), reps)
+                s2e  = _med_fq(lambda: R.run_one(workdb, wl, hot_2e,  "fadvise", recdir, _HARNESS_ARGS), reps)
+                sl92 = _med_fq(lambda: R.run_one(workdb, wl, hot_l92, "fadvise", recdir, _HARNESS_ARGS), reps)
+                for strat, v in [("baseline", base), ("2e_K10_static", s2e), ("layers_92_static", sl92)]:
+                    if v is not None:
+                        evo_rows.append((w, layout, ck, strat, f"{v:.2f}"))
+                sys.stderr.write(f"[ckpt {ck}/{n_ckpt}] {w}/{layout}: base={base} 2e={s2e} l92={sl92}\n")
+                if ck < n_ckpt:
+                    apply_churn(workdb, chunks[ck], recdir)
+
+            # fig 12: layers_N sweep on the FINAL churned DB (static t=0 layers hotsets)
+            nbase = _med_fq(lambda: R.run_baseline(workdb, wl, recdir, _HARNESS_ARGS, verify_hotset=hot_l92), reps)
+            if nbase is not None:
+                nsweep_rows.append((w, layout, 0, f"{nbase:.2f}"))
+            for N in NSWEEP_N:
+                hs = workdir / f"churn_layers_{w}_{layout}_{N}.csv"
+                R.build_hotset(R.select_pages(R.resolve_strategy(f"layers_{N}"), w, layout, classify), classify, hs)
+                v = _med_fq(lambda hs=hs: R.run_one(workdb, wl, hs, "fadvise", recdir, _HARNESS_ARGS), reps)
+                if v is not None:
+                    nsweep_rows.append((w, layout, N, f"{v:.2f}"))
+                sys.stderr.write(f"[churn-nsweep] {w}/{layout} N={N}: {v}\n")
+
+    out.mkdir(parents=True, exist_ok=True)
+    with open(out / "churn_evolution.csv", "w", newline="") as f:
+        wr = csv.writer(f); wr.writerow(["workload", "layout", "checkpoint", "strategy", "first_query_us"])
+        wr.writerows(evo_rows)
+    with open(out / "churn_nsweep.csv", "w", newline="") as f:
+        wr = csv.writer(f); wr.writerow(["workload", "layout", "N", "first_query_us"])
+        wr.writerows(nsweep_rows)
+    print(f"wrote {out/'churn_evolution.csv'} ({len(evo_rows)}) + {out/'churn_nsweep.csv'} ({len(nsweep_rows)})")
+    return 0
+
+
+# =============================================================================
+# aging: YCSB D/E self-aging experiment.
+#
+# Unlike `churn` (a separate write stream ages the DB while a read workload is
+# measured), a YCSB D/E workload IS both the aging stream and the query source:
+# its insert stream grows the DB, and its read/scan ops define the hot set. The
+# measured TTFQ trace is a read-only probe (read/scan lines only -- inserts
+# stripped) so it passes the harness's --readonly/--require-read-first gates; the
+# full trace (incl. inserts) is replayed in write mode to age a DB *copy* between
+# checkpoints. Static t=0 hotsets (built once on the fresh copy) then degrade as
+# the hot set rides the insert tail (D) or the DB grows (E).
+# =============================================================================
+
+def add_aging_parser(sub):
+    ap = sub.add_parser("aging",
+                        help="YCSB D/E self-aging experiment (write workload ages its own DB copy)",
+                        description="Write-workload aging: the workload's insert stream grows a DB copy "
+                                    "across checkpoints; a read-only probe re-measures static t=0 hotset TTFQ.")
+    ap.add_argument("--workload", default="YD,YE", help="write workload key(s): comma-list of YD,YE")
+    ap.add_argument("--db", default="orig", help="db key(s): comma-list of orig,vacuum,ta")
+    ap.add_argument("--checkpoints", type=int, default=10, help="aging checkpoints (x OPS_PER ops each)")
+    ap.add_argument("--reps", type=int, default=3, help="measurement reps per checkpoint (median)")
+    ap.add_argument("--seed", type=int, default=1, help="workload seed: age with workload_<w>_<seed>.txt "
+                    "(default 1 = master); loop 1..10 for the paper's cross-seed CI")
+    ap.add_argument("--outdir", default=str(R.ROOT / "results/aging"))
+    ap.add_argument("--dry-run", action="store_true", help="print the plan, run nothing")
+    ap.set_defaults(func=cmd_aging)
+
+
+def _probe_from_lines(lines, dest):
+    """Build a --readonly-safe TTFQ probe from a slice of a write-containing workload:
+    keep only read/scan ops (SELECTs), drop inserts; ensure op[0] is a read (prepend a
+    read of the first scan's start key if the first kept op is a scan) so the probe
+    passes --require-read-first. Returns op count.
+
+    Used PER-CHECKPOINT: probe_k is derived from chunk k, so its first query reflects the
+    hotspot AT checkpoint k. For read-latest (YD) that window follows the insert frontier
+    (non-stationary -> a frozen t=0 hotset decays); for zipfian (YE) it is stationary
+    (-> no decay). This is what makes the aging experiment able to observe decay at all;
+    a single whole-trace probe cannot (its first query never moves)."""
+    kept = [l for l in lines if l.strip() and l.split(None, 1)[0] in ("read", "scan")]
+    out = []
+    if kept and kept[0].split()[0] == "scan":
+        out.append(f"read {kept[0].split()[1]}\n")   # force op[0] = read
+    out += [l if l.endswith("\n") else l + "\n" for l in kept]
+    Path(dest).write_text("".join(out))
+    return len(out)
+
+
+def _build_t0_hotsets(workdb, w, layout, classify, probe, workdir):
+    """Build all six static t=0 prefetch hotsets on a fresh (pre-aging) DB copy,
+    in the aging workdir (never touching the canonical strategy dirs). All are
+    FROZEN at t=0 and reused across checkpoints, so the experiment observes each
+    strategy's decay as the DB grows:
+      - layers_5  / layers_92 : structural (classify only, no trace)
+      - 2d                    : resident interior pages (warm + residency, interior only)
+      - 2e_K10 / 2e_K500      : resident-interior U top-K hot leaves (gen_hotleaves)
+      - 2f_slru               : whole resident working set (the full t=0 cache dump)
+    Returns an ordered dict {display_name: hotset_path} in warmer format."""
+    def _is_interior(pn):
+        return classify.get(pn, ("", 0))[0].startswith("interior")
+
+    # structural hotsets: classify only, seed-independent
+    hot_l92 = workdir / f"aging_l92_{w}_{layout}.csv"
+    R.build_hotset(R.select_pages(R.resolve_strategy("layers_92"), w, layout, classify),
+                   classify, hot_l92)
+    hot_l5 = workdir / f"aging_l5_{w}_{layout}.csv"
+    R.build_hotset(R.select_pages(R.resolve_strategy("layers_5"), w, layout, classify),
+                   classify, hot_l5)
+
+    # warm the fresh DB with the t=0 probe, then snapshot residency
+    warm_rec = workdir / f"aging_warm_{w}_{layout}"; warm_rec.mkdir(exist_ok=True)
+    try:
+        subprocess.run([R.DROP_CACHES], check=True, timeout=120)
+    except (subprocess.SubprocessError, OSError) as e:
+        sys.stderr.write(f"  WARN aging t=0: drop-caches failed ({e}); residency may be warm\n")
+    subprocess.run(
+        [str(R.BH), "--db", str(workdb), "--workload", str(probe),
+         "--output", str(warm_rec / "warm_ops.csv"), "--record-dir", str(warm_rec),
+         "--cold-advice", "none", "--mmap-size", str(Path(workdb).stat().st_size),
+         "--readonly", "--require-read-first", "--cpu", "2"],
+        capture_output=True, text=True, timeout=600)
+    base = workdir / f"aging_base_{w}_{layout}.csv"
+    subprocess.run([str(R.RESIDENCY_CHECKER), str(workdb), str(base)],
+                   capture_output=True, text=True, timeout=300)
+    resident = R._resident_pages(base)
+
+    # 2d: resident interior skeleton; 2f_slru: whole resident working set
+    hot_2d = workdir / f"aging_2d_{w}_{layout}.csv"
+    R.build_hotset({pn for pn in resident if _is_interior(pn)}, classify, hot_2d)
+    hot_2f = workdir / f"aging_2f_{w}_{layout}.csv"
+    R.build_hotset(resident, classify, hot_2f)
+
+    # 2e_K: resident-interior U top-K hot leaves, for K in {10, 500}
+    classify_path = R.resolve_pointer(R.CLASSIFY[layout])
+    hot_2e, hot_2e500 = None, None
+    for k, dst in (("10", "aging_2e_"), ("500", "aging_2e500_")):
+        raw = workdir / f"aging_hot2e{k}_{w}_{layout}.csv"
+        subprocess.run(
+            [sys.executable, str(R.GEN_HOTLEAVES), str(workdb), str(classify_path),
+             str(base), str(probe), k, str(raw)],
+            capture_output=True, text=True, timeout=600)
+        out = workdir / f"{dst}{w}_{layout}.csv"
+        R.build_hotset(R._resident_pages(raw), classify, out)
+        if k == "10": hot_2e = out
+        else:         hot_2e500 = out
+
+    # ordered to mirror the read-matrix figures (layers_5 .. 2f_slru)
+    return {"layers_5_static": hot_l5, "layers_92_static": hot_l92,
+            "2d_static": hot_2d, "2e_K10_static": hot_2e,
+            "2e_K500_static": hot_2e500, "2f_slru_static": hot_2f}
+
+
+def cmd_aging(args):
+    workloads = [x for x in args.workload.split(",") if x]
+    layouts   = [x for x in args.db.split(",") if x]
+    R._check_keys("workload", workloads, R.WORKLOADS)
+    R._check_keys("db", layouts, R.DBS)
+    non_write = [w for w in workloads if w not in R.WRITE_WORKLOADS]
+    if non_write:
+        sys.exit(f"aging: {non_write} are read-only (no insert stream to age the DB); "
+                 f"use `run`/`churn`. write workloads: {sorted(R.WRITE_WORKLOADS)}")
+    n_ckpt, reps = args.checkpoints, args.reps
+    out = Path(args.outdir); workdir = out / "work"
+
+    if args.dry_run:
+        print(f"aging: {workloads} x {layouts}, {n_ckpt} checkpoints x {OPS_PER} ops "
+              f"(from each workload's own insert stream), {reps} reps/ckpt.")
+        print("  strategies: baseline + 6 static t=0 hotsets (layers_5, layers_92, 2d, "
+              "2e_K10, 2e_K500, 2f_slru); TTFQ via read-only probe.")
+        print(f"  -> {out/'aging_evolution.csv'}")
+        return 0
+
+    workdir.mkdir(parents=True, exist_ok=True)
+    evo_rows = []   # (workload, layout, checkpoint, strategy, first_query_us)
+    for layout in layouts:
+        db0 = R.resolve_pointer(R.DBS[layout])
+        classify = R.load_classify(layout)
+        for w in workloads:
+            seed = getattr(args, "seed", 1) or 1
+            wl = R.WORKLOADS[w]
+            if not wl.exists():
+                sys.exit(f"aging: missing {wl} (--seed {seed})")
+            workdb = workdir / f"aging_{w}_{layout}.db"
+            shutil.copy2(db0, workdb)
+            recdir = workdir / f"rec_{w}_{layout}"; recdir.mkdir(exist_ok=True)
+            chunks = make_chunks(workdir / f"chunks_{w}_{layout}", n_ckpt, src=wl)
+            # PER-CHECKPOINT probes: probe_ck reflects the hotspot AT checkpoint ck (chunk ck's
+            # reads). The t=0 hotset is built from the INITIAL window (probe_0) and FROZEN. A
+            # moving hotspot (YD read-latest) then decays the frozen hotset; a stationary one
+            # (YE zipfian) does not -> decay iff the hotspot is non-stationary.
+            probes = []
+            for ck in range(n_ckpt + 1):
+                src = chunks[min(ck, n_ckpt - 1)]
+                p = workdir / f"probe_{w}_{layout}_ck{ck}.txt"
+                _probe_from_lines(open(src).read().splitlines(), p)
+                probes.append(p)
+            hotsets = _build_t0_hotsets(workdb, w, layout, classify, probes[0], workdir)
+            sys.stderr.write(f"[aging] {w}/{layout}: {len(probes)} per-checkpoint probes, "
+                             f"{len(chunks)} chunks x {OPS_PER} ops, {len(hotsets)} t=0 hotsets frozen from probe_0\n")
+
+            for ck in range(n_ckpt + 1):
+                pk = probes[ck]
+                base = _med_fq(lambda pk=pk: R.run_baseline(workdb, pk, recdir, _HARNESS_ARGS,
+                                                      verify_hotset=hotsets["2e_K10_static"]), reps)
+                if base is not None:
+                    evo_rows.append((w, layout, ck, "baseline", f"{base:.2f}"))
+                measured = {}
+                for strat, hot in hotsets.items():
+                    v = _med_fq(lambda hot=hot, pk=pk: R.run_one(workdb, pk, hot, "fadvise", recdir, _HARNESS_ARGS), reps)
+                    measured[strat] = v
+                    if v is not None:
+                        evo_rows.append((w, layout, ck, strat, f"{v:.2f}"))
+                summ = " ".join(f"{s.replace('_static','')}={measured[s]}" for s in hotsets)
+                sys.stderr.write(f"[aging ckpt {ck}/{n_ckpt}] {w}/{layout}: base={base} {summ}\n")
+                if ck < n_ckpt:
+                    apply_churn(workdb, chunks[ck], recdir)
+
+    out.mkdir(parents=True, exist_ok=True)
+    with open(out / "aging_evolution.csv", "w", newline="") as f:
+        wr = csv.writer(f); wr.writerow(["workload", "layout", "checkpoint", "strategy", "first_query_us"])
+        wr.writerows(evo_rows)
+    print(f"wrote {out/'aging_evolution.csv'} ({len(evo_rows)} rows)")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit("run via: python3 run_experiment.py churn [options]")

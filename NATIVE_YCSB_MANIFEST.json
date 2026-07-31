@@ -1,0 +1,321 @@
+{
+  "schema_version": 1,
+  "generated_by": "pre-OpenWhisk native-YCSB freeze (docs/provenance only; no benchmark rerun)",
+  "ycsb_version": "0.17.0",
+  "suite_label": "native-YCSB-generated suite",
+  "provenance": {
+    "main_head_before": "1275f4982e989dcc7bbce6cf71d56fa3f2b187a0",
+    "speculation_source_commit": "166b8a430fdfcd61e7296e23b4dadbc277e7ebc7",
+    "note": "native-YCSB replay set + aggregated results file-level imported (git checkout, NOT merged) from the speculation branch at speculation_source_commit onto main at main_head_before."
+  },
+  "generator": {
+    "main_class": "site.ycsb.Client",
+    "db_binding": "site.ycsb.BasicDB",
+    "java": "openjdk 17.0.19 2026-04-21",
+    "jar_sha256": {
+      "core-0.17.0.jar": "e1c64d09bfc642715428c2e53ec129b0a98a0e634ee32bf0ae77e5b4eebb3cda",
+      "HdrHistogram-2.1.4.jar": "8e68b9608ab107690350b904eab24087785f69218e5c6acd860d28116eded708",
+      "htrace-core4-4.1.0-incubating.jar": "5d45b7904857c3e4ad36b3bcc57be2d2c5f308c69b5f6a58bd86aa7d48a25ef6"
+    },
+    "workload_prop_files": {
+      "workloada": "54b8ef52cd6056b4192377f80e557caf73ccf9eed22a471c217a3864ba26e80f",
+      "workloadb": "3211561099a1e7bf52fbe6e5899b056e6afdfecf1e83e10b71e0601eea84463a",
+      "workloadc": "c5c6019eb1e8959a5ab3cb9058b34b0a8869e47cb74718630094b69ccf3f09e1",
+      "workloadd": "c0b951b190f14ae5a669ddb0f18cd9931648ef86347e27a6a9cea30481700e9e",
+      "workloade": "0e75eea21df10bc1304f25c8daa6e16c2bfbfcb83f9b5a4d794260f470cf7dd1",
+      "workloadf": "d9c9dfcf5065b026a881c357eebb653cf40efa0098dd57d861062ab8856157df"
+    },
+    "env_source": "workloads_refined/env/ycsb_env.txt"
+  },
+  "converter": {
+    "path": "workloads_refined/tools/ycsb2trace.py",
+    "sha256": "e5a316e605018fd9f14da8d69fb57576424d036c52e4c8594fd50c6f5fadac8b"
+  },
+  "db": {
+    "role": "native-run DB AND OpenWhisk replay target -- the DB every native-YCSB result in results/ycsb_full/ was measured against (executor 'orig' layout) and the exact DB OpenWhisk artifacts.json already pins.",
+    "path": "pipeline/preparation/layout_rewriter/runs/test.db",
+    "source": "deployment/openwhisk/config/artifacts.json (database block); on-disk sha256 re-verified in this freeze",
+    "executor_layout_key": "orig",
+    "executor_binding": "run_experiment_ycsb.py maps layout 'orig' -> pipeline/preparation/layout_rewriter/runs/test.db; fig17_abl_YC_orig_s{1..10}.csv (the headline 10-seed CI) carry db=orig, i.e. this DB.",
+    "sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+    "byte_size": 107851776,
+    "page_size": 4096,
+    "page_count": 26331,
+    "row_count": 600000,
+    "max_key": 600000,
+    "schema": "items(id INTEGER PRIMARY KEY, k1 TEXT NOT NULL, k2 TEXT NOT NULL, payload BLOB NOT NULL) WITH idx_items_k1, idx_items_k2",
+    "indexes": ["idx_items_k1", "idx_items_k2"],
+    "normalized_schema_hash": "097dd65895636cc3789708d99faf2eb0e3dfbcaca9dadaaef236d71d085f74bd",
+    "geometry_reference_db": {
+      "note": "SEPARATE artifact, NOT the native-run DB. build_headline_db.py produces a clean items-only rebuild (page_count 20035, NO secondary index) used ONLY for the skeleton-bytes geometry argument (interior skeleton is workload-independent, DB-specific). Native-YCSB results were NOT measured on this DB; do not conflate its 20035 pages with the 26331-page indexed test.db above.",
+      "builder": "workloads_refined/tools/build_headline_db.py",
+      "geometry_gate": "workloads_refined/tools/headline_db_gate.py",
+      "page_count": 20035,
+      "schema": "items(id INTEGER PRIMARY KEY, k1 TEXT, k2 TEXT, payload BLOB); dense rowid 1..600000; sorted load; NO secondary index",
+      "gate_expect": {
+        "leaf_pages": 20000,
+        "depth": 3,
+        "skeleton_bytes": 209920,
+        "dbstat_record_bytes": 75600000,
+        "page_count": 20035
+      },
+      "sha256": null,
+      "sha256_note": "No stored byte hash: identity is the deterministic build + signed geometry gate. NOT built in this no-build freeze."
+    }
+  },
+  "seeds": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10
+  ],
+  "workloads": [
+    {
+      "canonical_id": "native_ycsb_a_read_update",
+      "display": "YCSB-A",
+      "native_semantics": "50% read + 50% update | native YCSB zipfian over the current keyspace",
+      "standard_workload": true,
+      "external_validity_counterpart": null,
+      "trace": "workloads_refined/traces/workload_YA.txt",
+      "trace_sha256": "730fded6275461c1a20937cf37d98f0e03b0589cab98be08514149cd265e2534",
+      "seed_count": 1
+    },
+    {
+      "canonical_id": "native_ycsb_b_read_update",
+      "display": "YCSB-B",
+      "native_semantics": "95% read + 5% update | native YCSB zipfian over the current keyspace",
+      "standard_workload": true,
+      "external_validity_counterpart": null,
+      "trace": "workloads_refined/traces/workload_YB.txt",
+      "trace_sha256": "b1c9056a3ad14079e7fd2c738cae824c7a7cea36b4284f7b0d5e8cfa17116d94",
+      "seed_count": 1
+    },
+    {
+      "canonical_id": "native_ycsb_c_read_zipf",
+      "display": "YCSB-C",
+      "native_semantics": "100% read | native YCSB zipfian (scrambledZipfian, alpha~0.99) request distribution over the 600000-key space",
+      "standard_workload": true,
+      "external_validity_counterpart": "external-validity counterpart of Scattered-Zipf (paper A) -- NOT equated",
+      "trace": "workloads_refined/traces/workload_YC.txt",
+      "trace_sha256": "f85d5992dbe1c759f053d3cf3a35dae4c46edb7f7ab6ce8666564b3efe248499",
+      "seed_family": {
+        "workload_YC_1.txt": "e07bb0dae1c595b5335d4fe41834474690845d7dd31755cbf6c2449017a29603",
+        "workload_YC_2.txt": "ee5459bfd554537dad8485136bd33656b0ccca216b425b8b72ffb90250ace323",
+        "workload_YC_3.txt": "86e866b8fcb18ee036f55f7e973e0de8def77f76e5c45dd5fd43956168d0b84d",
+        "workload_YC_4.txt": "74b99282b80c014e9288cd20938e71abb44ca14106e46629c7bd8296c0ae2781",
+        "workload_YC_5.txt": "913a1fd4eb83c5be14b884ff08546789135d831c8bfd9605dc56eca497398357",
+        "workload_YC_6.txt": "ac51b9ba4be6dae4bc015886f2c8d3863a8782fe8aa2c1cfbd151414c547a558",
+        "workload_YC_7.txt": "a2a589f6c60e721adb5dd6f9b74c119926dc71ee609976f730203791c905f71e",
+        "workload_YC_8.txt": "945305b2d81f9c100fc5c4ec4d9597200ef841fbe5145360ed684b4e556e62b2",
+        "workload_YC_9.txt": "142d92eacce927277ae1864ae34a028c1d68098d12a41b8a7fd0115431880205",
+        "workload_YC_10.txt": "6c3d1bcd1e3e27d0029865a81a9b178c7cf1a112e0cfd81b0f57b624b30c2299"
+      },
+      "seed_count": 10,
+      "base_trace_identity": {
+        "alias_of": null,
+        "convenience_only": true,
+        "note": "base trace not byte-identical to any of the 10 seeds; convenience trace, EXCLUDED from seed statistics (not an 11th seed)."
+      }
+    },
+    {
+      "canonical_id": "native_ycsb_c_read_uniform",
+      "display": "YCSB-Cu",
+      "native_semantics": "100% read | native YCSB uniform request distribution over the 600000-key space (workloadc op-mix, requestdistribution=uniform)",
+      "standard_workload": false,
+      "external_validity_counterpart": "external-validity counterpart of Uniform-100K (paper B) -- NOT equated",
+      "trace": "workloads_refined/traces/workload_YC-u.txt",
+      "trace_sha256": "86f7d0538b602e45e02c8163f4e3e4e1980cd0ae1ec99f1d6f86462767989020",
+      "seed_family": {
+        "workload_YCu_1.txt": "d90409af77c280168d1059e87cb8134e845e01d73395134add1958660ae463fb",
+        "workload_YCu_2.txt": "aeb9d3c808126f4e4adffe32118a6fba581a5648aee7c3da89fe5c6bb0c3a39a",
+        "workload_YCu_3.txt": "ec8dc2cdd6a988ca69c975c6472d5e5d8efeacc4904049722d5d7b7c8a73f370",
+        "workload_YCu_4.txt": "f72b6f16158408316a1220bd63a1bdd8d7ffe899759cb34b85e1ecc78ef4d523",
+        "workload_YCu_5.txt": "c0721abfbc4612118fbeefbdc1a2aa075dd3e669c9fdf46c9a7b3fa97a3f008b",
+        "workload_YCu_6.txt": "d557694d5d24a7dc7b2b20ee2759c92917dc830ca617e209ba83541d1fc899a6",
+        "workload_YCu_7.txt": "43dd4d38b65a7ec236691d77e251366ca377be1c456e940f9c3f01277856bee8",
+        "workload_YCu_8.txt": "93ea56656a6fbc20178de0a9f512e1104185c4fe4948ef637b856f0871f97574",
+        "workload_YCu_9.txt": "271e374133a7a1df6999bf15f4b7d3142843d306beecfcaea6f37c3212fcca73",
+        "workload_YCu_10.txt": "0b78c815e14c557bafc6f7001894e9e09b15df5204245b62193cb559d421e549"
+      },
+      "seed_count": 10,
+      "base_trace_identity": {
+        "alias_of": null,
+        "convenience_only": true,
+        "note": "base trace not byte-identical to any of the 10 seeds; convenience trace, EXCLUDED from seed statistics (not an 11th seed)."
+      }
+    },
+    {
+      "canonical_id": "native_ycsb_c_hot_hashed_01",
+      "display": "YCSB-Ch-hashed-01",
+      "native_semantics": "100% read | native YCSB hotspot distribution, hot-data-fraction=1%; hot keys HASHED across the physical key space (scattered leaves)",
+      "standard_workload": false,
+      "external_validity_counterpart": "native hotspot regime (native C-panel) -- NOT equated with Tail-Mixed",
+      "trace": "workloads_refined/traces/workload_YC-h-hashed-hdf0.01.txt",
+      "trace_sha256": "ba30659c1935dcfea437945860b857aa89daf21a1a81daf0507db0e2b90050eb",
+      "seed_family": {
+        "workload_YCh01_1.txt": "27c2f869cba85f68f63ac627219291d275c13ab9c7b67bd82699817676384216",
+        "workload_YCh01_2.txt": "57c87dd2f07de41c1868250313cc37c2c354c8318f4c4c62da840810ca4a0437",
+        "workload_YCh01_3.txt": "88063d340517625ac2b3a538d53e79bfa3f720abc46a04b226abb10068404fea",
+        "workload_YCh01_4.txt": "6973f7e6f76304ab0242b0b336542c714f7021b1a04072ef0723ede1373d9cdb",
+        "workload_YCh01_5.txt": "169f2128722401ac3c84f8732bb2180cc86217d06b865149def93a3d745a2204",
+        "workload_YCh01_6.txt": "0d43721ec0edce12f543bcda42872e8bf6460539e4948886cfbea81f2fac98c6",
+        "workload_YCh01_7.txt": "1036085a1aaa3b1e0277fce8ad7ad9c2803e8cacd2c9751ee4f813860ff6880b",
+        "workload_YCh01_8.txt": "556ca3bcee829ce6fcc041668309db6105b081ca9e9c933ba659112011189419",
+        "workload_YCh01_9.txt": "da379500b9298088fa7a4fa1683618908c5dd7985047c51c35dd702e8a47a1cc",
+        "workload_YCh01_10.txt": "e1d1d250661be6db3b05e3c558e6340edc3d426192675720a23037ab0e1c0e79"
+      },
+      "seed_count": 10,
+      "base_trace_identity": {
+        "alias_of": null,
+        "convenience_only": true,
+        "note": "base trace not byte-identical to any of the 10 seeds; convenience trace, EXCLUDED from seed statistics (not an 11th seed)."
+      }
+    },
+    {
+      "canonical_id": "native_ycsb_c_hot_hashed_05",
+      "display": "YCSB-Ch-hashed-05",
+      "native_semantics": "100% read | native YCSB hotspot distribution, hot-data-fraction=5%; hot keys HASHED across the physical key space (scattered leaves)",
+      "standard_workload": false,
+      "external_validity_counterpart": "native hotspot regime (native C-panel) -- NOT equated with Tail-Mixed",
+      "trace": "workloads_refined/traces/workload_YC-h-hashed-hdf0.05.txt",
+      "trace_sha256": "f61b492270d9944d7710a378b26db7dc38d077281cf4b243aacd77f772120ca2",
+      "seed_count": 1
+    },
+    {
+      "canonical_id": "native_ycsb_c_hot_hashed_10",
+      "display": "YCSB-Ch-hashed-10",
+      "native_semantics": "100% read | native YCSB hotspot distribution, hot-data-fraction=10%; hot keys HASHED across the physical key space (scattered leaves)",
+      "standard_workload": false,
+      "external_validity_counterpart": "native hotspot regime (native C-panel) -- NOT equated with Tail-Mixed",
+      "trace": "workloads_refined/traces/workload_YC-h-hashed-hdf0.10.txt",
+      "trace_sha256": "53ec3058f3079892fc96c4be25681277df2e862e19aa5494e78ee0571f0ea706",
+      "seed_count": 1
+    },
+    {
+      "canonical_id": "native_ycsb_c_hot_hashed_20",
+      "display": "YCSB-Ch-hashed-20",
+      "native_semantics": "100% read | native YCSB hotspot distribution, hot-data-fraction=20%; hot keys HASHED across the physical key space (scattered leaves)",
+      "standard_workload": false,
+      "external_validity_counterpart": "native hotspot regime (native C-panel) -- NOT equated with Tail-Mixed",
+      "trace": "workloads_refined/traces/workload_YC-h-hashed-hdf0.20.txt",
+      "trace_sha256": "85c40a63c2bc490c13dafe857ef532eac2efab68ebcd365c3c3f811702a27f46",
+      "seed_count": 1
+    },
+    {
+      "canonical_id": "native_ycsb_c_hot_hashed_50",
+      "display": "YCSB-Ch-hashed-50",
+      "native_semantics": "100% read | native YCSB hotspot distribution, hot-data-fraction=50%; hot keys HASHED across the physical key space (scattered leaves)",
+      "standard_workload": false,
+      "external_validity_counterpart": "native hotspot regime (native C-panel) -- NOT equated with Tail-Mixed",
+      "trace": "workloads_refined/traces/workload_YC-h-hashed-hdf0.50.txt",
+      "trace_sha256": "dc0046ee5a0a44169cb7810addf74bb3278c417786ec1365f8c8df80638f1715",
+      "seed_count": 1
+    },
+    {
+      "canonical_id": "native_ycsb_c_hot_ordered_01",
+      "display": "YCSB-Ch-ordered-01",
+      "native_semantics": "100% read | native YCSB hotspot distribution, hot-data-fraction=1%; hot keys ORDERED/contiguous (clustered leaves)",
+      "standard_workload": false,
+      "external_validity_counterpart": "native hotspot regime -- NOT equated with Tail-Mixed",
+      "trace": "workloads_refined/traces/workload_YC-h-ordered-hdf0.01.txt",
+      "trace_sha256": "ea9b8d863f4071341cdd6b6a5bc336239ee14a38085ac01bab51ec125e754880",
+      "seed_count": 1
+    },
+    {
+      "canonical_id": "native_ycsb_c_hot_ordered_05",
+      "display": "YCSB-Ch-ordered-05",
+      "native_semantics": "100% read | native YCSB hotspot distribution, hot-data-fraction=5%; hot keys ORDERED/contiguous (clustered leaves)",
+      "standard_workload": false,
+      "external_validity_counterpart": "native hotspot regime -- NOT equated with Tail-Mixed",
+      "trace": "workloads_refined/traces/workload_YC-h-ordered-hdf0.05.txt",
+      "trace_sha256": "88ca859a71081053d9813b916b027bdc553da2951e0c693a005503eb60fa0e74",
+      "seed_count": 1
+    },
+    {
+      "canonical_id": "native_ycsb_c_hot_ordered_10",
+      "display": "YCSB-Ch-ordered-10",
+      "native_semantics": "100% read | native YCSB hotspot distribution, hot-data-fraction=10%; hot keys ORDERED/contiguous (clustered leaves)",
+      "standard_workload": false,
+      "external_validity_counterpart": "native hotspot regime -- NOT equated with Tail-Mixed",
+      "trace": "workloads_refined/traces/workload_YC-h-ordered-hdf0.10.txt",
+      "trace_sha256": "38eeed7de6e1b1a4f6d9cf18cb2e868f7c86eac9888ad3f025d4a77407bfb29f",
+      "seed_count": 1
+    },
+    {
+      "canonical_id": "native_ycsb_c_hot_ordered_20",
+      "display": "YCSB-Ch-ordered-20",
+      "native_semantics": "100% read | native YCSB hotspot distribution, hot-data-fraction=20%; hot keys ORDERED/contiguous (clustered leaves)",
+      "standard_workload": false,
+      "external_validity_counterpart": "native hotspot regime -- NOT equated with Tail-Mixed",
+      "trace": "workloads_refined/traces/workload_YC-h-ordered-hdf0.20.txt",
+      "trace_sha256": "0cc5595fadb0874dc8e1f2539de88181a3d46049699ddefbe1d811c30ddb9923",
+      "seed_count": 1
+    },
+    {
+      "canonical_id": "native_ycsb_c_hot_ordered_50",
+      "display": "YCSB-Ch-ordered-50",
+      "native_semantics": "100% read | native YCSB hotspot distribution, hot-data-fraction=50%; hot keys ORDERED/contiguous (clustered leaves)",
+      "standard_workload": false,
+      "external_validity_counterpart": "native hotspot regime -- NOT equated with Tail-Mixed",
+      "trace": "workloads_refined/traces/workload_YC-h-ordered-hdf0.50.txt",
+      "trace_sha256": "8f1dc1c4845fbb5f64f8002cf78afb8b18d95351469710b0129770bc7bd1f8b6",
+      "seed_count": 1
+    },
+    {
+      "canonical_id": "native_ycsb_d_read_latest",
+      "display": "YCSB-D",
+      "native_semantics": "95% read (read-latest) + 5% insert | native YCSB zipfian over the current keyspace",
+      "standard_workload": true,
+      "external_validity_counterpart": null,
+      "trace": "workloads_refined/traces/workload_YD.txt",
+      "trace_sha256": "1c78fabd03a4e909b8ea80b27ed253031695c7d2bb6d7dda509084990758104b",
+      "seed_count": 1
+    },
+    {
+      "canonical_id": "native_ycsb_e_short_scan",
+      "display": "YCSB-E",
+      "native_semantics": "95% scan (short-ranges) + 5% insert | native YCSB zipfian over the current keyspace",
+      "standard_workload": true,
+      "external_validity_counterpart": null,
+      "trace": "workloads_refined/traces/workload_YE.txt",
+      "trace_sha256": "4ba9114f49bc311404ea60c90dddbc37b76c76e2312b20534392040b15943d0d",
+      "seed_count": 1
+    },
+    {
+      "canonical_id": "native_ycsb_f_rmw",
+      "display": "YCSB-F",
+      "native_semantics": "read-modify-write | native YCSB zipfian over the current keyspace",
+      "standard_workload": true,
+      "external_validity_counterpart": null,
+      "trace": "workloads_refined/traces/workload_YF.txt",
+      "trace_sha256": "1a59263054af449ec0cbd94565026ffa2918965ea10d34564ee2d7a502614d37",
+      "seed_count": 1
+    }
+  ],
+  "excluded_evidence": [
+    {
+      "path": "results/ycsb_full/REPORT_YCSB_FULL.pdf",
+      "reason": "regenerable PDF build artifact",
+      "source_commit": "166b8a430fdfcd61e7296e23b4dadbc277e7ebc7"
+    },
+    {
+      "path": "results/refined/**",
+      "reason": "out of freeze scope (per user); left on speculation",
+      "source_commit": "166b8a430fdfcd61e7296e23b4dadbc277e7ebc7"
+    },
+    {
+      "path": "results/ycsb_full/data/*_raw.csv",
+      "reason": "RAM-sweep + phaseC raw per-rep CSVs; aggregated CSVs kept",
+      "source_commit": "166b8a430fdfcd61e7296e23b4dadbc277e7ebc7"
+    }
+  ],
+  "python_reconstructions": {
+    "note": "Latest-Aging (py_ycsb_d_latest_aging) and Short-Scan Aging (py_ycsb_e_short_scan_aging) are deterministic Python rebuilds of YCSB-D/E semantics -- NOT the native traces here. Bare YD/YE alias the PYTHON line in config/workloads.json; native aging D/E resolve only via YCSB-D/YCSB-E."
+  }
+}

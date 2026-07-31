@@ -2,6 +2,7 @@
   "schema_version": 1,
   "description": "Canonical workload registry. Single source of truth mapping legacy workload IDs (used in immutable results CSVs and provenance filters) to descriptive canonical IDs and paper-facing display names, with per-workload metadata. Consumers (figure scripts, table generators, OpenWhisk config/schedule loader) MUST resolve display names through config/workload_registry.py rather than hard-coding the mapping. Results CSV 'workload' columns and verifier source_filter values keep the legacy IDs and are NOT rewritten; the registry normalizes for presentation only.",
   "notes": "Legacy IDs A/B/C/C_mixed/C_hit/Z were adopted before the real-YCSB migration and are easily confused with the standard YCSB core workloads A-F. Descriptive names remove that ambiguity. CHURN is a database-evolution mutation schedule, not a measured evaluation workload.",
+  "native_ycsb_notes": "The native-YCSB-generated suite (canonical_id prefix native_ycsb_*, display YCSB-*) is produced by the real YCSB 0.17.0 generator (see NATIVE_YCSB_MANIFEST.json). standard_workload=true marks ONLY the six official core specs (workloada..f = YCSB-A/B/C/D/E/F); YCSB-Cu and the hotspot hashed/ordered variants are native-YCSB-generated CUSTOM configurations (standard_workload=false), not official standard workloads. COLLISION NOTE: native aging D/E deliberately carry NO bare YD/YE alias here. Bare YD/YE remain historical aliases of the Python reconstructions (py_ycsb_d_latest_aging / py_ycsb_e_short_scan_aging). Native aging result CSVs (results/ycsb_full/data/phaseG_aging.csv) key D/E as 'YD'/'YE' as an executor-internal token of run_experiment_ycsb.py; resolve native aging D/E by canonical_id or display 'YCSB-D'/'YCSB-E', never by the bare token through this global registry.",
   "workloads": [
     {
       "canonical_id": "read_zipf_scattered_100k",
@@ -132,6 +133,340 @@
       "seed_count": null,
       "paper_role": "database-evolution / mutation schedule that ages the DB between measured read probes. NOT a measured evaluation workload and NOT latency-measured.",
       "is_measured": false
+    }
+,
+    {
+      "canonical_id": "native_ycsb_c_read_zipf",
+      "display_name": "YCSB-C",
+      "legacy_aliases": [
+        "YC"
+      ],
+      "category": "native_ycsb",
+      "kind": "measured_read",
+      "standard_workload": true,
+      "generator": "native YCSB 0.17.0 (site.ycsb.Client) -> workloads_refined/tools/ycsb2trace.py; see NATIVE_YCSB_MANIFEST.json",
+      "op_mix": "100% read",
+      "request_distribution": "native YCSB zipfian (scrambledZipfian, alpha~0.99) request distribution over the 600000-key space",
+      "active_keys": "zipfian-skewed over 600000 keys",
+      "key_range": "1..600000 (native keys keymapped to dense rowid 1..600000)",
+      "hit_semantics": "pure hit (native reads over existing keys; zero not-found)",
+      "seed_count": 10,
+      "external_validity_counterpart": "external-validity counterpart of Scattered-Zipf (paper A) -- NOT equated",
+      "paper_role": "native-YCSB read headline (canonical YC, 10-seed family). External-validity counterpart/regime of the controlled Scattered-Zipf (paper A); NOT identical to it.",
+      "is_measured": true
+    },
+    {
+      "canonical_id": "native_ycsb_c_read_uniform",
+      "display_name": "YCSB-Cu",
+      "legacy_aliases": [
+        "YCu"
+      ],
+      "category": "native_ycsb",
+      "kind": "measured_read",
+      "standard_workload": false,
+      "generator": "native YCSB 0.17.0 (site.ycsb.Client) -> workloads_refined/tools/ycsb2trace.py; see NATIVE_YCSB_MANIFEST.json",
+      "op_mix": "100% read",
+      "request_distribution": "native YCSB uniform request distribution over the 600000-key space (workloadc op-mix, requestdistribution=uniform)",
+      "active_keys": "uniform over 600000 keys",
+      "key_range": "1..600000 (native keys keymapped to dense rowid 1..600000)",
+      "hit_semantics": "pure hit (native reads over existing keys; zero not-found)",
+      "seed_count": 10,
+      "external_validity_counterpart": "external-validity counterpart of Uniform-100K (paper B) -- NOT equated",
+      "paper_role": "native-YCSB-generated custom read config (uniform). External-validity counterpart/regime of the controlled Uniform-100K (paper B); NOT identical to it.",
+      "is_measured": true
+    },
+    {
+      "canonical_id": "native_ycsb_c_hot_hashed_01",
+      "display_name": "YCSB-Ch-hashed-01",
+      "legacy_aliases": [
+        "YCh01"
+      ],
+      "category": "native_ycsb",
+      "kind": "measured_read",
+      "standard_workload": false,
+      "generator": "native YCSB 0.17.0 (site.ycsb.Client) -> workloads_refined/tools/ycsb2trace.py; see NATIVE_YCSB_MANIFEST.json",
+      "op_mix": "100% read",
+      "request_distribution": "native YCSB hotspot distribution, hot-data-fraction=1%; hot keys HASHED across the physical key space (scattered leaves)",
+      "active_keys": "hotspot: 1% of the key space is the hot set, physically scattered",
+      "key_range": "1..600000 (native keys keymapped to dense rowid 1..600000)",
+      "hit_semantics": "pure hit (native reads over existing keys; zero not-found)",
+      "seed_count": 10,
+      "external_validity_counterpart": "native hotspot regime (native C-panel) -- NOT equated with Tail-Mixed",
+      "paper_role": "native-YCSB-generated custom read config: tight hotspot (1%) with hashed (scattered-leaf) physical placement. Native C-panel hotspot regime; NOT equated with the controlled Tail-Mixed not-found/right-boundary probe.",
+      "is_measured": true
+    },
+    {
+      "canonical_id": "native_ycsb_c_hot_hashed_05",
+      "display_name": "YCSB-Ch-hashed-05",
+      "legacy_aliases": [
+        "YCh05"
+      ],
+      "category": "native_ycsb",
+      "kind": "measured_read",
+      "standard_workload": false,
+      "generator": "native YCSB 0.17.0 (site.ycsb.Client) -> workloads_refined/tools/ycsb2trace.py; see NATIVE_YCSB_MANIFEST.json",
+      "op_mix": "100% read",
+      "request_distribution": "native YCSB hotspot distribution, hot-data-fraction=5%; hot keys HASHED across the physical key space (scattered leaves)",
+      "active_keys": "hotspot: 5% of the key space is the hot set, physically scattered",
+      "key_range": "1..600000 (native keys keymapped to dense rowid 1..600000)",
+      "hit_semantics": "pure hit (native reads over existing keys; zero not-found)",
+      "seed_count": 1,
+      "external_validity_counterpart": "native hotspot regime (native C-panel) -- NOT equated with Tail-Mixed",
+      "paper_role": "native-YCSB-generated custom read config: tight hotspot (5%) with hashed (scattered-leaf) physical placement. Native C-panel hotspot regime; NOT equated with the controlled Tail-Mixed not-found/right-boundary probe.",
+      "is_measured": true
+    },
+    {
+      "canonical_id": "native_ycsb_c_hot_hashed_10",
+      "display_name": "YCSB-Ch-hashed-10",
+      "legacy_aliases": [
+        "YCh10"
+      ],
+      "category": "native_ycsb",
+      "kind": "measured_read",
+      "standard_workload": false,
+      "generator": "native YCSB 0.17.0 (site.ycsb.Client) -> workloads_refined/tools/ycsb2trace.py; see NATIVE_YCSB_MANIFEST.json",
+      "op_mix": "100% read",
+      "request_distribution": "native YCSB hotspot distribution, hot-data-fraction=10%; hot keys HASHED across the physical key space (scattered leaves)",
+      "active_keys": "hotspot: 10% of the key space is the hot set, physically scattered",
+      "key_range": "1..600000 (native keys keymapped to dense rowid 1..600000)",
+      "hit_semantics": "pure hit (native reads over existing keys; zero not-found)",
+      "seed_count": 1,
+      "external_validity_counterpart": "native hotspot regime (native C-panel) -- NOT equated with Tail-Mixed",
+      "paper_role": "native-YCSB-generated custom read config: tight hotspot (10%) with hashed (scattered-leaf) physical placement. Native C-panel hotspot regime; NOT equated with the controlled Tail-Mixed not-found/right-boundary probe.",
+      "is_measured": true
+    },
+    {
+      "canonical_id": "native_ycsb_c_hot_hashed_20",
+      "display_name": "YCSB-Ch-hashed-20",
+      "legacy_aliases": [
+        "YCh20"
+      ],
+      "category": "native_ycsb",
+      "kind": "measured_read",
+      "standard_workload": false,
+      "generator": "native YCSB 0.17.0 (site.ycsb.Client) -> workloads_refined/tools/ycsb2trace.py; see NATIVE_YCSB_MANIFEST.json",
+      "op_mix": "100% read",
+      "request_distribution": "native YCSB hotspot distribution, hot-data-fraction=20%; hot keys HASHED across the physical key space (scattered leaves)",
+      "active_keys": "hotspot: 20% of the key space is the hot set, physically scattered",
+      "key_range": "1..600000 (native keys keymapped to dense rowid 1..600000)",
+      "hit_semantics": "pure hit (native reads over existing keys; zero not-found)",
+      "seed_count": 1,
+      "external_validity_counterpart": "native hotspot regime (native C-panel) -- NOT equated with Tail-Mixed",
+      "paper_role": "native-YCSB-generated custom read config: tight hotspot (20%) with hashed (scattered-leaf) physical placement. Native C-panel hotspot regime; NOT equated with the controlled Tail-Mixed not-found/right-boundary probe.",
+      "is_measured": true
+    },
+    {
+      "canonical_id": "native_ycsb_c_hot_hashed_50",
+      "display_name": "YCSB-Ch-hashed-50",
+      "legacy_aliases": [
+        "YCh50"
+      ],
+      "category": "native_ycsb",
+      "kind": "measured_read",
+      "standard_workload": false,
+      "generator": "native YCSB 0.17.0 (site.ycsb.Client) -> workloads_refined/tools/ycsb2trace.py; see NATIVE_YCSB_MANIFEST.json",
+      "op_mix": "100% read",
+      "request_distribution": "native YCSB hotspot distribution, hot-data-fraction=50%; hot keys HASHED across the physical key space (scattered leaves)",
+      "active_keys": "hotspot: 50% of the key space is the hot set, physically scattered",
+      "key_range": "1..600000 (native keys keymapped to dense rowid 1..600000)",
+      "hit_semantics": "pure hit (native reads over existing keys; zero not-found)",
+      "seed_count": 1,
+      "external_validity_counterpart": "native hotspot regime (native C-panel) -- NOT equated with Tail-Mixed",
+      "paper_role": "native-YCSB-generated custom read config: tight hotspot (50%) with hashed (scattered-leaf) physical placement. Native C-panel hotspot regime; NOT equated with the controlled Tail-Mixed not-found/right-boundary probe.",
+      "is_measured": true
+    },
+    {
+      "canonical_id": "native_ycsb_c_hot_ordered_01",
+      "display_name": "YCSB-Ch-ordered-01",
+      "legacy_aliases": [
+        "YCo01"
+      ],
+      "category": "native_ycsb",
+      "kind": "measured_read",
+      "standard_workload": false,
+      "generator": "native YCSB 0.17.0 (site.ycsb.Client) -> workloads_refined/tools/ycsb2trace.py; see NATIVE_YCSB_MANIFEST.json",
+      "op_mix": "100% read",
+      "request_distribution": "native YCSB hotspot distribution, hot-data-fraction=1%; hot keys ORDERED/contiguous (clustered leaves)",
+      "active_keys": "hotspot: 1% of the key space is the hot set, physically contiguous",
+      "key_range": "1..600000 (native keys keymapped to dense rowid 1..600000)",
+      "hit_semantics": "pure hit (native reads over existing keys; zero not-found)",
+      "seed_count": 1,
+      "external_validity_counterpart": "native hotspot regime -- NOT equated with Tail-Mixed",
+      "paper_role": "native-YCSB-generated custom read config: hotspot (1%) with ordered (clustered-leaf) physical placement. Native hotspot regime; NOT equated with the controlled Tail-Mixed.",
+      "is_measured": true
+    },
+    {
+      "canonical_id": "native_ycsb_c_hot_ordered_05",
+      "display_name": "YCSB-Ch-ordered-05",
+      "legacy_aliases": [
+        "YCo05"
+      ],
+      "category": "native_ycsb",
+      "kind": "measured_read",
+      "standard_workload": false,
+      "generator": "native YCSB 0.17.0 (site.ycsb.Client) -> workloads_refined/tools/ycsb2trace.py; see NATIVE_YCSB_MANIFEST.json",
+      "op_mix": "100% read",
+      "request_distribution": "native YCSB hotspot distribution, hot-data-fraction=5%; hot keys ORDERED/contiguous (clustered leaves)",
+      "active_keys": "hotspot: 5% of the key space is the hot set, physically contiguous",
+      "key_range": "1..600000 (native keys keymapped to dense rowid 1..600000)",
+      "hit_semantics": "pure hit (native reads over existing keys; zero not-found)",
+      "seed_count": 1,
+      "external_validity_counterpart": "native hotspot regime -- NOT equated with Tail-Mixed",
+      "paper_role": "native-YCSB-generated custom read config: hotspot (5%) with ordered (clustered-leaf) physical placement. ORDERED-05 (YCo05) is the +22% baseline-anomaly workload (anomalously low no-prefetch baseline). Native hotspot regime; NOT equated with the controlled Tail-Mixed.",
+      "is_measured": true
+    },
+    {
+      "canonical_id": "native_ycsb_c_hot_ordered_10",
+      "display_name": "YCSB-Ch-ordered-10",
+      "legacy_aliases": [
+        "YCo10"
+      ],
+      "category": "native_ycsb",
+      "kind": "measured_read",
+      "standard_workload": false,
+      "generator": "native YCSB 0.17.0 (site.ycsb.Client) -> workloads_refined/tools/ycsb2trace.py; see NATIVE_YCSB_MANIFEST.json",
+      "op_mix": "100% read",
+      "request_distribution": "native YCSB hotspot distribution, hot-data-fraction=10%; hot keys ORDERED/contiguous (clustered leaves)",
+      "active_keys": "hotspot: 10% of the key space is the hot set, physically contiguous",
+      "key_range": "1..600000 (native keys keymapped to dense rowid 1..600000)",
+      "hit_semantics": "pure hit (native reads over existing keys; zero not-found)",
+      "seed_count": 1,
+      "external_validity_counterpart": "native hotspot regime -- NOT equated with Tail-Mixed",
+      "paper_role": "native-YCSB-generated custom read config: hotspot (10%) with ordered (clustered-leaf) physical placement. Native hotspot regime; NOT equated with the controlled Tail-Mixed.",
+      "is_measured": true
+    },
+    {
+      "canonical_id": "native_ycsb_c_hot_ordered_20",
+      "display_name": "YCSB-Ch-ordered-20",
+      "legacy_aliases": [
+        "YCo20"
+      ],
+      "category": "native_ycsb",
+      "kind": "measured_read",
+      "standard_workload": false,
+      "generator": "native YCSB 0.17.0 (site.ycsb.Client) -> workloads_refined/tools/ycsb2trace.py; see NATIVE_YCSB_MANIFEST.json",
+      "op_mix": "100% read",
+      "request_distribution": "native YCSB hotspot distribution, hot-data-fraction=20%; hot keys ORDERED/contiguous (clustered leaves)",
+      "active_keys": "hotspot: 20% of the key space is the hot set, physically contiguous",
+      "key_range": "1..600000 (native keys keymapped to dense rowid 1..600000)",
+      "hit_semantics": "pure hit (native reads over existing keys; zero not-found)",
+      "seed_count": 1,
+      "external_validity_counterpart": "native hotspot regime -- NOT equated with Tail-Mixed",
+      "paper_role": "native-YCSB-generated custom read config: hotspot (20%) with ordered (clustered-leaf) physical placement. Native hotspot regime; NOT equated with the controlled Tail-Mixed.",
+      "is_measured": true
+    },
+    {
+      "canonical_id": "native_ycsb_c_hot_ordered_50",
+      "display_name": "YCSB-Ch-ordered-50",
+      "legacy_aliases": [
+        "YCo50"
+      ],
+      "category": "native_ycsb",
+      "kind": "measured_read",
+      "standard_workload": false,
+      "generator": "native YCSB 0.17.0 (site.ycsb.Client) -> workloads_refined/tools/ycsb2trace.py; see NATIVE_YCSB_MANIFEST.json",
+      "op_mix": "100% read",
+      "request_distribution": "native YCSB hotspot distribution, hot-data-fraction=50%; hot keys ORDERED/contiguous (clustered leaves)",
+      "active_keys": "hotspot: 50% of the key space is the hot set, physically contiguous",
+      "key_range": "1..600000 (native keys keymapped to dense rowid 1..600000)",
+      "hit_semantics": "pure hit (native reads over existing keys; zero not-found)",
+      "seed_count": 1,
+      "external_validity_counterpart": "native hotspot regime -- NOT equated with Tail-Mixed",
+      "paper_role": "native-YCSB-generated custom read config: hotspot (50%) with ordered (clustered-leaf) physical placement. Native hotspot regime; NOT equated with the controlled Tail-Mixed.",
+      "is_measured": true
+    },
+    {
+      "canonical_id": "native_ycsb_a_read_update",
+      "display_name": "YCSB-A",
+      "legacy_aliases": [
+        "YA"
+      ],
+      "category": "native_ycsb",
+      "kind": "read_update_churn",
+      "standard_workload": true,
+      "generator": "native YCSB 0.17.0 (site.ycsb.Client) -> workloads_refined/tools/ycsb2trace.py; see NATIVE_YCSB_MANIFEST.json",
+      "op_mix": "50% read + 50% update",
+      "request_distribution": "native YCSB zipfian over the current keyspace",
+      "active_keys": "dataset [1..600000]; inserts append 600001..",
+      "key_range": "1..600000 (native keys keymapped to dense rowid 1..600000)",
+      "hit_semantics": "native reads over the current keyspace; write/insert stream ages the DB",
+      "seed_count": 1,
+      "paper_role": "native YCSB-A (50/50 read/update). Standard core spec; used as a churn ager (its update stream ages the DB between measured read probes).",
+      "is_measured": true
+    },
+    {
+      "canonical_id": "native_ycsb_b_read_update",
+      "display_name": "YCSB-B",
+      "legacy_aliases": [
+        "YB"
+      ],
+      "category": "native_ycsb",
+      "kind": "read_update_churn",
+      "standard_workload": true,
+      "generator": "native YCSB 0.17.0 (site.ycsb.Client) -> workloads_refined/tools/ycsb2trace.py; see NATIVE_YCSB_MANIFEST.json",
+      "op_mix": "95% read + 5% update",
+      "request_distribution": "native YCSB zipfian over the current keyspace",
+      "active_keys": "dataset [1..600000]; inserts append 600001..",
+      "key_range": "1..600000 (native keys keymapped to dense rowid 1..600000)",
+      "hit_semantics": "native reads over the current keyspace; write/insert stream ages the DB",
+      "seed_count": 1,
+      "paper_role": "native YCSB-B (95/5 read/update). Standard core spec; used as a churn ager.",
+      "is_measured": true
+    },
+    {
+      "canonical_id": "native_ycsb_f_rmw",
+      "display_name": "YCSB-F",
+      "legacy_aliases": [
+        "YF"
+      ],
+      "category": "native_ycsb",
+      "kind": "rmw_churn",
+      "standard_workload": true,
+      "generator": "native YCSB 0.17.0 (site.ycsb.Client) -> workloads_refined/tools/ycsb2trace.py; see NATIVE_YCSB_MANIFEST.json",
+      "op_mix": "read-modify-write",
+      "request_distribution": "native YCSB zipfian over the current keyspace",
+      "active_keys": "dataset [1..600000]; inserts append 600001..",
+      "key_range": "1..600000 (native keys keymapped to dense rowid 1..600000)",
+      "hit_semantics": "native reads over the current keyspace; write/insert stream ages the DB",
+      "seed_count": 1,
+      "paper_role": "native YCSB-F (read-modify-write). Standard core spec; used as a churn ager.",
+      "is_measured": true
+    },
+    {
+      "canonical_id": "native_ycsb_d_read_latest",
+      "display_name": "YCSB-D",
+      "legacy_aliases": [],
+      "category": "native_ycsb",
+      "kind": "read_latest_aging",
+      "standard_workload": true,
+      "generator": "native YCSB 0.17.0 (site.ycsb.Client) -> workloads_refined/tools/ycsb2trace.py; see NATIVE_YCSB_MANIFEST.json",
+      "op_mix": "95% read (read-latest) + 5% insert",
+      "request_distribution": "native YCSB zipfian over the current keyspace",
+      "active_keys": "dataset [1..600000]; inserts append 600001..",
+      "key_range": "1..600000 (native keys keymapped to dense rowid 1..600000)",
+      "hit_semantics": "native reads over the current keyspace; write/insert stream ages the DB",
+      "seed_count": 1,
+      "paper_role": "native YCSB-D (read-latest). Standard core spec; self-aging read-latest workload. Distinct from the Python Latest-Aging reconstruction (py_ycsb_d_latest_aging).",
+      "is_measured": true,
+      "native_csv_token_note": "Native aging result CSVs (results/ycsb_full/data/phaseG_aging.csv) key this workload as 'YD' -- an executor-internal token of run_experiment_ycsb.py, NOT the global registry alias. Bare YD resolves to the Python reconstruction; resolve native aging by this canonical_id / display, never by the bare token."
+    },
+    {
+      "canonical_id": "native_ycsb_e_short_scan",
+      "display_name": "YCSB-E",
+      "legacy_aliases": [],
+      "category": "native_ycsb",
+      "kind": "scan_insert_aging",
+      "standard_workload": true,
+      "generator": "native YCSB 0.17.0 (site.ycsb.Client) -> workloads_refined/tools/ycsb2trace.py; see NATIVE_YCSB_MANIFEST.json",
+      "op_mix": "95% scan (short-ranges) + 5% insert",
+      "request_distribution": "native YCSB zipfian over the current keyspace",
+      "active_keys": "dataset [1..600000]; inserts append 600001..",
+      "key_range": "1..600000 (native keys keymapped to dense rowid 1..600000)",
+      "hit_semantics": "native reads over the current keyspace; write/insert stream ages the DB",
+      "seed_count": 1,
+      "paper_role": "native YCSB-E (short-ranges/scan). Standard core spec; self-aging scan workload. Distinct from the Python Short-Scan Aging reconstruction (py_ycsb_e_short_scan_aging).",
+      "is_measured": true,
+      "native_csv_token_note": "Native aging result CSVs (results/ycsb_full/data/phaseG_aging.csv) key this workload as 'YE' -- an executor-internal token of run_experiment_ycsb.py, NOT the global registry alias. Bare YE resolves to the Python reconstruction; resolve native aging by this canonical_id / display, never by the bare token."
     }
   ]
 }

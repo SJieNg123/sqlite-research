@@ -3,6 +3,7 @@ interior-plan validation (alignment / off-by-one / duplicate / out-of-range /
 count), and that the frozen first-query oracle is computed by the same code the
 action uses."""
 import csv
+import hashlib
 import importlib.util
 import json
 import os
@@ -124,6 +125,127 @@ class TestOracleSingleSource(unittest.TestCase):
             m = json.load(f)
         self.assertEqual(m["expected_relevant_page_count"], m["database"]["page_count"])
         self.assertEqual(m["interior_page_count"], 92)
+
+
+NATIVE_PIN = os.path.join(REPO, "deployment/openwhisk/config/artifacts.native_ycsb.json")
+NATIVE_MANIFEST = os.path.join(REPO, "NATIVE_YCSB_MANIFEST.json")
+ARTIFACTS = os.path.join(REPO, "deployment/openwhisk/config/artifacts.json")
+
+
+def _sha256_file(path):
+    with open(path, "rb") as f:
+        return hashlib.sha256(f.read()).hexdigest()
+
+
+@unittest.skipUnless(os.path.exists(NATIVE_PIN), "native-YCSB pin missing")
+class TestNativeYcsbPinCrossAgreement(unittest.TestCase):
+    """The native-YCSB replay pin (artifacts.native_ycsb.json) must agree, byte for
+    byte, with the OpenWhisk artifacts manifest, the native-YCSB provenance manifest,
+    and the frozen files on disk. No OpenWhisk / benchmark execution is performed."""
+
+    @classmethod
+    def setUpClass(cls):
+        with open(NATIVE_PIN) as f:
+            cls.pin = json.load(f)
+        with open(ARTIFACTS) as f:
+            cls.art = json.load(f)
+        with open(NATIVE_MANIFEST) as f:
+            cls.man = json.load(f)
+
+    def test_db_hash_agrees_with_artifacts_and_manifest(self):
+        pdb, adb, mdb = self.pin["database"], self.art["database"], self.man["db"]
+        self.assertEqual(pdb["sha256"], adb["sha256"])
+        self.assertEqual(pdb["sha256"], mdb["sha256"])
+        self.assertEqual(pdb["page_count"], adb["page_count"])
+        self.assertEqual(pdb["page_count"], 26331)
+        self.assertEqual(pdb["row_count"], 600000)
+
+    def test_db_bytes_on_disk_match_pin(self):
+        db = os.path.join(REPO, self.pin["database"]["path"])
+        if not os.path.exists(db):
+            self.skipTest("canonical DB absent")
+        self.assertEqual(_sha256_file(db), self.pin["database"]["sha256"])
+
+    def test_normalized_schema_hash_recomputes(self):
+        db = os.path.join(REPO, self.pin["database"]["path"])
+        if not os.path.exists(db):
+            self.skipTest("canonical DB absent")
+        import re
+        import sqlite3
+        conn = sqlite3.connect(db)
+        try:
+            ddls = [r[0] for r in conn.execute(
+                "SELECT sql FROM sqlite_master WHERE sql IS NOT NULL ORDER BY type,name")]
+        finally:
+            conn.close()
+        canonical = "\n".join(sorted(re.sub(r"\s+", " ", d.strip()) for d in ddls))
+        self.assertEqual(hashlib.sha256(canonical.encode()).hexdigest(),
+                         self.pin["database"]["normalized_schema_hash"])
+
+    def test_2d_plan_hash_agrees_and_db_specific(self):
+        pplan = self.pin["strategy_plans"]["2d"]
+        aplan = self.art["strategy_plans"]["2d"]
+        self.assertEqual(pplan["sha256"], aplan["sha256"])
+        self.assertEqual(pplan["expected_pages"], 92)
+        self.assertEqual(self.pin["expected_interior_count"], 92)
+        # plan is bound to the pinned DB
+        self.assertEqual(pplan["bound_db_sha256"], self.pin["database"]["sha256"])
+        plan_file = os.path.join(REPO, pplan["path"])
+        if os.path.exists(plan_file):
+            self.assertEqual(_sha256_file(plan_file), pplan["sha256"])
+
+    def test_classifier_hash_agrees(self):
+        self.assertEqual(self.pin["classifier"]["sha256"],
+                         self.art["classifier"]["sha256"])
+
+    def test_expected_page_count_is_full_db_not_92(self):
+        self.assertEqual(self.pin["expected_page_count"],
+                         self.art["expected_relevant_page_count"])
+        self.assertEqual(self.pin["expected_page_count"],
+                         self.pin["database"]["page_count"])
+
+    def test_seed_traces_agree_with_manifest_and_disk(self):
+        yc = [w for w in self.man["workloads"]
+              if w["canonical_id"] == "native_ycsb_c_read_zipf"][0]
+        fam = yc["seed_family"]
+        seen = set()
+        for entry in self.pin["representative_workload"]["seed_family"]:
+            fn = os.path.basename(entry["trace"])
+            seen.add(entry["seed"])
+            self.assertEqual(entry["trace_sha256"], fam[fn],
+                             "pin seed %s != manifest" % fn)
+            tf = os.path.join(REPO, entry["trace"])
+            if os.path.exists(tf):
+                self.assertEqual(_sha256_file(tf), entry["trace_sha256"],
+                                 "on-disk %s != pin" % fn)
+        self.assertEqual(seen, set(range(1, 11)))
+
+    def test_base_trace_is_convenience_only(self):
+        base = self.pin["representative_workload"]["base_trace"]
+        yc = [w for w in self.man["workloads"]
+              if w["canonical_id"] == "native_ycsb_c_read_zipf"][0]
+        self.assertEqual(base["sha256"], yc["trace_sha256"])
+        self.assertTrue(base["convenience_only"])
+        self.assertTrue(base["excluded_from_seed_statistics"])
+
+    def test_run_config_sha256_recomputes(self):
+        expect = hashlib.sha256(json.dumps(
+            self.pin["invocation_plan"], sort_keys=True,
+            separators=(",", ":")).encode()).hexdigest()
+        self.assertEqual(self.pin["run_config_sha256"], expect)
+
+    def test_canonical_workload_id_resolves(self):
+        sys.path.insert(0, REPO)
+        import importlib
+        reg = importlib.import_module("config.workload_registry")
+        cid = self.pin["representative_workload"]["canonical_workload_id"]
+        self.assertEqual(reg.normalize_workload_id("YCSB-C"), cid)
+        # native C must NOT collide with the Python reconstructions' bare aliases
+        self.assertNotEqual(reg.normalize_workload_id("YD"), cid)
+
+    def test_replay_only_flags(self):
+        self.assertTrue(self.pin["replay_only"])
+        self.assertTrue(self.pin["never_regenerate"])
 
 
 if __name__ == "__main__":

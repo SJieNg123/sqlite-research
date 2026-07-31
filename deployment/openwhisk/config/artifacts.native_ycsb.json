@@ -1,0 +1,157 @@
+{
+  "schema_version": 1,
+  "purpose": "Frozen native-YCSB representative inputs for OpenWhisk REPLAY. Joint pin of trace + DB + 2d plan bytes by canonical ID + SHA256. OpenWhisk must replay these exact bytes; never regenerate.",
+  "replay_only": true,
+  "never_regenerate": true,
+  "no_execution_note": "This file is a byte-provenance freeze only. No OpenWhisk invocation, no benchmark rerun, no DB build was performed to produce it.",
+  "provenance": {
+    "manifest": "NATIVE_YCSB_MANIFEST.json",
+    "artifacts_manifest": "deployment/openwhisk/config/artifacts.json",
+    "main_head_before": "1275f4982e989dcc7bbce6cf71d56fa3f2b187a0",
+    "speculation_source_commit": "166b8a430fdfcd61e7296e23b4dadbc277e7ebc7"
+  },
+  "database": {
+    "path": "pipeline/preparation/layout_rewriter/runs/test.db",
+    "sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+    "byte_size": 107851776,
+    "page_size": 4096,
+    "page_count": 26331,
+    "row_count": 600000,
+    "max_key": 600000,
+    "indexes": [
+      "idx_items_k1",
+      "idx_items_k2"
+    ],
+    "normalized_schema_hash": "097dd65895636cc3789708d99faf2eb0e3dfbcaca9dadaaef236d71d085f74bd",
+    "source": "identical to deployment/openwhisk/config/artifacts.json database block (executor 'orig' layout); on-disk sha256 re-verified in this freeze."
+  },
+  "classifier": {
+    "path": "pipeline/preparation/layout_rewriter/runs/classify_before.csv",
+    "sha256": "6ec6837dc6a801c28e1cc08e90ccac570ee9a517765c0f6f03ab1b723349cc32"
+  },
+  "canonical_query": "SELECT payload FROM items WHERE id=?1",
+  "strategy_plans": {
+    "2d": {
+      "path": "deployment/openwhisk/config/plans/interior_pages.csv",
+      "sha256": "37ed5e4682d1771c735edc93133bb8ecb77d772a992721b180a9cabaae28745e",
+      "kind": "interior_skeleton",
+      "expected_pages": 92,
+      "db_specific": true,
+      "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+      "note": "2d interior-skeleton plan is DB-specific and workload-independent; valid ONLY against bound_db_sha256 (test.db, 26331 pages). Verified: max plan offset 106520576 -> page idx 26006 < 26331."
+    },
+    "baseline": {
+      "path": null,
+      "sha256": null,
+      "kind": "no_prefetch",
+      "expected_pages": 0
+    }
+  },
+  "expected_page_count": 26331,
+  "expected_interior_count": 92,
+  "representative_workload": {
+    "canonical_workload_id": "native_ycsb_c_read_zipf",
+    "display": "YCSB-C",
+    "standard_workload": true,
+    "external_validity_counterpart": "external-validity counterpart of Scattered-Zipf (paper A) -- NOT equated",
+    "op_format": "one op per line 'read <id>'; ids in [25,599999] subset of test.db keyspace [1,600000] (replay-compatible; verified).",
+    "seed_family": [
+      {
+        "seed": 1,
+        "trace": "workloads_refined/traces/seeds/workload_YC_1.txt",
+        "trace_sha256": "e07bb0dae1c595b5335d4fe41834474690845d7dd31755cbf6c2449017a29603"
+      },
+      {
+        "seed": 2,
+        "trace": "workloads_refined/traces/seeds/workload_YC_2.txt",
+        "trace_sha256": "ee5459bfd554537dad8485136bd33656b0ccca216b425b8b72ffb90250ace323"
+      },
+      {
+        "seed": 3,
+        "trace": "workloads_refined/traces/seeds/workload_YC_3.txt",
+        "trace_sha256": "86e866b8fcb18ee036f55f7e973e0de8def77f76e5c45dd5fd43956168d0b84d"
+      },
+      {
+        "seed": 4,
+        "trace": "workloads_refined/traces/seeds/workload_YC_4.txt",
+        "trace_sha256": "74b99282b80c014e9288cd20938e71abb44ca14106e46629c7bd8296c0ae2781"
+      },
+      {
+        "seed": 5,
+        "trace": "workloads_refined/traces/seeds/workload_YC_5.txt",
+        "trace_sha256": "913a1fd4eb83c5be14b884ff08546789135d831c8bfd9605dc56eca497398357"
+      },
+      {
+        "seed": 6,
+        "trace": "workloads_refined/traces/seeds/workload_YC_6.txt",
+        "trace_sha256": "ac51b9ba4be6dae4bc015886f2c8d3863a8782fe8aa2c1cfbd151414c547a558"
+      },
+      {
+        "seed": 7,
+        "trace": "workloads_refined/traces/seeds/workload_YC_7.txt",
+        "trace_sha256": "a2a589f6c60e721adb5dd6f9b74c119926dc71ee609976f730203791c905f71e"
+      },
+      {
+        "seed": 8,
+        "trace": "workloads_refined/traces/seeds/workload_YC_8.txt",
+        "trace_sha256": "945305b2d81f9c100fc5c4ec4d9597200ef841fbe5145360ed684b4e556e62b2"
+      },
+      {
+        "seed": 9,
+        "trace": "workloads_refined/traces/seeds/workload_YC_9.txt",
+        "trace_sha256": "142d92eacce927277ae1864ae34a028c1d68098d12a41b8a7fd0115431880205"
+      },
+      {
+        "seed": 10,
+        "trace": "workloads_refined/traces/seeds/workload_YC_10.txt",
+        "trace_sha256": "6c3d1bcd1e3e27d0029865a81a9b178c7cf1a112e0cfd81b0f57b624b30c2299"
+      }
+    ],
+    "base_trace": {
+      "path": "workloads_refined/traces/workload_YC.txt",
+      "sha256": "f85d5992dbe1c759f053d3cf3a35dae4c46edb7f7ab6ce8666564b3efe248499",
+      "convenience_only": true,
+      "excluded_from_seed_statistics": true,
+      "note": "base trace not byte-identical to any of the 10 seeds; NOT an 11th seed."
+    }
+  },
+  "headline_result_ref": {
+    "metric": "first-query latency vs baseline",
+    "db_layout": "orig (= test.db, 26331)",
+    "strategy": "2d",
+    "seed_mean_pct": -38.4,
+    "ci95_pct": [
+      -46.2,
+      -30.5
+    ],
+    "source": "results/ycsb_full/REPORT_YCSB_FULL.md:155 ; results/ycsb_full/data/fig17_abl_YC_orig_s{1..10}.csv",
+    "scope_note": "single-workload (canonical YCSB-C) 10-seed CI -- NOT a 12-config breadth CI."
+  },
+  "invocation_plan": {
+    "canonical_workload_id": "native_ycsb_c_read_zipf",
+    "seeds": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10
+    ],
+    "strategies": [
+      "baseline",
+      "2d"
+    ],
+    "handle_modes": [
+      "warm",
+      "standalone"
+    ],
+    "concurrency": 1,
+    "sequential": true
+  },
+  "run_config_sha256": "8fd7ddeb60f74f2cf7bb8106701f47d9107e10b80fdef4bbd22db46e09bb41b5",
+  "run_config_sha256_note": "Deterministic sha256 over the canonical invocation_plan (sorted-key compact JSON). Pins the replay configuration; the executed OpenWhisk run_config (run_id/action_image_digest/etc. per run_config.schema.json) is authored at replay time, out of scope for this no-execution freeze."
+}

@@ -117,6 +117,53 @@ class RegistryMapping(unittest.TestCase):
             os.unlink(tmp)
 
 
+class NativeYcsbRegistry(unittest.TestCase):
+    """Native-YCSB-generated suite: identity + collision guards (freeze rev.2)."""
+
+    CORE = {"YCSB-A", "YCSB-B", "YCSB-C", "YCSB-D", "YCSB-E", "YCSB-F"}
+
+    def test_native_de_never_normalize_to_python(self):
+        # The native aging D/E and the Python reconstructions are DISTINCT
+        # workloads. Bare YD/YE stay bound to the Python line; native D/E are
+        # reached only via YCSB-D/YCSB-E (or their canonical ids).
+        self.assertNotEqual(
+            normalize_workload_id("YCSB-D"), normalize_workload_id("YD"))
+        self.assertNotEqual(
+            normalize_workload_id("YCSB-E"), normalize_workload_id("YE"))
+        self.assertEqual(normalize_workload_id("YD"), "py_ycsb_d_latest_aging")
+        self.assertEqual(normalize_workload_id("YE"), "py_ycsb_e_short_scan_aging")
+        self.assertEqual(normalize_workload_id("YCSB-D"), "native_ycsb_d_read_latest")
+        self.assertEqual(normalize_workload_id("YCSB-E"), "native_ycsb_e_short_scan")
+        self.assertEqual(workload_metadata("YCSB-D")["category"], "native_ycsb")
+
+    def test_standard_workload_flag(self):
+        # standard_workload=true iff the display is one of the six official
+        # core specs YCSB-A..F; YCSB-Cu and hotspot variants are generated
+        # custom configs (false).
+        native = [r for r in all_records() if r.get("category") == "native_ycsb"]
+        self.assertEqual(len(native), 17, "expected 17 native-suite records")
+        for r in native:
+            want = r["display_name"] in self.CORE
+            self.assertEqual(
+                bool(r.get("standard_workload")), want,
+                f"{r['display_name']} standard_workload should be {want}")
+
+    def test_manifest_canonical_ids_resolve(self):
+        # Every canonical_id declared in NATIVE_YCSB_MANIFEST.json must resolve
+        # through the registry to itself and be a native-suite workload.
+        import json
+        manifest = _ROOT / "NATIVE_YCSB_MANIFEST.json"
+        self.assertTrue(manifest.exists(), f"missing {manifest}")
+        data = json.loads(manifest.read_text(encoding="utf-8"))
+        cids = [w["canonical_id"] for w in data["workloads"]]
+        self.assertTrue(cids, "manifest declares no workloads")
+        for cid in cids:
+            self.assertEqual(normalize_workload_id(cid), cid,
+                             f"manifest canonical_id {cid!r} does not resolve to itself")
+            self.assertEqual(workload_metadata(cid)["category"], "native_ycsb",
+                             f"{cid!r} is not a native-suite workload")
+
+
 class PaperHasNoForbiddenTerms(unittest.TestCase):
     # Legacy tokens that must never appear in paper-visible LaTeX. "workload A"
     # style references and the letter IDs collide with the standard YCSB core
