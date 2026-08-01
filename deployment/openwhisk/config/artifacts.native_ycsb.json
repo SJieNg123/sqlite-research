@@ -119,13 +119,44 @@
     "metric": "first-query latency vs baseline",
     "db_layout": "orig (= test.db, 26331)",
     "strategy": "2d",
-    "seed_mean_pct": -38.4,
+    "seed_mean_pct": -36.2,
     "ci95_pct": [
-      -46.2,
-      -30.5
+      -46.5,
+      -25.9
     ],
-    "source": "results/ycsb_full/REPORT_YCSB_FULL.md:155 ; results/ycsb_full/data/fig17_abl_YC_orig_s{1..10}.csv",
-    "scope_note": "single-workload (canonical YCSB-C) 10-seed CI -- NOT a 12-config breadth CI."
+    "source": "results/native_headtohead/summary.csv ; results/native_headtohead/agg_h2h.py (same-batch ours-vs-prior-work re-canonicalization, 10-seed LOSO)",
+    "superseded_ref": {
+      "seed_mean_pct": -38.4,
+      "ci95_pct": [-46.2, -30.5],
+      "source": "results/ycsb_full/data/fig17_abl_YC_orig_s{1..10}.csv (frozen breadth+seed run; CI overlaps, relative effect consistent)"
+    },
+    "scope_note": "single-workload (canonical YCSB-C) 10-seed CI -- NOT a 12-config breadth CI. Re-canonicalized from the same batch that ran prior-work (libprefetch, learned_markov) head-to-head on the same frozen inputs (test.db 26331, seed traces workload_YC_{1..10}); relative %delta is machine-state-portable so the value tracks the frozen -38.4 within CI."
+  },
+  "secondary_config_headlines": {
+    "note": "Same-batch ours-vs-prior-work head-to-head, extended to the other two native configs that have a 10-seed trace family (the only reads where learned_markov LOSO is possible). Same protocol as the canonical YCSB-C headline_result_ref, retargeted via tools/native_headtohead_multi.sh onto the SAME frozen inputs (test.db 26331, per-config seed traces). These do NOT supersede the canonical YCSB-C headline; they are per-access-pattern re-canonicalizations. The 9 single-trace read configs have no seed family and cannot carry LOSO -- intentionally out of scope.",
+    "metric": "first-query latency vs same-fold baseline (2d async), 10-seed LOSO, mean + 95% CI",
+    "configs": [
+      {
+        "canonical_id": "native_ycsb_c_read_uniform",
+        "workload_key": "YCu",
+        "access_pattern": "uniform",
+        "strategy": "2d",
+        "seed_mean_pct": -35.9,
+        "ci95_pct": [-46.1, -25.7],
+        "source": "results/native_headtohead_YCu/summary.csv ; results/native_headtohead/agg_h2h.py",
+        "prior_work_same_budget": "learned_markov_14 -6.7% [-15.8,+2.4] ~= 2f_top14 -7.2% [-15.2,+0.7] (both CI cross zero: no physical skew to learn); learned never beats frequency at equal budget"
+      },
+      {
+        "canonical_id": "native_ycsb_c_hot_hashed_01",
+        "workload_key": "YCh01",
+        "access_pattern": "hotspot_1pct",
+        "strategy": "2d",
+        "seed_mean_pct": -41.6,
+        "ci95_pct": [-45.7, -37.4],
+        "source": "results/native_headtohead_YCh01/summary.csv ; results/native_headtohead/agg_h2h.py",
+        "prior_work_same_budget": "learned_markov_14 -23.2% [-37.3,-9.2] ~= 2f_top14 -22.8% [-37.2,-8.4] (CI excludes 0: physical hot leaf present); learned never beats frequency at equal budget"
+      }
+    ]
   },
   "invocation_plan": {
     "canonical_workload_id": "native_ycsb_c_read_zipf",

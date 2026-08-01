@@ -833,7 +833,7 @@ orig 欄取自已 commit 的 [`results/stats/uncertainty.csv`](results/stats/unc
 
 | # | 論文主張 | 原生 YCSB 重現結果 | 判定 |
 |---|---|---|---|
-| 1 | 常駐 interior 骨架(2d)穩健降低讀取冷啟動首查 | **breadth**:12 讀取 configuration **2d 首查中位 −38%**(mean −33%)、**11/12 favorable**(YCo05 +22% 為唯一例外);**seed-robustness**(另一維度):canonical YCSB-C 10-seed mean **−38.4%**、95% CI **[−46.2,−30.5]** 排除 0(此 CI 屬 YCSB-C 單一 workload) | **成立** |
+| 1 | 常駐 interior 骨架(2d)穩健降低讀取冷啟動首查 | **breadth**:12 讀取 configuration **2d 首查中位 −38%**(mean −33%)、**11/12 favorable**(YCo05 +22% 為唯一例外);**seed-robustness**(另一維度,同批 head-to-head 再 canonical 化):canonical YCSB-C 10-seed mean **−36.2%**、95% CI **[−46.5,−25.9]** 排除 0(此 CI 屬 YCSB-C 單一 workload;seed 2 baseline 異常低 533µs 致 +8%,同 YCo05 型) | **成立** |
 | 2 | 整庫暖快取(2f_slru)首查最快、但 e2e 災難 | 2f 首查最低,但 warm-e2e **+4000%~+7000%**(deliver 吞噬) | **成立** |
 | 3 | 好處來自 **interior 結構**,不是熱葉 | Ablation(10-seed+95%CI):interior 2d −36%/2e −40%(CI 排除 0);leaf_freq −3.6% 與 leaf_rand −4.3% **CI 重疊**(頻率=隨機對照) | **成立** |
 | 4 | RAM 壓力下 targeted 遞送穩定、整庫暖快取崩潰 | 10-cap 掃描(128M→6M):2d delivery **恆 100%**(cap 僅 DB 的 1/17 仍是);2f_slru **線性崩潰 100→3.5%**、首查塌回 baseline | **成立** |
@@ -841,6 +841,53 @@ orig 欄取自已 commit 的 [`results/stats/uncertainty.csv`](results/stats/unc
 | 6 | 效益隨 DB 規模擴大 | 6M-row DB:2d 成本持平(~0.1 ms),首查 **−57%**;2f preproc 仍 **31 ms** trap | **成立** |
 
 **一句話**:論文核心結論(「常駐 interior 骨架 = 穩健、可擴展、抗記憶體壓力的冷啟動槓桿;整庫暖快取 = first-query 陷阱」)在**原生 YCSB A–F 上完整成立**,**不依賴其自訂 workload 產生器**。
+
+### 原生 head-to-head:我方 vs prior-work(同一 batch,canonical YCSB-C 10-seed)
+
+> 補此前唯一缺口:prior-work(libprefetch / learned Markov)過去只跑合成 A/B/C,native 從無同機對照。本表 **baseline + 我方 + prior-work 全在同一 batch 跑完**(driver `tools/native_headtohead.sh`,10-seed LOSO,資料 `results/native_headtohead/summary.csv`),故相對 %Δ 嚴格可互比。first-q = async 遞送,%Δ vs **同 fold** baseline。
+
+| strategy | 類別 | first-q async %Δ | 95% CI | 備註 |
+|---|---|--:|--:|---|
+| **2d** | 我方 interior skeleton | **−36.2%** | [−46.5,−25.9] | 再 canonical 化 headline |
+| layers_92 | 我方 interior | −37.6% | [−48.2,−26.9] | ≈ 2d |
+| 2e_K10 | 我方 access hotset(~10 頁) | −40.9% | [−53.3,−28.5] | 每頁效率最佳 |
+| 2e_K500 | 我方 access(大) | −44.4% | [−58.9,−30.0] | deliver ~1 ms |
+| 2f_slru | 我方 整庫暖快取 | −88.4% | [−90.5,−86.3] | ⚠ deliver 42 ms 陷阱 |
+| layers_5 | 我方 前 5 interior | −4.1% | [−5.6,−2.5] | 頁太少 |
+| **learned_markov_14** | **prior-work** Chen 一階 Markov(LOSO,14 頁) | −23.4% | [−36.6,−10.3] | **≈ 2f_top14** |
+| 2f_top14 | 頻率對照(14 頁) | −22.6% | [−35.7,−9.5] | 同 14 頁預算 |
+| learned_markov_28 | prior-work(LOSO,28 頁) | −26.7% | [−39.3,−14.0] | ≈ 2f_top28 |
+| 2f_top28 | 頻率對照(28 頁) | −23.0% | [−35.6,−10.4] | 同 28 頁預算 |
+
+**兩個同批可比的結論**:
+1. **learned Markov 在等預算下 ≈ 簡單頻率選頁**:learned_markov_14(−23.4%)與 2f_top14(−22.6%)CI 大幅重疊、統計不可分,28 頁同理。Chen 式學習型 prefetch 在 native YCSB 上**沒有贏過頻率 baseline**(與我方先前撤回「marginal collapse」宣稱一致),兩者又皆**輸給**我方 interior skeleton(2d −36%)與 access hotset(2e_K10 −41%)——**page-type 結構槓桿 > 學習型/頻率型 leaf 選擇**。
+2. **libprefetch = 遞送順序效應**:`lp_shuf`(打散順序)pread 遞送比 `lp_sorted`(offset 排序)慢 **15.2×**(1568 ms vs 103 ms);`lp_sorted` ≈ `2f_slru` pread(0.99×,同內容 sanity check),證實 libprefetch 收益來自 offset 排序遞送(NVMe readahead-coalesce),在 native YCSB 重現合成批 10–16× 的量級。lp 為同步機制,故以 `deliver_us`(pread)為主指標。
+
+> integrity:全 prefetch arm delivery **100%**、cold **0%**;LOSO 20 個模型每個訓練集皆排除自身 test seed(無洩漏)。彙總腳本 `results/native_headtohead/agg_h2h.py`。
+
+### 原生 head-to-head 擴展:uniform(YCu)+ hotspot(YCh01)—— 同協議跨三種 access pattern
+
+> 把上表協議**原封不動**套到另兩個有 10-seed family 的 native config——唯二能做 LOSO 的 `YCu`(uniform random)與 `YCh01`(hotspot,1% 熱鍵)。driver `tools/native_headtohead_multi.sh`,資料 `results/native_headtohead_YCu/`、`results/native_headtohead_YCh01/`。**每個 config 自帶同批 baseline**,故 %Δ 同表可互比;learned Markov 需 seed family 做 LOSO,故僅這三個 config 可跑(其餘 9 個單-trace read config 無 seed family、無法 LOSO,非本表範圍——刻意畫的紅線)。下表 first-q = async 遞送,%Δ vs 同 fold baseline,N14 除非另註。
+
+| strategy(類別) | YCu uniform | YC zipf | YCh01 hotspot-1% |
+|---|--:|--:|--:|
+| **2d**(我方 interior skeleton,**workload-independent**) | **−35.9%** [−46.1,−25.7] | **−36.2%** [−46.5,−25.9] | **−41.6%** [−45.7,−37.4] |
+| 2e_K10(我方 access hotset,~10 頁) | −35.8% [−45.6,−26.1] | −40.9% [−53.3,−28.5] | −42.3% [−45.8,−38.8] |
+| layers_92(我方 interior) | −35.2% [−45.0,−25.4] | −37.6% [−48.2,−26.9] | −41.5% [−44.7,−38.3] |
+| 2f_slru(整庫 dump) | −87.9% ⚠ | −88.4% ⚠ | −88.4% ⚠ |
+| layers_5(前 5 interior) | −3.5% | −4.1% | −2.2% |
+| **learned_markov_14**(**prior-work**,LOSO,14 頁) | **−6.7%** [−15.8,**+2.4**] | −23.4% [−36.6,−10.3] | −23.2% [−37.3,−9.2] |
+| 2f_top14(頻率對照,14 頁) | −7.2% [−15.2,**+0.7**] | −22.6% [−35.7,−9.5] | −22.8% [−37.2,−8.4] |
+| learned_markov_28(prior-work,28 頁) | −22.1% [−36.8,−7.5] | −26.7% [−39.3,−14.0] | −26.2% [−40.2,−12.1] |
+| 2f_top28(頻率對照,28 頁) | −25.5% [−37.4,−13.5] | −23.0% [−35.6,−10.4] | −31.1% [−43.8,−18.4] |
+| lp_shuf / lp_sorted(遞送順序,pread) | **15.1×** | **15.2×** | **15.1×** |
+
+**跨三種 access pattern 的三個同批可比結論**:
+1. **learned Markov 每個 config 都 ≈ 同預算頻率選頁,無一勝出**:learned_markov_14 vs 2f_top14 三 config CI 全重疊(YCu −6.7 vs −7.2、YC −23.4 vs −22.6、YCh01 −23.2 vs −22.8),28 頁同理。Chen 式學習型 prefetch **沒有在任何 access pattern 上贏過簡單頻率排名**(與先前撤回「marginal collapse 更優」一致)。
+2. **skew 一消失,leaf-frequency/learned 一起塌到 ~0**:uniform(YCu)上 learned_14 與 2f_top14 皆 **−7%、CI 跨 0**(uniform 無 physical 熱點可學,正是 Leaper 指出的 learned-prefetch 失效區);要到 zipf/hotspot 才雙雙 −23%(CI 排除 0)。**leaf 槓桿的效益是 access-skew 的函數,不是學習複雜度的函數。**
+3. **我方 page-type 骨架(2d)不吃 skew、三 config 穩定 −36~−42%**:interior skeleton 是 workload-independent 結構,即使在 learned/frequency 失效的 uniform 上仍守 **−35.9%**。**結論:structure > learning,且正好在 learning 失效處(uniform)最明顯。** libprefetch 遞送順序效應(15.1–15.2×)三 config 一致重現。
+
+> integrity:YCu、YCh01 各 230 列(10 seed × 23 strategy-arm)、**無缺格**、全 prefetch arm delivery **100%**、cold **0%**;各 20 個 LOSO 模型(共 40)train_seeds 皆排除自身 test seed(無洩漏)。彙總沿用 `results/native_headtohead/agg_h2h.py`(接受 summary 路徑參數)。seed outlier:YCu seed 4 baseline 510 µs 異常低致 2d +7%(同 YC seed 2 / YCo05 型),已含入 CI。
 
 ### 旗艦圖 Fig 14 — e2e 分解(YC / orig,warm-process)
 
@@ -885,7 +932,7 @@ orig 欄取自已 commit 的 [`results/stats/uncertainty.csv`](results/stats/unc
 ### 其餘 phase 摘要
 
 - **讀取矩陣 breadth**(Phase A,12 讀取 configuration × 3 layout):2d 首查中位 **−38%**(mean −33%,range [−45%, +22%]);**11/12 favorable**——唯一例外 **YCo05**(`YCSB-Ch-ordered-05`)**+22%**,其 baseline 首查本就異常低(597 vs ~900 µs),2d 與 2e 同步 +22%,為 workload 特性非策略 artifact;layout 皆穩健(YC orig −40% / vacuum −39% / type-aware −28%)。**此為 breadth,非 seed CI**。
-- **10-seed 穩健性**(Phase D):canonical YCSB-C(`native_ycsb_c_read_zipf`)10 條獨立 zipfian trace,2d 首查 mean **−38.4%**,95% CI **[−46.2%, −30.5%]**,排除 0。**此 CI 屬 YCSB-C 單一 workload 的 seed 分佈,不可讀成 12-config breadth 的 CI**。
+- **10-seed 穩健性**(Phase D,同批 head-to-head 再 canonical 化):canonical YCSB-C(`native_ycsb_c_read_zipf`)10 條獨立 zipfian trace,2d 首查 mean **−36.2%**,95% CI **[−46.5%, −25.9%]**,排除 0(取代先前凍結的 −38.4%[−46.2,−30.5];兩者 CI 重疊、相對量一致,新值來自與 prior-work 同一 batch 的重跑 `results/native_headtohead/`)。**此 CI 屬 YCSB-C 單一 workload 的 seed 分佈,不可讀成 12-config breadth 的 CI**。
 - **邊界(native YCSB 的機制界定)**:原生 YCSB 證實 **skeleton-first**——在所測 native configuration 下 **frequency-selected leaf ≈ random leaf**(hot-leaf 幾乎不加分);hot-leaf bonus 需 **verified physical leaf concentration**(真實實體葉集中),**而非僅 logical Zipf skew**。native YCSB 的 zipfian request 分佈是 logical skew,散到 dense-rowid DB 的多個實體葉後未形成單一超熱葉,故 leaf-frequency 這根槓桿在此不生效;controlled Tail-Mixed 的 −70% 尖峰來自 key-range 造成的 physical 集中(最右葉),是不同機制(§6.2.8)。
 - **Size-scaling**(Phase E,6M-row/0.82 GiB):2d 首查 −57%(orig −40%)、preproc 持平 ~0.1ms;2f_slru warm-e2e = 31.9 ms(baseline 43×)。2d/2e_K10 是成本–收益曲線膝點。
 - **Churn**(Phase F,YA/YB/YF 的 update 流當 ager、量測 YC):以改列流翻動頁面,static 結構骨架(2e_K10_static / layers_92_static)首查優勢在 churn 下**大致保持**(vs baseline,11 checkpoint)。

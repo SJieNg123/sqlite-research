@@ -218,6 +218,12 @@ strategies/access/runs/frequency_*.csv
 strategies/access/runs/*_test*.meta.json
 strategies/learned/artifacts/
 
+# native head-to-head (ours vs prior-work, same-batch): keep summary/raw/env + agg script;
+#   ignore LOSO model artifacts (regenerable via strategies/learned/train_markov.py) + logs
+results/native_headtohead*/models/
+results/native_headtohead*/fullrun.stdout
+results/native_headtohead_multi.runlog
+
 # results: heavy regenerable intermediates (DB copies, chunks, probes, hotsets) -- never commit
 results/**/work/
 results/**/regen_work/

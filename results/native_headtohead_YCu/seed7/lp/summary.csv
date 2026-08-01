@@ -1,0 +1,3 @@
+workload,db,strategy,arm,n,ra_kb,fq_median,fq_p95,fq_min,fq_stdev,delivery_pct_median,preproc_us_median,open_us_median,deliver_us_median,e2e_median,e2e_warm_median,cold_pct_max
+YCu,orig,lp_shuf,pread,10,128,121.90,128.70,117.06,3.62,100.0,1564333.27,75.72,1564257.75,1564452.76,1564377.24,0.0
+YCu,orig,lp_sorted,pread,10,128,113.75,115.93,103.75,4.72,100.0,104814.08,75.86,104738.96,104923.80,104848.68,0.0

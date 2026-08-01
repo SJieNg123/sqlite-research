@@ -1,0 +1,5 @@
+workload,db,strategy,arm,n,ra_kb,fq_median,fq_p95,fq_min,fq_stdev,delivery_pct_median,preproc_us_median,open_us_median,deliver_us_median,e2e_median,e2e_warm_median,cold_pct_max
+YC,orig,learned_markov_14,async,10,128,404.27,412.40,367.44,12.78,100.0,164.05,79.71,84.24,571.90,488.04,0.0
+YC,orig,learned_markov_14,pread,10,128,403.11,411.20,374.98,13.34,100.0,1328.44,82.88,1248.76,1721.01,1641.88,0.0
+YC,orig,learned_markov_28,async,10,128,403.52,415.32,365.40,13.41,100.0,185.89,84.42,103.59,589.28,506.83,0.0
+YC,orig,learned_markov_28,pread,10,128,404.97,410.90,376.53,9.32,100.0,2511.03,82.56,2427.40,2914.86,2832.57,0.0
