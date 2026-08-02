@@ -132,7 +132,16 @@ def apply_seed(args):
     if seed is None:
         return
     SEED = seed
-    for k in WORKLOADS:
+    # Repoint ONLY the workloads this invocation actually runs (--workload), not every
+    # registered key. Registering YC/YD/YE (real-YCSB migration) added workloads that only
+    # ship a seed-1 trace; the old all-keys loop then demanded workload_yc_{N}.txt for every
+    # single-workload seed-sweep (e.g. --seed 2 --workload C_hit) and spuriously died. Keys
+    # not in --workload are validated later by _check_keys, so restricting here is a pure
+    # relaxation: any sweep that used to pass still passes.
+    run_keys = [x for x in getattr(args, "workload", "").split(",") if x]
+    for k in run_keys:
+        if k not in WORKLOADS:
+            continue                       # unknown key -> _check_keys reports it downstream
         p = ROOT / f"workloads/workload_{k.lower()}_{seed}.txt"
         if not p.exists():
             sys.exit(f"--seed {seed}: missing workload file {p} "

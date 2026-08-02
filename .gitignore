@@ -224,6 +224,15 @@ results/native_headtohead*/models/
 results/native_headtohead*/fullrun.stdout
 results/native_headtohead_multi.runlog
 
+# C_hit same-batch head-to-head (synthetic executor -> heavy per-rep ops/run dumps + warmer
+#   hotsets, all regenerable via tools/chit_headtohead.sh); keep summary/raw/env only
+results/chit_headtohead/**/ops*.csv
+results/chit_headtohead/**/run-*.log
+results/chit_headtohead/**/hotset_*.csv
+results/chit_headtohead/**/refhotset*.csv
+results/chit_headtohead/batch.log
+results/chit_headtohead.runlog
+
 # results: heavy regenerable intermediates (DB copies, chunks, probes, hotsets) -- never commit
 results/**/work/
 results/**/regen_work/

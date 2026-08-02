@@ -1141,6 +1141,8 @@ Tail-Mixed（WS 僅 1.8 MB ≈ 量測下限）**無法以 cgroup 施壓 → 其 
 
 修正把 `2e_K10` 從舊的 **−69.6%（artifact）拉回 −27.2%**，落進 2d/2f_top14/learned 同一 band——**pure-hit tail 上 access-frequency 的 leaf 選擇相對 interior skeleton 幾乎不加分**（沒有真實 leaf 熱點）。
 
+**同批 libprefetch 補測（`results/chit_headtohead/`，10 seeds，baseline + 我方 + learned + lp 同一機器狀態）。** Tail-Hit 此前唯一未測的 prior-work 是 libprefetch（`lp_sorted`/`lp_shuf` 過去只跑合成 Scattered-Zipf/Uniform-100K/Tail-Mixed，§6.2.6）。為取得**嚴格同批可比性**（相對 %Δ vs 同機器狀態 baseline、無跨批 additive drift），重跑 baseline + 我方 anchors + learned + lp 於同一 batch。fq %Δ **重現凍結敘事**：`2d` −36.0% [−44.0,−28.1]、`learned_markov_14` −40.0% ≈ `2f_top14` −39.7%、`learned_markov_28` −40.9% ≈ `2f_top28` −41.1%（budget-matched、CI 重疊、統計不可分——native 的「learned ≈ frequency」在合成 pure-hit 上原樣成立）。libprefetch 遞送順序效應（`deliver_us`, pread，主度量）：`lp_sorted`（offset 排序）**4479 µs** vs `lp_shuf`（打散順序）**53879 µs** → **`lp_shuf` 慢 12.0×**；`lp_sorted` ≈ `2f_slru` pread（**1.00×** sanity check，同內容、同 offset 排序）。收益全在 offset 排序遞送（NVMe readahead-coalesce），在合成 pure-hit 上重現 native（15.1×）與合成 A/B/C（10–16×，§6.2.6）的量級。lp 只 reorder 既有 `2f_slru` residency hotset、不訓練、不需 seed family，故為同步機制、以 `deliver_us`(pread) 為主指標。（`2e_K500` async delivery ~45% 是大預算 over-prefetch arm 的固有特性，與凍結 `results/c_hit` 的 42% 一致，非本批瑕疵；其餘所報 arm delivery 均 100%、cold 0%。）
+
 **修正後 Tail-Mixed（mixed，10 seeds，orig，warm e2e）：`2e_K10` 從舊的 −70% [−72,−69]（tight）變成 −55% [−67,−43]（robust 但雙峰）**：
 - **miss-first-op 的 seed（首查本身是 not-found probe）→ ~−70%**：probe 沿右緣落到吸收 ~50k miss 的最右葉，那是**真實的 #1 熱點**、tie-break 無關。
 - **hit-first-op 的 seed（首查是真 key）→ ~−31%**：回落到 interior skeleton，與 Tail-Hit 一致。

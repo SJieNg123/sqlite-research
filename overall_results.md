@@ -424,6 +424,16 @@ C_hit（`id∈[580001,600000]`、同 20k key-space、tail locality、uniform ×5
 - **`2e_K10` 的舊 −69.6% 是 first-op leakage，已修正**：leaf count 打平（~150）→ 舊 `gen_hotleaves` 的 `Counter.most_common` insertion-order tie-break → 最早出現的 K 葉 → 恰含被測 first-op（`gen_freqdump` 用 page-number tie-break 則不追）。10-fold coverage `results/loso/coverage_c_hit.csv`：first-op 覆蓋 **2e_K10(舊) 10/10 vs 2f_top14/learned/frequency 0/10**。改成 `(-count, pageno)` tie-break（commit `de4490f`）後 `2e_K10` = **−27.2%**（== 2d/learned）。
 - **三個 access regime**：無真實 leaf 熱點（B、C_hit）→ interior skeleton ~−28%、frequency leaf 不加分；真實 skew（A）→ frequency leaf 加分（2e_K10 −36%）；key-range 集中（C mixed 的 not-found probe）→ 最右葉超熱 ~−70%。C（mixed）整體 = hit/miss first-op 混合 → 雙峰 −55% [−67,−43]（`results/tiebreak_fix`）。**page-type interior skeleton 才是普適 robust 贏面。** 完整 [`results/c_hit/FINDINGS.md`](results/c_hit/FINDINGS.md)。
 
+**同批 libprefetch 補測（`results/chit_headtohead/`，10 seeds，baseline+我方+learned+lp 同一機器狀態）**：C_hit 此前唯一沒跑的 prior-work 是 libprefetch（lp 過去只跑合成 A/B/C）。為取得嚴格同批可比性（%Δ vs 同機器狀態 baseline、無跨批 additive drift），重跑 baseline+2d/2e/2f/layers+learned+lp 於同一 batch。fq %Δ 重現凍結敘事（`2d` −36.0% [−44.0,−28.1]；`learned_markov_14` −40.0% ≈ `2f_top14` −39.7%、`learned_28` −40.9% ≈ `2f_top28` −41.1%，budget-matched、CI 重疊、統計不可分）。libprefetch 遞送順序（`deliver_us`, pread，主度量）：
+
+| arm | deliver_us（pread, mean）| 這是什麼 |
+|---|--:|---|
+| `lp_sorted`（offset 排序）| 4479 µs | libprefetch C-LOOK |
+| `lp_shuf`（打散順序）| 53879 µs | **12.0× 慢** |
+| `2f_slru`（同內容、offset 排序）| 4461 µs | **1.00× sanity** |
+
+→ 收益全在 offset 排序遞送（NVMe readahead-coalesce），在 synthetic pure-hit 上重現 native（15.1×）與合成 A/B/C（10–16×）的量級；lp 為同步機制、以 `deliver_us`(pread) 為主指標，只 reorder 既有 `2f_slru` residency hotset、不訓練、不需 seed family。
+
 ## RAM-pressure（cgroup MemoryMax=20M / unlimited 比值,async first-q）
 
 > 來源 [`results/ram20m/`](results/ram20m/summary.csv)(20M cgroup)÷ **同期(06-22)unconfined** baseline。比值近 1.0 → 壓力幾乎不影響。
