@@ -152,6 +152,7 @@
 - **learned_markov 與 frequency_train 選同一組頁（J=1.0，同一訓練資料）**：當前 3 層固定深度 tree 的**觀測性質**（每頁單一深度 → expected-visit score = 正規化 visit frequency），由兩條獨立 code path 算出 — **非**普遍宣稱、不外推其他模型。對 held-out 量測種子（`2f_topN_test`）則 J 掉到 0.47/0.56（A/B），即 out-of-sample ranking 會位移。
 - **C 的 caveat（key-range artifact，勿讀成「learned 在 C 有效」）**：C 的半數 key 為 not-found 高 key、全落最右葉形成壓倒性單一 hot leaf（key-range 機制見 [overall_workloads.md](overall_workloads.md)「Tail-Mixed」）。offline coverage 的雙峰因此拆解為 **miss first-op 5/5 覆蓋、hit first-op 1/5 覆蓋**（合計跨 10 test seed **6/10**，`results/loso/coverage.csv`）。C leaf score 平（每真 key 恰 5 次），兩 arm 統一 tie-break 選同 hotset → fq 必等（186≈185）。**10-fold 已證實 coverage 的預測方向**：seed 1（hit、覆蓋）實測 186µs，10-fold C mean **336µs**（sd 200、range 180–629）——非覆蓋 fold 落在較高 interior 地板。held-out precision：C=100%、A/B=43%。A/B first-op 0/10 覆蓋但 interior 撐住。**勿讀成「learned 在 C 有效」。**
 - **Workload E 未支援**：range scan 非 3-page episode，`gen_pageseq` 對 scan fail-loud（需真正 range 頁序列重建）。
+- **原生 YCSB-C 同批交叉驗證（10-seed × 10-repetition same-batch）**：canonical native YCSB-C（`results/native_headtohead/`，10 seeds × 10 reps 同批量測，metric = async `fq_median` 首查 %Δ vs 同-seed baseline）上，`learned_markov_14` ≈ **−23.4%** vs baseline，對照 **matched-budget** `2f_top14` **−22.6%**（同 14 頁預算）——兩者 CI 大幅重疊，**transition-based ranking 在此 fixed-depth point-query workload 對 frequency 無明顯優勢**。這與上面 synthetic A/B/C 的結論一致；此臂仍是 **first-order Markov 啟發的透明 baseline、非 neural 重現**。
 
 ---
 

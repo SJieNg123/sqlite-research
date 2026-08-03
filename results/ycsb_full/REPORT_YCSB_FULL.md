@@ -8,6 +8,16 @@
 
 ---
 
+> **Historical snapshot / superseded canonical result**
+>
+> This report preserves the pre-canonicalization native YCSB-C result
+> of −38.4% with 95% CI [−46.2%, −30.5%] for provenance.
+> The canonical same-batch head-to-head result used by the current
+> repository is −36.2%, from `results/native_headtohead/`.
+> Do not use the −38.4% value as the current headline result.
+
+---
+
 ## 0. 一頁摘要
 
 | # | 論文主張 | 原生 YCSB 重現結果 | 判定 |
