@@ -9,3 +9,18 @@ config/run_config.json
 # Python caches
 __pycache__/
 *.pyc
+
+# Build-staging tree assembled by ws2/01_build_image.sh: the reference DB (~103 MB),
+# classifier, and YC seed traces staged under their repo-relative subpaths for
+# `COPY _image_stage/` in the Dockerfile. Machine-local, sha-verified vs the pin at
+# build time, never committed.
+_image_stage/
+
+# WS2 machine-local run tree: every stage's requests/responses/reports/metadata,
+# preflight reports, schedules, ledgers, and collected bundles. Created per
+# checkout under ws2/_runs/<git-sha>/. NEVER committed -- it is machine-specific
+# and may reference local paths/inodes. The ws2/*.sh scripts and matrix.example.json
+# ARE committed; only the outputs are ignored.
+ws2/_runs/
+ws2/*.tar.gz
+ws2/*.tar.gz.sha256

@@ -1,0 +1,15 @@
+# Keep the build context lean and never bake machine-local trees into the image.
+# Only action/, __main__.py, config/, and the staged _image_stage/ are needed.
+ws2/_runs/
+ws2/*.tar.gz
+ws2/*.tar.gz.sha256
+tests/
+client/
+*.sh
+build_artifact_manifest.py
+__pycache__/
+**/__pycache__/
+*.pyc
+*.md
+config/environment.txt
+config/run_config.json

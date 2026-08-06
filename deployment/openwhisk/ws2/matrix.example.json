@@ -1,0 +1,10 @@
+{
+  "_comment": "EXAMPLE matrix manifest for 05_full_matrix.sh. This is NOT the final matrix -- copy it, edit it, and pass it explicitly with --matrix. Every workload/strategy/seed/handle_mode is validated against the frozen runtime artifact pin (artifacts.native_ycsb.json) before anything runs. Strategies are limited to what the action implements (baseline, 2d) until full strategy support lands and WS2_MATRIX_IMPL_READY=1 is set.",
+  "schedule_seed": 20260804,
+  "workloads": ["native_ycsb_c_read_zipf"],
+  "strategies": ["baseline", "2d"],
+  "seeds": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+  "handle_modes": ["warm", "standalone"],
+  "first_operation_ids": [0],
+  "repetitions_per_cell": 10
+}

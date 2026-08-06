@@ -15,13 +15,18 @@ Invariants enforced here (generation aborts on violation):
   - every interior file_offset == (page_number-1)*page_size, 4096-aligned,
     unique, within the DB, exactly 92 interior pages;
   - plan offsets == manifest offsets;
-  - all workload-A seeds 1..10 present.
+  - all native YCSB-C seeds 1..10 present;
+  - every generated DB/plan/classifier/trace SHA256 matches the frozen replay pin
+    (config/artifacts.native_ycsb.json). The live manifest is byte-tied to the pin.
+
+The generated manifest is destined for the action image; device/inode are always
+null (the runtime self-pins st_dev/st_ino at process init and only rejects a
+change during the session, so host values would be meaningless in-container).
 
 No benchmark is run.
 
 Usage:
   python3 deployment/openwhisk/build_artifact_manifest.py --out .../artifacts.json
-  python3 deployment/openwhisk/build_artifact_manifest.py --example --out .../artifacts.example.json
 """
 import argparse
 import csv
@@ -47,7 +52,12 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 DB_REL = "pipeline/preparation/layout_rewriter/runs/test.db"
 CLASSIFY_REL = "pipeline/preparation/layout_rewriter/runs/classify_before.csv"
 PLAN_REL = "deployment/openwhisk/config/plans/interior_pages.csv"
-WORKLOADS = {"A": "a"}
+PIN_REL = "deployment/openwhisk/config/artifacts.native_ycsb.json"
+# The single canonical measured workload for this phase: native YCSB-C read (zipf).
+# The manifest keys workload_traces/first_query_oracle on this id; the ws2 diagnostic
+# and matrix drive the same id from the frozen pin.
+CANONICAL_WORKLOAD_ID = "native_ycsb_c_read_zipf"
+YC_TRACE_REL = "workloads_refined/traces/seeds/workload_YC_%d.txt"
 SEEDS = list(range(1, 11))
 EXPECTED_PAGE_SIZE = 4096
 EXPECTED_INTERIORS = 92
@@ -134,33 +144,58 @@ def first_op_key(trace_path, first_op):
 
 
 def build_oracle(db_path):
-    """Expected hit + digest for every supported first op of every A seed."""
+    """Expected hit + digest for every supported first op of every YCSB-C seed."""
     conn = sqlite3.connect(db_path)
-    out = {}
-    for wk, stem in WORKLOADS.items():
-        out[wk] = {}
-        for s in SEEDS:
-            rel = "workloads/workload_%s_%d.txt" % (stem, s)
-            tp = os.path.join(ROOT, rel)
-            if not os.path.exists(tp):
-                conn.close()
-                sys.exit("missing required trace for oracle: %s" % rel)
-            out[wk][str(s)] = {}
-            for fop in SUPPORTED_FIRST_OPS:
-                key = first_op_key(tp, fop)
-                hit_raw, payload = oracle.run_read_payload(conn, key)
-                hit, digest = oracle.digest_payload(hit_raw, payload)
-                out[wk][str(s)][str(fop)] = {
-                    "key": key, "expected_hit": hit, "expected_digest": digest}
+    out = {CANONICAL_WORKLOAD_ID: {}}
+    for s in SEEDS:
+        rel = YC_TRACE_REL % s
+        tp = os.path.join(ROOT, rel)
+        if not os.path.exists(tp):
+            conn.close()
+            sys.exit("missing required trace for oracle: %s" % rel)
+        out[CANONICAL_WORKLOAD_ID][str(s)] = {}
+        for fop in SUPPORTED_FIRST_OPS:
+            key = first_op_key(tp, fop)
+            hit_raw, payload = oracle.run_read_payload(conn, key)
+            hit, digest = oracle.digest_payload(hit_raw, payload)
+            out[CANONICAL_WORKLOAD_ID][str(s)][str(fop)] = {
+                "key": key, "expected_hit": hit, "expected_digest": digest}
     conn.close()
     return out
+
+
+def crosscheck_pin(db_sha, plan_sha, classifier_sha, trace_shas):
+    """Fail closed unless every generated hash matches the frozen replay pin.
+    Ties the live image manifest byte-for-byte to config/artifacts.native_ycsb.json
+    (single source of truth for DB / 2d plan / classifier / YC trace identity)."""
+    pin_path = os.path.join(ROOT, PIN_REL)
+    if not os.path.exists(pin_path):
+        sys.exit("missing frozen native-YCSB pin: %s" % PIN_REL)
+    with open(pin_path) as f:
+        pin = json.load(f)
+
+    def need(got, want, label):
+        if got != want:
+            sys.exit("pin mismatch %s: generated %s != pin %s" % (label, got, want))
+
+    need(CANONICAL_WORKLOAD_ID,
+         pin["representative_workload"]["canonical_workload_id"], "canonical_workload_id")
+    need(db_sha, pin["database"]["sha256"], "db")
+    need(plan_sha, pin["strategy_plans"]["2d"]["sha256"], "2d_plan")
+    need(classifier_sha, pin["classifier"]["sha256"], "classifier")
+    pin_traces = {str(e["seed"]): e["trace_sha256"]
+                  for e in pin["representative_workload"]["seed_family"]}
+    for s in SEEDS:
+        need(trace_shas[str(s)], pin_traces[str(s)], "trace_seed_%d" % s)
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", required=True)
     ap.add_argument("--example", action="store_true",
-                    help="omit machine-specific device/inode (committed example)")
+                    help="deprecated no-op: device/inode are always null now "
+                         "(image-bound manifest; runtime self-pins). The committed "
+                         "workload-A example is a frozen test fixture, not produced here.")
     args = ap.parse_args()
 
     db = os.path.join(ROOT, DB_REL)
@@ -184,17 +219,22 @@ def main():
 
     offsets = derive_and_validate_plan(classify, plan, page_size, page_count)
 
-    # all A seeds required
-    traces = {}
-    for wk, stem in WORKLOADS.items():
-        seedmap = {}
-        for s in SEEDS:
-            rel = "workloads/workload_%s_%d.txt" % (stem, s)
-            ap_ = os.path.join(ROOT, rel)
-            if not os.path.exists(ap_):
-                sys.exit("missing required workload trace: %s" % rel)
-            seedmap[str(s)] = {"path": rel, "sha256": sha256_file(ap_)}
-        traces[wk] = {"stem": stem, "seeds": seedmap}
+    # all native YCSB-C seeds required
+    seedmap = {}
+    for s in SEEDS:
+        rel = YC_TRACE_REL % s
+        ap_ = os.path.join(ROOT, rel)
+        if not os.path.exists(ap_):
+            sys.exit("missing required workload trace: %s" % rel)
+        seedmap[str(s)] = {"path": rel, "sha256": sha256_file(ap_)}
+    traces = {CANONICAL_WORKLOAD_ID: {"seeds": seedmap}}
+
+    # Byte-tie the live manifest to the frozen replay pin (fail closed).
+    db_sha = sha256_file(db)
+    plan_sha = sha256_file(plan)
+    classifier_sha = sha256_file(classify)
+    crosscheck_pin(db_sha, plan_sha, classifier_sha,
+                   {s: seedmap[s]["sha256"] for s in seedmap})
 
     st = os.stat(db)
     manifest = {
@@ -208,24 +248,26 @@ def main():
             "python_version": platform.python_version(),
         },
         # Immutable action image digest; filled at deploy (from OW_ACTION_IMAGE_DIGEST
-        # or the run config). Null in the committed example.
-        "action_image_digest": None if args.example else os.environ.get("OW_ACTION_IMAGE_DIGEST"),
+        # or the run config). Null until then.
+        "action_image_digest": os.environ.get("OW_ACTION_IMAGE_DIGEST"),
         "canonical_query": oracle.SELECT_SQL,
         "database": {
             "path": DB_REL,
-            "sha256": sha256_file(db),
+            "sha256": db_sha,
             "byte_size": st.st_size,
             "page_size": page_size,
             "page_count": page_count,
             "row_count": row_count,
             "max_key": maxid,
-            "device": None if args.example else st.st_dev,
-            "inode": None if args.example else st.st_ino,
+            # Always null: this manifest is image-bound and the runtime self-pins
+            # (st_dev, st_ino) at process init; host values are meaningless in-container.
+            "device": None,
+            "inode": None,
         },
-        "classifier": {"path": CLASSIFY_REL, "sha256": sha256_file(classify)},
+        "classifier": {"path": CLASSIFY_REL, "sha256": classifier_sha},
         "interior_page_list": {
             "path": PLAN_REL,
-            "sha256": sha256_file(plan),
+            "sha256": plan_sha,
             "count": EXPECTED_INTERIORS,
             "offsets": offsets,
         },
@@ -246,7 +288,7 @@ def main():
         "canonical_reference_pragmas": {"cache_size": 0, "mmap_size": st.st_size,
                                         "source": "benchmark_harness.c default"},
         "strategy_plans": {
-            "2d": {"path": PLAN_REL, "sha256": sha256_file(plan),
+            "2d": {"path": PLAN_REL, "sha256": plan_sha,
                    "kind": "interior_skeleton", "expected_pages": EXPECTED_INTERIORS},
             "baseline": {"path": None, "sha256": None, "kind": "no_prefetch",
                          "expected_pages": 0},
