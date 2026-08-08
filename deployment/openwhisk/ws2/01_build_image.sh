@@ -104,6 +104,27 @@ PY
 ARTIFACTS_SHA="$(ws2_sha256 "$LIVE_MANIFEST")"
 ws2_log "live manifest agrees with pin; artifacts_sha256=$ARTIFACTS_SHA"
 
+# --- live-manifest invariant gate (unittest; fail BEFORE any build) -------- #
+# The live-manifest invariants (pin <-> the just-generated config/artifacts.json on
+# DB / classifier / 2d-plan / denominator) are the checks 00_preflight deliberately
+# cannot run (artifacts.json does not exist yet there). Run them now, after
+# generation and before staging/build, so a live manifest that disagrees with the
+# pin can never reach `docker build`. This runs under DRY_RUN too (artifacts.json is
+# already generated above). A SKIP here means artifacts.json vanished -> fail closed.
+ws2_require_cmd python3
+LIVE_INV="deployment.openwhisk.tests.test_manifest_invariants.TestNativeYcsbLiveManifestAgreement"
+LIVE_INV_LOG="$WS2_STAGEDIR/live_manifest_invariants.log"
+if ( cd "$WS2_REPO_ROOT" && python3 -m unittest "$LIVE_INV" ) > "$LIVE_INV_LOG" 2>&1; then
+  if grep -q 'skipped' "$LIVE_INV_LOG"; then
+    ws2_mark_status "$WS2_STAGEDIR" failed FAIL
+    ws2_die "live-manifest invariants were SKIPPED (config/artifacts.json missing?); refusing to build (see $LIVE_INV_LOG)."
+  fi
+  ws2_log "live-manifest invariants PASS ($LIVE_INV)"
+else
+  ws2_mark_status "$WS2_STAGEDIR" failed FAIL
+  ws2_die "live-manifest invariant tests FAILED; refusing to build (see $LIVE_INV_LOG)."
+fi
+
 # --- image artifact staging list (DB + classifier + 10 YC traces) --------- #
 # Each is staged into _image_stage/<repo-rel> so the Dockerfile's
 # `COPY _image_stage/ /action/artifacts/` lands it at its manifest path. Paths +

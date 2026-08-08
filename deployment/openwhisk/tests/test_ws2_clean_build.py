@@ -89,6 +89,14 @@ class TestWs2CleanBuild(unittest.TestCase):
         self.assertIn("generating live manifest", r.stderr)
         self.assertIn("pin-verified", r.stderr)
 
+        # The live-manifest invariant gate ran AFTER generation and BEFORE any build
+        # (DRY_RUN exits before staging/build, so its presence proves the ordering).
+        self.assertIn("live-manifest invariants PASS", r.stderr,
+                      "01 did not run the live-manifest invariant gate")
+        self.assertLess(r.stderr.find("generating live manifest"),
+                        r.stderr.find("live-manifest invariants PASS"),
+                        "live-manifest gate ran before generation")
+
         # The generated manifest is byte-tied to the frozen pin.
         with open(LIVE) as f:
             man = json.load(f)

@@ -138,25 +138,27 @@ def _sha256_file(path):
 
 
 @unittest.skipUnless(os.path.exists(NATIVE_PIN), "native-YCSB pin missing")
-class TestNativeYcsbPinCrossAgreement(unittest.TestCase):
-    """The native-YCSB replay pin (artifacts.native_ycsb.json) must agree, byte for
-    byte, with the OpenWhisk artifacts manifest, the native-YCSB provenance manifest,
-    and the frozen files on disk. No OpenWhisk / benchmark execution is performed."""
+class TestNativeYcsbPinFrozenSources(unittest.TestCase):
+    """Frozen-source consistency: the native-YCSB replay pin
+    (artifacts.native_ycsb.json) must agree with the native-YCSB provenance manifest
+    (NATIVE_YCSB_MANIFEST.json), the frozen files on disk, and the workload registry.
+
+    These checks depend on NOTHING generated at build time -- in particular NOT the
+    live config/artifacts.json -- so they are valid BEFORE 01_build_image runs and
+    are the deployment-side gate for WS2 00_preflight. No OpenWhisk / benchmark
+    execution is performed. (Live-manifest agreement lives in
+    TestNativeYcsbLiveManifestAgreement, run by 01_build_image after generation.)"""
 
     @classmethod
     def setUpClass(cls):
         with open(NATIVE_PIN) as f:
             cls.pin = json.load(f)
-        with open(ARTIFACTS) as f:
-            cls.art = json.load(f)
         with open(NATIVE_MANIFEST) as f:
             cls.man = json.load(f)
 
-    def test_db_hash_agrees_with_artifacts_and_manifest(self):
-        pdb, adb, mdb = self.pin["database"], self.art["database"], self.man["db"]
-        self.assertEqual(pdb["sha256"], adb["sha256"])
+    def test_db_hash_agrees_with_manifest(self):
+        pdb, mdb = self.pin["database"], self.man["db"]
         self.assertEqual(pdb["sha256"], mdb["sha256"])
-        self.assertEqual(pdb["page_count"], adb["page_count"])
         self.assertEqual(pdb["page_count"], 26331)
         self.assertEqual(pdb["row_count"], 600000)
 
@@ -182,10 +184,8 @@ class TestNativeYcsbPinCrossAgreement(unittest.TestCase):
         self.assertEqual(hashlib.sha256(canonical.encode()).hexdigest(),
                          self.pin["database"]["normalized_schema_hash"])
 
-    def test_2d_plan_hash_agrees_and_db_specific(self):
+    def test_2d_plan_pin_is_db_specific_and_on_disk(self):
         pplan = self.pin["strategy_plans"]["2d"]
-        aplan = self.art["strategy_plans"]["2d"]
-        self.assertEqual(pplan["sha256"], aplan["sha256"])
         self.assertEqual(pplan["expected_pages"], 92)
         self.assertEqual(self.pin["expected_interior_count"], 92)
         # plan is bound to the pinned DB
@@ -194,13 +194,7 @@ class TestNativeYcsbPinCrossAgreement(unittest.TestCase):
         if os.path.exists(plan_file):
             self.assertEqual(_sha256_file(plan_file), pplan["sha256"])
 
-    def test_classifier_hash_agrees(self):
-        self.assertEqual(self.pin["classifier"]["sha256"],
-                         self.art["classifier"]["sha256"])
-
     def test_expected_page_count_is_full_db_not_92(self):
-        self.assertEqual(self.pin["expected_page_count"],
-                         self.art["expected_relevant_page_count"])
         self.assertEqual(self.pin["expected_page_count"],
                          self.pin["database"]["page_count"])
 
@@ -246,6 +240,53 @@ class TestNativeYcsbPinCrossAgreement(unittest.TestCase):
     def test_replay_only_flags(self):
         self.assertTrue(self.pin["replay_only"])
         self.assertTrue(self.pin["never_regenerate"])
+
+
+@unittest.skipUnless(os.path.exists(NATIVE_PIN) and os.path.exists(ARTIFACTS),
+                     "native-YCSB pin or live artifacts.json missing")
+class TestNativeYcsbLiveManifestAgreement(unittest.TestCase):
+    """Live-manifest agreement: the GENERATED OpenWhisk manifest
+    (config/artifacts.json) must match the frozen pin byte-for-byte on DB /
+    classifier / 2d-plan / denominator.
+
+    config/artifacts.json is produced by 01_build_image.sh (build_artifact_manifest.py),
+    so this class SKIPS cleanly when it is absent. It is the live-manifest invariant
+    gate 01_build_image runs AFTER generation and BEFORE the Docker build -- it is
+    NEVER part of 00_preflight (which must be read-only and never generate it)."""
+
+    @classmethod
+    def setUpClass(cls):
+        with open(NATIVE_PIN) as f:
+            cls.pin = json.load(f)
+        with open(ARTIFACTS) as f:
+            cls.art = json.load(f)
+
+    def test_db_hash_agrees_with_artifacts(self):
+        pdb, adb = self.pin["database"], self.art["database"]
+        self.assertEqual(pdb["sha256"], adb["sha256"])
+        self.assertEqual(pdb["page_count"], adb["page_count"])
+
+    def test_2d_plan_hash_agrees_and_db_specific(self):
+        pplan = self.pin["strategy_plans"]["2d"]
+        aplan = self.art["strategy_plans"]["2d"]
+        self.assertEqual(pplan["sha256"], aplan["sha256"])
+        self.assertEqual(pplan["expected_pages"], 92)
+        self.assertEqual(self.pin["expected_interior_count"], 92)
+        # plan is bound to the pinned DB
+        self.assertEqual(pplan["bound_db_sha256"], self.pin["database"]["sha256"])
+        plan_file = os.path.join(REPO, pplan["path"])
+        if os.path.exists(plan_file):
+            self.assertEqual(_sha256_file(plan_file), pplan["sha256"])
+
+    def test_classifier_hash_agrees(self):
+        self.assertEqual(self.pin["classifier"]["sha256"],
+                         self.art["classifier"]["sha256"])
+
+    def test_expected_page_count_is_full_db_not_92(self):
+        self.assertEqual(self.pin["expected_page_count"],
+                         self.art["expected_relevant_page_count"])
+        self.assertEqual(self.pin["expected_page_count"],
+                         self.pin["database"]["page_count"])
 
 
 if __name__ == "__main__":
