@@ -36,8 +36,11 @@ RESPONSE_CONTRACT = [
     "reset_us", "open_us", "select_us", "deliver_us", "first_query_us",
     "handler_total_us", "query_hit", "result_digest", "oracle_expected_hit",
     "oracle_expected_digest", "oracle_passed", "sqlite_cache_miss",
-    "measured_valid", "sqlite_error", "error", "error_stage",
+    "measured_valid", "sqlite_error", "error_stage",
 ]
+# A successful response must NOT carry a top-level "error" key: OpenWhisk treats
+# any top-level "error" (even null) as an application error. "error" appears only
+# on an actual failure envelope (see the success/failure tests below).
 
 
 def mreq(strategy, h, **kw):
@@ -68,6 +71,22 @@ class TestContract(unittest.TestCase):
         r = main.handle(mreq("2d", self.h), self.s)
         missing = [f for f in RESPONSE_CONTRACT if f not in r]
         self.assertEqual(missing, [], "missing: %s" % missing)
+
+    def test_success_response_has_no_top_level_error_key(self):
+        # OpenWhisk flags any top-level "error" (even null) as an application
+        # error, so a successful measured response must omit the key entirely.
+        r = main.handle(mreq("2d", self.h), self.s)
+        self.assertTrue(r["measured_valid"])
+        self.assertNotIn("error", r)
+        self.assertIsNone(r.get("error_stage"))
+
+    def test_failure_response_has_error_and_stage(self):
+        # An actual failure envelope DOES carry both error and error_stage.
+        r = main.handle(mreq("2d", "b" * 64), self.s)   # manifest-hash mismatch
+        self.assertEqual(r["error_stage"], "identity")
+        self.assertIn("error", r)
+        self.assertTrue(r["error"])
+        self.assertFalse(r["measured_valid"])
 
     def test_measured_2d_valid(self):
         r = main.handle(mreq("2d", self.h), self.s)

@@ -12,8 +12,11 @@ Config (with defaults):
   OW_ACTION_NAME    (sqlite-coldstart)
   OW_ACTION_MEMORY  (512  MiB)
   OW_ACTION_TIMEOUT (60000 ms)
-Concurrency is forced to 1. The image is deployed by immutable @sha256 digest;
-an unpinned build is refused unless it was explicitly allowed at build time.
+Concurrency is forced to 1. The action ships the Python sources as a zip (an
+image alone yields "Missing main/no code to execute"), is executed by the unique
+registry TAG (OpenWhisk does not preserve @sha256 for --docker here), and binds
+the immutable RepoDigest as OW_ACTION_IMAGE_DIGEST. An unpinned build (no real
+immutable digest) is refused.
 
 Writes action metadata (redacted) under _runs/<sha>/02_deploy/. Never sudo.
 Env: DRY_RUN=1 (print the wsk plan, do not deploy), WS2_FORCE=1 (redeploy).'
@@ -31,37 +34,52 @@ ws2_guard_completed "$WS2_STAGEDIR"
 BUILD_META="$WS2_RUN_DIR/01_build_image/build_meta.json"
 [ -f "$BUILD_META" ] || ws2_die "build metadata missing ($BUILD_META). Run 01_build_image first."
 
-read -r IMAGE_TAG REPO_DIGEST ARTIFACTS_SHA < <(python3 - "$BUILD_META" <<'PY'
+# Distinct identities from build metadata: the registry execution TAG (what
+# OpenWhisk runs), the immutable RepoDigest (bound identity), the local image id
+# (provenance only, never the execution ref), and the baked-manifest sha256.
+read -r EXEC_REF IMMUTABLE_DIGEST IMAGE_ID ARTIFACTS_SHA < <(python3 - "$BUILD_META" <<'PY'
 import json, sys
 m = json.load(open(sys.argv[1]))
-print(m.get("image_tag",""), m.get("repo_digest",""), m.get("artifacts_sha256",""))
+print(m.get("execution_image_ref",""), m.get("repo_digest",""),
+      m.get("image_id",""), m.get("artifacts_sha256",""))
 PY
 )
-[ -n "$IMAGE_TAG" ] || ws2_die "build metadata has no image_tag"
+[ -n "$EXEC_REF" ] || ws2_die "build metadata has no execution_image_ref (rebuild with 01_build_image)"
 [ -n "$ARTIFACTS_SHA" ] || ws2_die "build metadata has no artifacts_sha256 (rebuild with 01_build_image)"
-case "$REPO_DIGEST" in
-  UNPINNED:*) ws2_die "build recorded an UNPINNED image ($REPO_DIGEST); measured \
-deploy requires an immutable @sha256 digest. Rebuild with a push target." ;;
+# Fail closed: a measured deploy must bind a REAL immutable registry digest.
+case "$IMMUTABLE_DIGEST" in
+  UNPINNED:*) ws2_die "build recorded an UNPINNED image ($IMMUTABLE_DIGEST); measured \
+deploy requires an immutable @sha256 registry digest. Rebuild with a push target." ;;
   *@sha256:[0-9a-f]*) : ;;
-  *) ws2_die "build metadata repo_digest is not a pinned @sha256 digest: $REPO_DIGEST" ;;
+  *) ws2_die "build metadata repo_digest is not a pinned @sha256 digest: $IMMUTABLE_DIGEST" ;;
 esac
 
 OW_ACTION_NAME="${OW_ACTION_NAME:-sqlite-coldstart}"
 OW_ACTION_MEMORY="${OW_ACTION_MEMORY:-512}"
 OW_ACTION_TIMEOUT="${OW_ACTION_TIMEOUT:-60000}"
-ws2_log "deploy target: action=$OW_ACTION_NAME image=$REPO_DIGEST mem=${OW_ACTION_MEMORY} to=${OW_ACTION_TIMEOUT} concurrency=1"
+ws2_log "deploy target: action=$OW_ACTION_NAME exec_ref=$EXEC_REF bound_digest=$IMMUTABLE_DIGEST mem=${OW_ACTION_MEMORY} to=${OW_ACTION_TIMEOUT} concurrency=1"
 
-# wsk args. The image digest is passed twice: --docker pins what OpenWhisk runs,
-# and -p OW_ACTION_IMAGE_DIGEST injects the identity the action echoes per request.
-# Auth comes from ~/.wskprops (never read/printed here).
+# --- package the action code zip (deterministic) --------------------------- #
+# The Docker image supplies the runtime + baked artifacts; the action still needs
+# its Python sources or OpenWhisk reports "Missing main". Ship a flat archive
+# (main.py -> __main__.py + siblings) deployed with `--main main`.
+ACTION_ZIP="$WS2_STAGEDIR/action.zip"
+python3 "$WS2_DIR/make_action_zip.py" "$WS2_OW_DIR/action" "$ACTION_ZIP" >/dev/null \
+  || ws2_die "failed to build the action code zip ($ACTION_ZIP)"
+ws2_log "packaged action code -> $ACTION_ZIP"
+
+# wsk args. Execution is by the registry TAG (--docker EXEC_REF); the immutable
+# RepoDigest is bound as the -p OW_ACTION_IMAGE_DIGEST identity the action
+# validates per measured request. Auth comes from ~/.wskprops (never read/printed).
 build_wsk_cmd() {  # prints the wsk argv, one token per line
   local verb="$1"
-  printf '%s\n' wsk action "$verb" "$OW_ACTION_NAME" \
-    --docker "$REPO_DIGEST" \
+  printf '%s\n' wsk action "$verb" "$OW_ACTION_NAME" "$ACTION_ZIP" \
+    --docker "$EXEC_REF" \
+    --main main \
     --memory "$OW_ACTION_MEMORY" \
     --timeout "$OW_ACTION_TIMEOUT" \
     --concurrency 1 \
-    -p OW_ACTION_IMAGE_DIGEST "$REPO_DIGEST"
+    -p OW_ACTION_IMAGE_DIGEST "$IMMUTABLE_DIGEST"
 }
 
 if [ "${DRY_RUN:-0}" = 1 ]; then
@@ -87,9 +105,12 @@ fi
 wsk action get "$OW_ACTION_NAME" 2>/dev/null | ws2_redact \
   | ws2_atomic_write "$WS2_STAGEDIR/action_metadata.json"
 
-printf '{\n  "action_name": "%s",\n  "image_digest": "%s",\n  "artifact_manifest_sha256": "%s",\n  "memory_mb": %s,\n  "timeout_ms": %s,\n  "concurrency": 1,\n  "git_sha": "%s",\n  "utc": "%s"\n}\n' \
-  "$OW_ACTION_NAME" "$REPO_DIGEST" "$ARTIFACTS_SHA" "$OW_ACTION_MEMORY" "$OW_ACTION_TIMEOUT" \
-  "$WS2_GIT_SHA" "$(ws2_ts)" \
+# Record the identities with UNAMBIGUOUS names: the execution tag OpenWhisk runs,
+# the immutable RepoDigest bound as the action identity, and the local image id
+# (provenance only) are three DIFFERENT things and are never conflated.
+printf '{\n  "action_name": "%s",\n  "execution_image_ref": "%s",\n  "immutable_image_digest": "%s",\n  "image_id": "%s",\n  "artifact_manifest_sha256": "%s",\n  "memory_mb": %s,\n  "timeout_ms": %s,\n  "concurrency": 1,\n  "git_sha": "%s",\n  "utc": "%s"\n}\n' \
+  "$OW_ACTION_NAME" "$EXEC_REF" "$IMMUTABLE_DIGEST" "$IMAGE_ID" "$ARTIFACTS_SHA" \
+  "$OW_ACTION_MEMORY" "$OW_ACTION_TIMEOUT" "$WS2_GIT_SHA" "$(ws2_ts)" \
   | ws2_atomic_write "$WS2_STAGEDIR/deploy_meta.json"
 
 ws2_mark_status "$WS2_STAGEDIR" done PASS

@@ -77,13 +77,23 @@ class Session:
         except Exception:  # pragma: no cover
             self.sqlite_library_version = None
         self.python_version = platform.python_version()
-        # observed immutable image digest injected by the deployment (env);
-        # measured mode requires it to equal the request's expected digest.
-        self.observed_action_image_digest = os.environ.get("OW_ACTION_IMAGE_DIGEST")
+        # Deployment-bound immutable image identity. This is NOT self-observed by
+        # the container: OpenWhisk delivers it as an action input parameter
+        # (`-p OW_ACTION_IMAGE_DIGEST <digest>` at deploy), which main() binds via
+        # bind_deployment_image_digest() before measured validation. The env read
+        # is only a convenience default for local runs; in-cluster it is unset.
+        self.deployment_image_digest = os.environ.get("OW_ACTION_IMAGE_DIGEST")
         self.warmdb = None
 
     def _abspath(self, rel):
         return rel if os.path.isabs(rel) else os.path.join(self.root, rel)
+
+    def bind_deployment_image_digest(self, digest):
+        """Bind the deployment-bound immutable image identity. Called by main()
+        with the OW_ACTION_IMAGE_DIGEST input parameter OpenWhisk injects at
+        invoke time (it is delivered as a param, not an env var). Idempotent: a
+        deployment binds one digest for the life of the warm process."""
+        self.deployment_image_digest = digest
 
     # ------------------------------------------------------------------ validate
     def validate_artifacts(self, expected_manifest_hash=None):
@@ -252,7 +262,7 @@ class Session:
             "db_inode": self.db_inode,
             "db_sha256": self.db_sha256,
             "artifact_manifest_sha256": self.artifact_manifest_sha256,
-            "action_image_digest": self.observed_action_image_digest,
+            "action_image_digest": self.deployment_image_digest,
             "repository_commit": self.manifest.get("repository_commit"),
             "sqlite_library_version": self.sqlite_library_version,
             "python_version": self.python_version,
@@ -308,8 +318,8 @@ def validate_request_semantics(request, session):
         exp_img = request.get("expected_action_image_digest")
         if not exp_img:
             r.append("empty expected_action_image_digest")
-        elif not session.observed_action_image_digest:
-            r.append("no observed action image digest (OW_ACTION_IMAGE_DIGEST unset)")
-        elif exp_img != session.observed_action_image_digest:
+        elif not session.deployment_image_digest:
+            r.append("deployment-bound image digest unset (OW_ACTION_IMAGE_DIGEST param not delivered)")
+        elif exp_img != session.deployment_image_digest:
             r.append("action image digest mismatch")
     return tuple(r)

@@ -35,7 +35,7 @@ DEPLOY_META="$WS2_RUN_DIR/02_deploy/deploy_meta.json"
 read -r OW_ACTION_NAME IMAGE_DIGEST META_MANIFEST_SHA < <(python3 - "$DEPLOY_META" <<'PY'
 import json, sys
 m = json.load(open(sys.argv[1]))
-print(m.get("action_name","sqlite-coldstart"), m.get("image_digest",""),
+print(m.get("action_name","sqlite-coldstart"), m.get("immutable_image_digest",""),
       m.get("artifact_manifest_sha256",""))
 PY
 )
@@ -68,6 +68,7 @@ req = {
     "pair_id": "",
     "repetition_id": 0,
     "schedule_position": 0,
+    "schedule_seed": 0,
     "run_config_sha256": p["run_config_sha256"],
     "expected_artifact_manifest_hash": manifest,
     "expected_action_image_digest": image,
@@ -77,13 +78,28 @@ PY
 ws2_log "diagnostic request -> $REQ"
 
 # --- invoke ---------------------------------------------------------------- #
-ws2_invoke "$OW_ACTION_NAME" "$REQ" "$RESP" || ws2_warn "invocation returned non-zero; evaluating response anyway"
+INVOKE_RC=0
+ws2_invoke "$OW_ACTION_NAME" "$REQ" "$RESP" || INVOKE_RC=1
 
 if [ "${DRY_RUN:-0}" = 1 ]; then
   ws2_log "DRY_RUN: request built + synthetic response saved; gates NOT enforced."
   ws2_mark_status "$WS2_STAGEDIR" done DRYRUN
   exit 0
 fi
+
+# --- invocation / runtime failure (no evaluable response) ------------------ #
+# Distinguish an invoke/runtime failure from a gate failure: if the invocation
+# produced no response.json, or one that is not valid JSON, the runtime never
+# returned a record to evaluate. Report THAT -- do NOT claim the cold-reset gate
+# failed (which would falsely blame the container's eviction path).
+if [ "$INVOKE_RC" -ne 0 ] && { [ ! -s "$RESP" ] || ! python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$RESP" >/dev/null 2>&1; }; then
+  ws2_mark_status "$WS2_STAGEDIR" done FAIL
+  ws2_die "DIAGNOSTIC FAIL: the invocation did not return an evaluable response \
+(runtime/invocation error, see $(basename "${RESP%.json}.stderr")). This is NOT a \
+cold-reset gate failure; fix the deploy/runtime and rerun. The cold-data gate was \
+never reached."
+fi
+[ "$INVOKE_RC" -eq 0 ] || ws2_warn "invocation returned non-zero but a response is present; evaluating it."
 
 # --- gate evaluation ------------------------------------------------------- #
 REPORT="$WS2_STAGEDIR/gate_report.txt"

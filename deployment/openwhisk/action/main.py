@@ -44,16 +44,33 @@ DELIVERY_INVARIANTS = {
 }
 _SESSION = None
 
+# The image bakes the artifacts under a FIXED absolute root. OpenWhisk extracts
+# the action code archive under a per-activation path (e.g. /action/1/), so
+# __file__ and cwd point at the extracted code, NOT the baked artifacts, and must
+# never be used to locate them. Resolution order is: an explicit env override (if
+# the platform preserves it) else these image-absolute defaults.
+IMAGE_ARTIFACT_ROOT = "/action/artifacts"
+IMAGE_ARTIFACT_MANIFEST = IMAGE_ARTIFACT_ROOT + "/deployment/openwhisk/config/artifacts.json"
+
+
+def artifact_root():
+    """Image-absolute artifact root, never derived from __file__/cwd."""
+    return os.environ.get("OW_ARTIFACT_ROOT") or IMAGE_ARTIFACT_ROOT
+
+
+def artifact_manifest_path():
+    """Image-absolute manifest path, never derived from __file__/cwd."""
+    return os.environ.get("OW_ARTIFACT_MANIFEST") or IMAGE_ARTIFACT_MANIFEST
+
 
 def get_session():
     """Module-singleton warm Session. Validates artifacts and opens the warm
     handle exactly once; if validation fails the session is returned unvalidated
-    so the handler refuses measured mode."""
+    so the handler refuses measured mode. Artifacts are resolved against the
+    fixed image root, not the OpenWhisk-extracted code path."""
     global _SESSION
     if _SESSION is None:
-        manifest = os.environ.get("OW_ARTIFACT_MANIFEST") or os.path.join(
-            os.path.dirname(__file__), "..", "config", "artifacts.json")
-        s = Session(os.path.abspath(manifest))
+        s = Session(artifact_manifest_path(), resolve_root=artifact_root())
         s.validate_artifacts()          # sets s.validated / s.validation_reasons
         if s.validated:
             s.open_warm_handle()
@@ -159,7 +176,11 @@ def handle(request, session):
         return _envelope(session, request, "concurrency",
                          "overlapping invocation rejected (concurrency must be 1)")
     try:
-        resp = {"error": None, "error_stage": None, "sqlite_error": None}
+        # A successful response carries NO top-level "error" key: OpenWhisk treats
+        # any top-level "error" (even null) as an application error. "error" is
+        # added only by _envelope() on an actual failure. error_stage stays None
+        # on success (not the platform-magic key).
+        resp = {"error_stage": None, "sqlite_error": None}
 
         # ---- stage: artifact validation (fail closed) ----
         if not session.validated:
@@ -329,6 +350,13 @@ def main(params):
         return {"error": "; ".join(schema), "error_stage": "request",
                 "measured_valid": False, "request_id": params.get("request_id")}
     session = get_session()
+    # The deployment binds the immutable image identity via `wsk ... -p
+    # OW_ACTION_IMAGE_DIGEST <digest>`, which OpenWhisk delivers as an action
+    # INPUT PARAMETER (not an OS env var). Bind it as the session's
+    # deployment-bound image identity before any measured validation.
+    bound_digest = params.get("OW_ACTION_IMAGE_DIGEST")
+    if bound_digest:
+        session.bind_deployment_image_digest(bound_digest)
     if not session.validated:
         return {"error": "artifact validation failed: "
                 + "; ".join(session.validation_reasons),

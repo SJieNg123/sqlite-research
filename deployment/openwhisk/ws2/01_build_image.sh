@@ -12,11 +12,13 @@ inputs FIRST (never required to pre-exist; git-ignored), verifies it against the
 pin, records its sha256, then stages + builds. Requires:
   * 00_preflight PASS for this checkout.
   * OW_BASE_IMAGE_DIGEST=<repo>@sha256:<64hex>  -- pinned base runtime digest.
-  * OW_IMAGE_TAG (optional, default sqlite-coldstart:ws2) -- local build tag.
-  * OW_IMAGE_REPO (optional) -- push target used only to resolve an immutable
-    @sha256 RepoDigest for measured mode.
+  * OW_IMAGE_TAG (optional, default sqlite-coldstart:ws2) -- LOCAL build tag.
+  * OW_IMAGE_REPO (optional) -- registry REPOSITORY (untagged, e.g.
+    localhost:5000/sqlite-coldstart). If set, a unique immutable-policy execution
+    tag <repo>:<git-sha> is pushed and its real registry RepoDigest resolved.
 
-Records image id + digest under _runs/<sha>/01_build_image/. Never uses sudo.
+Records, distinctly: local image id, local build tag, registry execution tag, and
+registry RepoDigest under _runs/<sha>/01_build_image/. Never uses sudo.
 Env: DRY_RUN=1 (validate + print the build plan, do not build),
 WS2_ALLOW_UNPINNED_IMAGE=1 (allow a mutable-only image id -- NON-measured only),
 WS2_FORCE=1 (rebuild over a completed stage).'
@@ -149,6 +151,9 @@ if [ "${DRY_RUN:-0}" = 1 ]; then
   while IFS=$'\t' read -r rel _; do [ -n "$rel" ] && ws2_log "  stage $rel"; done <<< "$STAGE_LIST"
   ws2_log "DRY_RUN: would run:"
   ws2_log "  docker build --no-cache --build-arg BASE_RUNTIME=$BASE --build-arg ARTIFACTS_SHA256=$ARTIFACTS_SHA -t $OW_IMAGE_TAG $WS2_OW_DIR"
+  if [ -n "${OW_IMAGE_REPO:-}" ]; then
+    ws2_log "  then push unique execution tag <repo>:$WS2_GIT_SHA_SHORT (OW_IMAGE_REPO=$OW_IMAGE_REPO) and resolve its RepoDigest"
+  fi
   ws2_log "DRY_RUN: no image built, no metadata written."
   exit 0
 fi
@@ -177,30 +182,53 @@ docker build --no-cache --build-arg BASE_RUNTIME="$BASE" --build-arg ARTIFACTS_S
 IMAGE_ID="$(docker image inspect "$OW_IMAGE_TAG" --format '{{.Id}}' 2>/dev/null || true)"
 [ -n "$IMAGE_ID" ] || { ws2_mark_status "$WS2_STAGEDIR" failed FAIL; ws2_die "cannot read built image id"; }
 
-# --- immutable repo digest (measured mode requires it) --------------------- #
-REPO_DIGEST="$(docker image inspect "$OW_IMAGE_TAG" --format '{{if .RepoDigests}}{{index .RepoDigests 0}}{{end}}' 2>/dev/null || true)"
-if [ -z "$REPO_DIGEST" ] && [ -n "${OW_IMAGE_REPO:-}" ]; then
-  ws2_log "no local RepoDigest; pushing to $OW_IMAGE_REPO to obtain an immutable digest ..."
-  docker tag "$OW_IMAGE_TAG" "$OW_IMAGE_REPO" && docker push "$OW_IMAGE_REPO" \
-    && REPO_DIGEST="$(docker image inspect "$OW_IMAGE_REPO" --format '{{if .RepoDigests}}{{index .RepoDigests 0}}{{end}}' 2>/dev/null || true)"
+# --- registry execution tag + immutable RepoDigest ------------------------- #
+# Four distinct identities, never conflated:
+#   IMAGE_ID   -- local Docker image content id (sha256:...); NOT a registry digest.
+#   OW_IMAGE_TAG -- local build tag (mutable; how docker names the local image).
+#   EXEC_REF   -- registry execution tag <repo>:<git-sha> (what OpenWhisk runs).
+#   REPO_DIGEST -- registry RepoDigest <repo>@sha256:... (immutable content identity
+#                  bound as OW_ACTION_IMAGE_DIGEST). Resolved ONLY from a real push;
+#                  NEVER fabricated from IMAGE_ID.
+EXEC_REF=""
+REPO_DIGEST=""
+if [ -n "${OW_IMAGE_REPO:-}" ]; then
+  # Immutable-policy execution tag: the exact git SHA (unique per commit).
+  EXEC_REF="$(python3 - "$OW_IMAGE_REPO" "$WS2_GIT_SHA_SHORT" <<'PY'
+import sys
+repo, sha = sys.argv[1], sys.argv[2]
+# strip a trailing :tag only from the final path component (host:port keeps its colon)
+last = repo.rsplit('/', 1)[-1]
+if ':' in last:
+    repo = repo[:repo.rfind(':')]
+print("%s:%s" % (repo, sha))
+PY
+)"
+  ws2_log "pushing immutable execution tag $EXEC_REF ..."
+  docker tag "$OW_IMAGE_TAG" "$EXEC_REF" && docker push "$EXEC_REF" >/dev/null \
+    && REPO_DIGEST="$(docker image inspect "$EXEC_REF" --format '{{if .RepoDigests}}{{index .RepoDigests 0}}{{end}}' 2>/dev/null || true)"
+  [ -n "$REPO_DIGEST" ] || ws2_warn "pushed $EXEC_REF but could not resolve a registry RepoDigest"
 fi
 
 if [ -z "$REPO_DIGEST" ]; then
   if [ "${WS2_ALLOW_UNPINNED_IMAGE:-0}" = 1 ]; then
-    ws2_warn "no immutable @sha256 image digest available; WS2_ALLOW_UNPINNED_IMAGE=1 \
-set -> recording NON-MEASURED mutable id only."
+    # NON-MEASURED build: record a clearly-marked sentinel (never a fake digest)
+    # and fall back to the local tag for execution. 02_deploy refuses this.
+    ws2_warn "no immutable @sha256 RepoDigest; WS2_ALLOW_UNPINNED_IMAGE=1 set -> \
+NON-MEASURED build (execution by local tag, no bound immutable digest)."
     REPO_DIGEST="UNPINNED:$IMAGE_ID"
+    [ -n "$EXEC_REF" ] || EXEC_REF="$OW_IMAGE_TAG"
   else
     ws2_mark_status "$WS2_STAGEDIR" failed FAIL
-    ws2_die "only a mutable image identity is available; measured mode requires an \
-immutable @sha256 digest. Set OW_IMAGE_REPO to push, or WS2_ALLOW_UNPINNED_IMAGE=1 \
-for a non-measured build."
+    ws2_die "no immutable @sha256 registry digest available; measured mode requires \
+one. Set OW_IMAGE_REPO to push a unique execution tag, or WS2_ALLOW_UNPINNED_IMAGE=1 \
+for a non-measured build. The local image id is NOT a substitute for a RepoDigest."
   fi
 fi
 
-printf '{\n  "image_tag": "%s",\n  "image_id": "%s",\n  "repo_digest": "%s",\n  "base_runtime": "%s",\n  "artifacts_sha256": "%s",\n  "git_sha": "%s",\n  "utc": "%s"\n}\n' \
-  "$OW_IMAGE_TAG" "$IMAGE_ID" "$REPO_DIGEST" "$BASE" "$ARTIFACTS_SHA" "$WS2_GIT_SHA" "$(ws2_ts)" \
+printf '{\n  "image_id": "%s",\n  "local_image_tag": "%s",\n  "execution_image_ref": "%s",\n  "repo_digest": "%s",\n  "base_runtime": "%s",\n  "artifacts_sha256": "%s",\n  "git_sha": "%s",\n  "utc": "%s"\n}\n' \
+  "$IMAGE_ID" "$OW_IMAGE_TAG" "$EXEC_REF" "$REPO_DIGEST" "$BASE" "$ARTIFACTS_SHA" "$WS2_GIT_SHA" "$(ws2_ts)" \
   | ws2_atomic_write "$BUILD_META"
 
 ws2_mark_status "$WS2_STAGEDIR" done PASS
-ws2_log "BUILD OK  image_id=$IMAGE_ID digest=$REPO_DIGEST artifacts_sha256=$ARTIFACTS_SHA -> $BUILD_META"
+ws2_log "BUILD OK  image_id=$IMAGE_ID exec_ref=$EXEC_REF repo_digest=$REPO_DIGEST artifacts_sha256=$ARTIFACTS_SHA -> $BUILD_META"
