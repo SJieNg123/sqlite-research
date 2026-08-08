@@ -236,6 +236,63 @@ if [ "${DRY_RUN:-0}" = 1 ]; then
   exit 0
 fi
 
+# --- client-side pacing + transient-retry configuration -------------------- #
+# Apache OpenWhisk Standalone rate-limits to ~60 requests/minute. We pace BETWEEN
+# complete pairs (never between a pair's two arms) so the sustained rate stays
+# safely under the limit, and we retry TRANSIENT transport/rate-limit failures at
+# the SAME schedule position with bounded backoff. Both are client-side controls:
+# a shell sleep between invocations never enters the measured action timings
+# (first_query_us / deliver_us / open_us are computed inside the handler).
+WS2_INTER_PAIR_DELAY_SEC="${WS2_INTER_PAIR_DELAY_SEC:-2.2}"
+WS2_MAX_INVOKE_RETRIES="${WS2_MAX_INVOKE_RETRIES:-5}"
+WS2_RETRY_BACKOFF_BASE_SEC="${WS2_RETRY_BACKOFF_BASE_SEC:-5}"
+WS2_RETRY_BACKOFF_CAP_SEC="${WS2_RETRY_BACKOFF_CAP_SEC:-60}"
+LAST_INVOKED_PAIR=""
+{
+  printf 'inter_pair_delay_sec: %s\n' "$WS2_INTER_PAIR_DELAY_SEC"
+  printf 'max_invoke_retries: %s\n' "$WS2_MAX_INVOKE_RETRIES"
+  printf 'retry_backoff_base_sec: %s\n' "$WS2_RETRY_BACKOFF_BASE_SEC"
+  printf 'retry_backoff_cap_sec: %s\n' "$WS2_RETRY_BACKOFF_CAP_SEC"
+  printf 'note: pacing + backoff are client-side and OUTSIDE the measured action; they never enter first_query_us/deliver_us/open_us.\n'
+} | ws2_atomic_write "$WS2_STAGEDIR/pacing.txt"
+ws2_log "pacing: inter_pair_delay=${WS2_INTER_PAIR_DELAY_SEC}s max_retries=${WS2_MAX_INVOKE_RETRIES} backoff_base=${WS2_RETRY_BACKOFF_BASE_SEC}s cap=${WS2_RETRY_BACKOFF_CAP_SEC}s (client-side, outside measurement)"
+
+# Bounded retry/backoff for TRANSIENT invocation errors (rate-limit/transport).
+# Retries the SAME position/request identity; never advances or reorders; never
+# leaves a completed resp_*.json unless a real handler response was written; keeps
+# each transient stderr for provenance. Returns:
+#   0 -> a response file was produced (real or handler error envelope; classify it)
+#   1 -> a NON-transient invocation failure (leave it to the identity classifier)
+#   2 -> transient error persisted after WS2_MAX_INVOKE_RETRIES (caller hard-stops)
+ws2_invoke_with_retry() {
+  local action="$1" req="$2" resp="$3"
+  local err="${resp%.json}.stderr" attempt=1 backoff
+  while : ; do
+    if ws2_invoke "$action" "$req" "$resp"; then
+      return 0
+    fi
+    # Invocation failed. Transient transport/rate-limit vs a real failure?
+    if [ -f "$err" ] && python3 "$WS2_DIR/response_gate.py" is-transient "$err" >/dev/null 2>&1; then
+      # Preserve the transient stderr for provenance; never keep a partial resp
+      # (no completed response until a real handler response exists).
+      cp -f "$err" "${resp%.json}.transient.${attempt}.stderr" 2>/dev/null || true
+      rm -f "$resp"
+      if [ "$attempt" -ge "$WS2_MAX_INVOKE_RETRIES" ]; then
+        ws2_warn "transient invocation error persisted after $attempt attempt(s): $(basename "$req")"
+        return 2
+      fi
+      backoff=$(( WS2_RETRY_BACKOFF_BASE_SEC * (1 << (attempt - 1)) ))
+      [ "$backoff" -gt "$WS2_RETRY_BACKOFF_CAP_SEC" ] && backoff="$WS2_RETRY_BACKOFF_CAP_SEC"
+      ws2_warn "transient invocation error (attempt $attempt/$WS2_MAX_INVOKE_RETRIES); backing off ${backoff}s and retrying the SAME position."
+      sleep "$backoff"
+      attempt=$((attempt + 1))
+      continue
+    fi
+    # Non-transient failure: leave any response for the classifier to reject.
+    return 1
+  done
+}
+
 # --- sequential execution with resume + session/identity stop -------------- #
 LEDGER="$WS2_STAGEDIR/completed_cells.tsv"; : >> "$LEDGER"
 for req in $(ls "$RAW"/req_*.json | sort); do
@@ -260,8 +317,28 @@ for req in $(ls "$RAW"/req_*.json | sort); do
       fi
     fi
   fi
+  # Inter-pair pacing (client-side; OUTSIDE the measured action). Keep a pair's two
+  # arms adjacent -- pace only when a NEW pair begins, so within-pair adjacency and
+  # the frozen AB/BA order are preserved. Applied only before a real invocation.
+  cur_pair="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("pair_id",""))' "$req")"
+  if [ -n "$LAST_INVOKED_PAIR" ] && [ "$cur_pair" != "$LAST_INVOKED_PAIR" ]; then
+    ws2_log "inter-pair pacing: sleeping ${WS2_INTER_PAIR_DELAY_SEC}s before pair '$cur_pair' (<=60 req/min)."
+    sleep "$WS2_INTER_PAIR_DELAY_SEC"
+  fi
+
   ws2_log "invoke position $pos (sequential)"
-  ws2_invoke "$OW_ACTION_NAME" "$req" "$resp" || ws2_warn "position $pos non-zero; kept"
+  irc=0
+  ws2_invoke_with_retry "$OW_ACTION_NAME" "$req" "$resp" || irc=$?
+  if [ "$irc" = 2 ]; then
+    # TRANSIENT (rate-limit/transport) error, not an identity/session violation.
+    # The schedule was NOT advanced and no completed resp_${pos}.json was written.
+    ws2_mark_status "$WS2_STAGEDIR" failed FAIL
+    ws2_die "stopped: TRANSIENT invocation error (e.g. OpenWhisk rate limit) persisted at position \
+$pos after $WS2_MAX_INVOKE_RETRIES retries. This is NOT an identity/session violation. No \
+resp_${pos}.json was created; re-run 05 to resume from this exact position."
+  fi
+  [ "$irc" = 1 ] && ws2_warn "position $pos invocation returned non-zero (non-transient); the classifier will evaluate the response."
+  LAST_INVOKED_PAIR="$cur_pair"
 
   # Per-cell identity + session-break enforcement (stop-the-run on violation).
   if ! python3 - "$req" "$resp" "$IMAGE_DIGEST" "$LEDGER" "$WS2_DIR" >> "$WS2_STAGEDIR/exec_log.txt" 2>&1 <<'PY'; then
@@ -269,39 +346,54 @@ import json, os, sys
 sys.path.insert(0, sys.argv[5])           # WS2_DIR -> shared response_gate
 from response_gate import classify_response
 req = json.load(open(sys.argv[1]))
+resp_path = sys.argv[2]
+if not os.path.exists(resp_path):
+    # No evaluable response: an invocation/runtime error, NOT an identity/session
+    # violation (a transient one would have been retried/handled above).
+    print("STOP: no response for %s (invocation/runtime error, not identity/session)"
+          % req.get("request_id")); sys.exit(1)
 try:
-    resp = json.load(open(sys.argv[2])) if os.path.exists(sys.argv[2]) else {}
+    resp = json.load(open(resp_path))
 except ValueError as e:
-    print("STOP: response for %s is not valid JSON: %s" % (req.get("request_id"), e)); sys.exit(1)
+    print("STOP: response for %s is not valid JSON (invocation/runtime error): %s"
+          % (req.get("request_id"), e)); sys.exit(1)
 image = sys.argv[3]; ledger = sys.argv[4]
 
-# Fresh response must be a real handler response whose identity matches the request
-# AND the deployed image digest (rejects synthetic/malformed/foreign responses).
+# A completed cell requires a real handler response whose identity matches the
+# request AND the deployed image digest (rejects synthetic/malformed/foreign).
 status, reason = classify_response(req, resp, image)
 if status != "valid":
     print("STOP: %s (%s)" % (reason, status)); sys.exit(1)
 
-# Observation key (INCLUDES strategy). Reject a completed cell reappearing with a
-# different response identity.
+# Warm-session protocol: the real response's process identity is `process_uuid`
+# (session.identity_fields()). Reject a completed cell reappearing under a
+# different warm process. Observation key INCLUDES strategy.
 key = "\t".join(str(req.get(k)) for k in
                 ("run_config_sha256", "workload", "seed", "first_operation_id",
                  "handle_mode", "pair_id", "strategy"))
-sess = str(resp.get("warm_session_id"))
+proc = resp.get("process_uuid")
+if not proc:
+    print("STOP: real response for %s lacks process_uuid (warm-session identity missing)"
+          % req.get("request_id")); sys.exit(1)
+proc = str(proc)
 seen = {}
 if os.path.exists(ledger):
     for line in open(ledger):
         parts = line.rstrip("\n").split("\t")
         if len(parts) >= 2:
             seen[parts[0]] = parts[1]
-if key in seen and seen[key] != sess:
-    print("STOP: duplicate completed cell with different session: %s" % key); sys.exit(1)
+if key in seen and seen[key] != proc:
+    print("STOP: duplicate completed cell with different process_uuid (session break): %s" % key)
+    sys.exit(1)
 with open(ledger, "a") as f:
-    f.write("%s\t%s\n" % (key, sess))
-print("OK", req["request_id"], "session", sess)
+    f.write("%s\t%s\n" % (key, proc))
+print("OK", req["request_id"], "process_uuid", proc)
 PY
     ws2_warn "identity/session violation at position $pos; stopping per protocol."
     ws2_mark_status "$WS2_STAGEDIR" failed FAIL
-    ws2_die "stopped: identity mismatch or session break (see exec_log.txt)."
+    ws2_die "stopped at position $pos: response failed identity/session validation \
+(see exec_log.txt for the exact STOP reason: identity mismatch, session break, or an \
+unrecoverable invocation error)."
   fi
 done
 

@@ -20,6 +20,11 @@ This module is the single source of truth for three decisions:
   * synthetic detection (`is_synthetic`, `purge_synthetic`, `scan_synthetic`) --
     used by WS2_FORCE cleanup and by 06_collect's refusal to package DRY_RUN
     output as measured evidence.
+  * transient-error detection (`is_transient_invocation_error`) -- whether a
+    FAILED invocation's stderr names a transient transport/rate-limit condition
+    (e.g. OpenWhisk "Too many requests in the last minute") that is safe to retry
+    at the same schedule position, as opposed to a handler identity/session
+    failure. Transport failures never reached the handler, so they are neither.
 
 The identity fields checked are exactly those the action echoes back from the
 request (see action/main.py ECHO_FIELDS + the workload/strategy/seed block and the
@@ -43,6 +48,38 @@ IDENTITY_FIELDS = (
 def is_synthetic(resp):
     """True iff `resp` is a DRY_RUN synthetic placeholder."""
     return isinstance(resp, dict) and bool(resp.get("_dry_run"))
+
+
+# Transport-layer signatures that make a failed invocation safe to retry at the
+# SAME schedule position. These are transient (client/platform), NOT handler
+# outcomes: the primary case is Apache OpenWhisk Standalone's per-minute rate
+# limit. Matched case-insensitively as substrings of the invocation stderr.
+_TRANSIENT_SIGNATURES = (
+    "too many requests in the last minute",   # OpenWhisk per-minute rate limit
+    "too many requests",                      # generic HTTP 429 phrasing
+    "429 too many requests",
+    "503 service unavailable",
+    "service unavailable",
+    "connection reset by peer",
+    "connection refused",
+    "connection timed out",
+    "i/o timeout",
+)
+
+
+def is_transient_invocation_error(stderr_text):
+    """True iff invocation stderr names a transient transport / rate-limit
+    condition that is safe to retry at the same schedule position (e.g. the
+    OpenWhisk "Too many requests in the last minute" rate limit).
+
+    This is a TRANSPORT decision, deliberately independent of handler identity /
+    session validation: a rate-limited request never reached the handler, so it is
+    neither an identity mismatch nor a session break.
+    """
+    if not stderr_text:
+        return False
+    low = stderr_text.lower()
+    return any(sig in low for sig in _TRANSIENT_SIGNATURES)
 
 
 def classify_response(req, resp, image_digest=None):
@@ -151,7 +188,8 @@ def scan_synthetic(paths):
 def _main(argv):
     if not argv:
         print("usage: response_gate.py "
-              "{classify|verify-complete|purge-synthetic|scan-synthetic} ...", file=sys.stderr)
+              "{classify|verify-complete|purge-synthetic|scan-synthetic|is-transient} ...",
+              file=sys.stderr)
         return 2
     cmd, rest = argv[0], argv[1:]
 
@@ -195,6 +233,21 @@ def _main(argv):
             print("purged synthetic response: %s" % p, file=sys.stderr)
         print("purged %d synthetic response file(s) from %s" % (len(removed), rest[0]))
         return 0
+
+    if cmd == "is-transient":
+        # Classify an invocation stderr file: exit 0 transient (retryable), 1 not.
+        if not rest:
+            print("usage: is-transient <stderr_file>", file=sys.stderr); return 2
+        try:
+            with open(rest[0]) as f:
+                text = f.read()
+        except OSError as e:
+            print("stderr file unreadable: %s" % e, file=sys.stderr); return 2
+        if is_transient_invocation_error(text):
+            print("transient")
+            return 0
+        print("non-transient")
+        return 1
 
     if cmd == "scan-synthetic":
         if not rest:
