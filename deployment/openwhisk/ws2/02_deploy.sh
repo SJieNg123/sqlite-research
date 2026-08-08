@@ -53,6 +53,12 @@ deploy requires an immutable @sha256 registry digest. Rebuild with a push target
   *@sha256:[0-9a-f]*) : ;;
   *) ws2_die "build metadata repo_digest is not a pinned @sha256 digest: $IMMUTABLE_DIGEST" ;;
 esac
+# The bound digest MUST name the same repository as the execution tag: OpenWhisk
+# runs <repo>:<git-sha> while we bind <repo>@sha256:... as the identity -- a digest
+# from a different repository would pin the wrong image. Fail closed on mismatch.
+python3 "$WS2_DIR/image_identity.py" same-repo "$EXEC_REF" "$IMMUTABLE_DIGEST" \
+  || ws2_die "execution_image_ref ($EXEC_REF) and immutable_image_digest \
+($IMMUTABLE_DIGEST) name different repositories; refusing to deploy."
 
 OW_ACTION_NAME="${OW_ACTION_NAME:-sqlite-coldstart}"
 OW_ACTION_MEMORY="${OW_ACTION_MEMORY:-512}"

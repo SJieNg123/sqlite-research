@@ -11,7 +11,9 @@ Builds the custom action image. Regenerates config/artifacts.json from the froze
 inputs FIRST (never required to pre-exist; git-ignored), verifies it against the
 pin, records its sha256, then stages + builds. Requires:
   * 00_preflight PASS for this checkout.
-  * OW_BASE_IMAGE_DIGEST=<repo>@sha256:<64hex>  -- pinned base runtime digest.
+  * OW_BASE_IMAGE_DIGEST=<repo>@sha256:<64hex>  -- COMPLETE pinned base runtime
+    reference (repository REQUIRED, e.g. openwhisk/action-python-v3.11@sha256:...);
+    a bare @sha256 value or a mutable tag is refused.
   * OW_IMAGE_TAG (optional, default sqlite-coldstart:ws2) -- LOCAL build tag.
   * OW_IMAGE_REPO (optional) -- registry REPOSITORY (untagged, e.g.
     localhost:5000/sqlite-coldstart). If set, a unique immutable-policy execution
@@ -39,13 +41,18 @@ ws2_stage_is_done "$PRE_DIR" && [ "$(ws2_stage_status_value "$PRE_DIR")" = PASS 
 ws2_log "preflight PASS confirmed"
 
 # --- gate: pinned base-image digest ---------------------------------------- #
+# The Dockerfile does `FROM ${BASE_RUNTIME}`, so a COMPLETE pinned reference
+# <repo>@sha256:<64hex> is mandatory: a bare `@sha256:...` (empty repository) or a
+# mutable tag would build the wrong image (or fail). The predicate lives in
+# image_identity.py so it is unit-tested behaviourally rather than as a shell glob.
 BASE="${OW_BASE_IMAGE_DIGEST:-}"
-[ -n "$BASE" ] || ws2_die "OW_BASE_IMAGE_DIGEST is unset. A pinned base runtime \
-digest (repo@sha256:...) is mandatory; mutable tags are refused."
-case "$BASE" in
-  *@sha256:[0-9a-f]*) : ;;
-  *) ws2_die "OW_BASE_IMAGE_DIGEST must be pinned by @sha256 digest, got: $BASE" ;;
-esac
+[ -n "$BASE" ] || ws2_die "OW_BASE_IMAGE_DIGEST is unset. A complete pinned base \
+runtime reference (<repo>@sha256:<64hex>) is mandatory; mutable tags are refused."
+ws2_require_cmd python3
+python3 "$WS2_DIR/image_identity.py" check-base "$BASE" \
+  || ws2_die "OW_BASE_IMAGE_DIGEST must be a COMPLETE pinned reference \
+<repo>@sha256:<64hex> with a non-empty repository; a bare @sha256 value or a \
+mutable tag is refused. Got: $BASE"
 ws2_log "base runtime pinned: $BASE"
 
 # --- generate the live manifest (clean-checkout capable) ------------------- #
@@ -152,7 +159,7 @@ if [ "${DRY_RUN:-0}" = 1 ]; then
   ws2_log "DRY_RUN: would run:"
   ws2_log "  docker build --no-cache --build-arg BASE_RUNTIME=$BASE --build-arg ARTIFACTS_SHA256=$ARTIFACTS_SHA -t $OW_IMAGE_TAG $WS2_OW_DIR"
   if [ -n "${OW_IMAGE_REPO:-}" ]; then
-    ws2_log "  then push unique execution tag <repo>:$WS2_GIT_SHA_SHORT (OW_IMAGE_REPO=$OW_IMAGE_REPO) and resolve its RepoDigest"
+    ws2_log "  then push unique execution tag <repo>:$WS2_GIT_SHA_SHORT (OW_IMAGE_REPO=$OW_IMAGE_REPO) and resolve its exact-repository RepoDigest"
   fi
   ws2_log "DRY_RUN: no image built, no metadata written."
   exit 0
@@ -194,20 +201,25 @@ EXEC_REF=""
 REPO_DIGEST=""
 if [ -n "${OW_IMAGE_REPO:-}" ]; then
   # Immutable-policy execution tag: the exact git SHA (unique per commit).
-  EXEC_REF="$(python3 - "$OW_IMAGE_REPO" "$WS2_GIT_SHA_SHORT" <<'PY'
-import sys
-repo, sha = sys.argv[1], sys.argv[2]
-# strip a trailing :tag only from the final path component (host:port keeps its colon)
-last = repo.rsplit('/', 1)[-1]
-if ':' in last:
-    repo = repo[:repo.rfind(':')]
-print("%s:%s" % (repo, sha))
-PY
-)"
+  EXEC_REF="$(python3 "$WS2_DIR/image_identity.py" exec-ref "$OW_IMAGE_REPO" "$WS2_GIT_SHA_SHORT")" \
+    || { ws2_mark_status "$WS2_STAGEDIR" failed FAIL; ws2_die "could not derive an execution tag from OW_IMAGE_REPO=$OW_IMAGE_REPO"; }
   ws2_log "pushing immutable execution tag $EXEC_REF ..."
-  docker tag "$OW_IMAGE_TAG" "$EXEC_REF" && docker push "$EXEC_REF" >/dev/null \
-    && REPO_DIGEST="$(docker image inspect "$EXEC_REF" --format '{{if .RepoDigests}}{{index .RepoDigests 0}}{{end}}' 2>/dev/null || true)"
-  [ -n "$REPO_DIGEST" ] || ws2_warn "pushed $EXEC_REF but could not resolve a registry RepoDigest"
+  if docker tag "$OW_IMAGE_TAG" "$EXEC_REF" && docker push "$EXEC_REF" >/dev/null; then
+    # Bind the RepoDigest whose repository EXACTLY matches OW_IMAGE_REPO -- NOT
+    # docker's first RepoDigests entry, which may be a registry-less alias
+    # (name@sha256:...) that drops the host:port and would mis-pin the image.
+    RD_JSON="$(docker image inspect "$EXEC_REF" --format '{{json .RepoDigests}}' 2>/dev/null || echo 'null')"
+    if REPO_DIGEST="$(python3 "$WS2_DIR/image_identity.py" select-digest "$OW_IMAGE_REPO" "$RD_JSON" 2>"$WS2_STAGEDIR/repodigest_select.err")"; then
+      # Confirm the resolved host-qualified digest is really pullable from the registry.
+      docker pull "$REPO_DIGEST" >/dev/null 2>&1 \
+        || { ws2_warn "resolved RepoDigest did not verify via docker pull: $REPO_DIGEST"; REPO_DIGEST=""; }
+    else
+      ws2_warn "no unique registry RepoDigest for $OW_IMAGE_REPO ($(cat "$WS2_STAGEDIR/repodigest_select.err" 2>/dev/null))"
+      REPO_DIGEST=""
+    fi
+  else
+    ws2_warn "failed to tag/push $EXEC_REF"
+  fi
 fi
 
 if [ -z "$REPO_DIGEST" ]; then

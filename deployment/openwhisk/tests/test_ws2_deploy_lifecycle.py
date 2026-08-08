@@ -105,6 +105,12 @@ class TestDeployScriptWiring(unittest.TestCase):
         self.assertIn("UNPINNED:*", self.txt)
         self.assertRegex(self.txt, r"UNPINNED[^\n]*ws2_die|ws2_die[^\n]*UNPINNED")
 
+    def test_immutable_digest_repository_must_match_execution_ref(self):
+        # the bound digest must belong to the same repository as the exec tag.
+        self.assertIn("image_identity.py", self.txt)
+        self.assertIn("same-repo", self.txt)
+        self.assertIn("different repositories", self.txt)
+
 
 class TestBuildScriptIdentityDistinction(unittest.TestCase):
     def setUp(self):
@@ -123,6 +129,20 @@ class TestBuildScriptIdentityDistinction(unittest.TestCase):
         # RepoDigest resolution comes from a real registry inspect after push.
         self.assertIn("RepoDigests", self.txt)
         self.assertIn("docker push", self.txt)
+
+    def test_selects_exact_repository_digest_not_first_entry(self):
+        # binds the exact-repository digest via the shared helper; NEVER docker's
+        # first RepoDigests entry (which may be a host-less alias).
+        self.assertIn("image_identity.py", self.txt)
+        self.assertIn("select-digest", self.txt)
+        self.assertIn("json .RepoDigests", self.txt)
+        self.assertNotIn("index .RepoDigests 0", self.txt)
+
+    def test_base_runtime_validated_by_tested_predicate(self):
+        # the pinned-base check goes through the tested helper, not a weak glob that
+        # accepted a bare @sha256 (empty repository).
+        self.assertIn("check-base", self.txt)
+        self.assertNotIn("*@sha256:[0-9a-f]*", self.txt)
 
 
 class TestDiagnosticScript(unittest.TestCase):
