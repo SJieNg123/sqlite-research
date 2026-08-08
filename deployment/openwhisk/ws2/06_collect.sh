@@ -84,7 +84,7 @@ out = {
                     for e in pin["representative_workload"]["seed_family"]},
     "image": {"repo_digest": b.get("repo_digest"), "image_id": b.get("image_id"),
               "base_runtime": b.get("base_runtime")},
-    "action": {"name": d.get("action_name"), "image_digest": d.get("image_digest"),
+    "action": {"name": d.get("action_name"), "image_digest": d.get("immutable_image_digest"),
                "memory_mb": d.get("memory_mb"), "timeout_ms": d.get("timeout_ms"),
                "concurrency": d.get("concurrency")},
 }

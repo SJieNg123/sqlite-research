@@ -32,12 +32,26 @@ ws2_stage_is_done "$DIAG_DIR" && [ "$(ws2_stage_status_value "$DIAG_DIR")" = PAS
   || ws2_die "03_diagnostic has not PASSed for this checkout. Run it first."
 
 DEPLOY_META="$WS2_RUN_DIR/02_deploy/deploy_meta.json"
+[ -f "$DEPLOY_META" ] || ws2_die "02_deploy metadata missing ($DEPLOY_META). Run 02_deploy first."
 read -r OW_ACTION_NAME IMAGE_DIGEST < <(python3 - "$DEPLOY_META" <<'PY'
 import json, sys
 m = json.load(open(sys.argv[1]))
-print(m.get("action_name","sqlite-coldstart"), m.get("image_digest",""))
+# The bound image identity 02_deploy writes under the CURRENT key
+# `immutable_image_digest` (the legacy `image_digest` key no longer exists).
+print(m.get("action_name","sqlite-coldstart"), m.get("immutable_image_digest",""))
 PY
 )
+# Fail closed on the bound image identity BEFORE building/invoking the schedule:
+# every measured request's expected_action_image_digest is this exact value, so an
+# absent/unpinned digest must stop the stage, not silently produce empty-identity
+# requests. A DRY_RUN schedule build (no real deploy) may stand in a placeholder,
+# mirroring the MANIFEST_SHA fallback below.
+if [ -z "$IMAGE_DIGEST" ] && [ "${DRY_RUN:-0}" = 1 ]; then
+  IMAGE_DIGEST="dry-run/placeholder@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+fi
+python3 "$WS2_DIR/image_identity.py" check-base "$IMAGE_DIGEST" \
+  || ws2_die "02_deploy metadata has no pinned immutable_image_digest (got: '$IMAGE_DIGEST'). \
+Every measured request needs the bound repo@sha256:<64hex> identity; redeploy with 02_deploy."
 MANIFEST_SHA="${OW_ARTIFACT_MANIFEST_SHA256:-}"
 SCHED_SEED="${OW_SCHEDULE_SEED:-20260804}"
 if [ -z "$MANIFEST_SHA" ]; then

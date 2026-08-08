@@ -53,9 +53,20 @@ DEPLOY_META="$WS2_RUN_DIR/02_deploy/deploy_meta.json"
 read -r OW_ACTION_NAME IMAGE_DIGEST < <(python3 - "$DEPLOY_META" <<'PY'
 import json, sys
 m = json.load(open(sys.argv[1]))
-print(m.get("action_name","sqlite-coldstart"), m.get("image_digest",""))
+# Bound image identity under the CURRENT key `immutable_image_digest` (the legacy
+# `image_digest` key no longer exists in 02_deploy metadata).
+print(m.get("action_name","sqlite-coldstart"), m.get("immutable_image_digest",""))
 PY
 )
+# Fail closed BEFORE building/invoking the matrix: this exact digest is stamped as
+# every request's expected_action_image_digest and re-checked against each response
+# below. DRY_RUN may stand in a placeholder, mirroring MANIFEST_SHA.
+if [ -z "$IMAGE_DIGEST" ] && [ "${DRY_RUN:-0}" = 1 ]; then
+  IMAGE_DIGEST="dry-run/placeholder@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+fi
+python3 "$WS2_DIR/image_identity.py" check-base "$IMAGE_DIGEST" \
+  || ws2_die "02_deploy metadata has no pinned immutable_image_digest (got: '$IMAGE_DIGEST'). \
+Every measured request needs the bound repo@sha256:<64hex> identity; redeploy with 02_deploy."
 MANIFEST_SHA="${OW_ARTIFACT_MANIFEST_SHA256:-}"
 if [ -z "$MANIFEST_SHA" ]; then
   [ "${DRY_RUN:-0}" = 1 ] && MANIFEST_SHA="0000000000000000000000000000000000000000000000000000000000000000" \
