@@ -92,6 +92,20 @@ print(json.dumps(out, indent=2, sort_keys=True))
 PY
 mv -f "$MANIFEST.tmp" "$MANIFEST"
 
+# --- refuse to package synthetic DRY_RUN output as measured evidence ------- #
+# A DRY_RUN response (`_dry_run: true`) is a placeholder, not a measurement. If any
+# survives in the run tree, the bundle would misrepresent synthetic output as real
+# evidence -- fail closed (in DRY_RUN listing mode too, so the contamination is loud).
+SYNSCAN="$STAGE/synthetic_scan.txt"
+if ! python3 "$WS2_DIR/response_gate.py" scan-synthetic \
+      "$WS2_RUN_DIR/03_diagnostic" "$WS2_RUN_DIR/04_feasibility" "$WS2_RUN_DIR/05_full_matrix" \
+      > "$SYNSCAN" 2>&1; then
+  cat "$SYNSCAN" >&2
+  ws2_mark_status "$STAGE" failed FAIL
+  ws2_die "refusing to package: DRY_RUN synthetic (_dry_run:true) responses found in the run tree; \
+they are not measured evidence. Re-run the measured stages (WS2_FORCE=1) and collect again."
+fi
+
 # --- package -------------------------------------------------------------- #
 TARBALL="$STAGE/ws2_bundle_${WS2_GIT_SHA_SHORT}_$(ws2_ts | tr -d ':-').tar.gz"
 # Collect the machine-local run tree for this checkout, excluding this stage's own

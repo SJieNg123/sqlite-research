@@ -20,10 +20,13 @@ every requested strategy is one the action implements (baseline, 2d). Otherwise
 the stage validates the matrix, writes the schedule, and STOPS (result=GATED) --
 no invocation.
 
-Resume: re-running skips positions whose raw response already exists; a completed
-cell that reappears with a different identity is a hard stop.
-Env: DRY_RUN=1 (validate + schedule, synthesize responses, no gate on results),
-WS2_FORCE=1 (rebuild the schedule from scratch).'
+Resume: re-running skips a position ONLY when its existing response parses as a
+real, identity-matching, non-synthetic handler response. A DRY_RUN placeholder is
+discarded and re-invoked; a mismatching/malformed response is a hard stop. PASS
+requires every scheduled position to have such a validated real response.
+Env: DRY_RUN=1 (validate + schedule; synthetic responses go to an ISOLATED
+dryrun_raw/ tree, never the measured raw/, and are never resumable),
+WS2_FORCE=1 (rebuild the schedule AND purge any stale synthetic responses).'
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=common.sh
@@ -148,6 +151,18 @@ PY
 RUN_CONFIG_SHA="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["run_config_sha256"])' "$WS2_PIN_JSON")"
 SCHED="$WS2_STAGEDIR/schedule.json"
 RAW="$WS2_STAGEDIR/raw"; mkdir -p "$RAW"
+# DRY_RUN synthetic responses are written HERE, never into the measured raw/ tree,
+# so a real run can never resume over them.
+DRYRUN_RAW="$WS2_STAGEDIR/dryrun_raw"
+
+# WS2_FORCE: rebuild the schedule (below) AND guarantee no stale DRY_RUN synthetic
+# response survives into this real execution -- purge synthetic responses from the
+# measured raw/ tree and drop the isolated dry-run tree entirely. Synthetic output
+# is never silently preserved.
+if [ "${WS2_FORCE:-0}" = 1 ]; then
+  python3 "$WS2_DIR/response_gate.py" purge-synthetic "$RAW" >&2
+  rm -rf "$DRYRUN_RAW"
+fi
 
 # --- deterministic schedule (built once; resume reuses it) ----------------- #
 if [ -f "$SCHED" ] && [ "${WS2_FORCE:-0}" != 1 ]; then
@@ -209,11 +224,14 @@ if [ "${WS2_MATRIX_IMPL_READY:-0}" != 1 ] || [ -n "$UNSUPPORTED" ]; then
 fi
 
 if [ "${DRY_RUN:-0}" = 1 ]; then
+  # Synthetic responses go into an ISOLATED tree, never into the measured raw/, so
+  # a later real run cannot mistake them for completed measurements.
+  mkdir -p "$DRYRUN_RAW"
   for req in $(ls "$RAW"/req_*.json | sort); do
     pos="$(basename "$req" .json | sed 's/req_//')"
-    ws2_invoke "$OW_ACTION_NAME" "$req" "$RAW/resp_${pos}.json" || true
+    ws2_invoke "$OW_ACTION_NAME" "$req" "$DRYRUN_RAW/resp_${pos}.json" || true
   done
-  ws2_log "DRY_RUN: schedule executed with synthetic responses; no result gate."
+  ws2_log "DRY_RUN: synthetic responses isolated under $DRYRUN_RAW (never resumable as measured); no result gate."
   ws2_mark_status "$WS2_STAGEDIR" done DRYRUN
   exit 0
 fi
@@ -224,31 +242,44 @@ for req in $(ls "$RAW"/req_*.json | sort); do
   pos="$(basename "$req" .json | sed 's/req_//')"
   resp="$RAW/resp_${pos}.json"
   if [ -f "$resp" ]; then
-    ws2_log "resume: position $pos already has a response; skipping."
-    continue
+    # Never skip on mere existence: parse + validate the existing response. Only a
+    # real, identity-matching, non-synthetic response may be resumed.
+    if cls="$(python3 "$WS2_DIR/response_gate.py" classify "$req" "$resp" "$IMAGE_DIGEST" 2>>"$WS2_STAGEDIR/exec_log.txt")"; then
+      ws2_log "resume: position $pos has a validated real response ($cls); skipping."
+      continue
+    else
+      rc=$?
+      if [ "$rc" = 10 ]; then
+        # DRY_RUN synthetic contamination in the measured tree: discard + invoke.
+        ws2_warn "position $pos holds a DRY_RUN synthetic response ($cls); discarding and invoking for real."
+        rm -f "$resp"
+      else
+        ws2_warn "position $pos existing response is not a valid resumable measurement ($cls); stopping per protocol."
+        ws2_mark_status "$WS2_STAGEDIR" failed FAIL
+        ws2_die "stopped: existing response at position $pos failed validation (see exec_log.txt)."
+      fi
+    fi
   fi
   ws2_log "invoke position $pos (sequential)"
   ws2_invoke "$OW_ACTION_NAME" "$req" "$resp" || ws2_warn "position $pos non-zero; kept"
 
   # Per-cell identity + session-break enforcement (stop-the-run on violation).
-  if ! python3 - "$req" "$resp" "$IMAGE_DIGEST" "$LEDGER" >> "$WS2_STAGEDIR/exec_log.txt" 2>&1 <<'PY'; then
+  if ! python3 - "$req" "$resp" "$IMAGE_DIGEST" "$LEDGER" "$WS2_DIR" >> "$WS2_STAGEDIR/exec_log.txt" 2>&1 <<'PY'; then
 import json, os, sys
+sys.path.insert(0, sys.argv[5])           # WS2_DIR -> shared response_gate
+from response_gate import classify_response
 req = json.load(open(sys.argv[1]))
-resp = json.load(open(sys.argv[2])) if os.path.exists(sys.argv[2]) else {}
+try:
+    resp = json.load(open(sys.argv[2])) if os.path.exists(sys.argv[2]) else {}
+except ValueError as e:
+    print("STOP: response for %s is not valid JSON: %s" % (req.get("request_id"), e)); sys.exit(1)
 image = sys.argv[3]; ledger = sys.argv[4]
 
-if not isinstance(resp, dict):
-    print("STOP: non-dict response for", req["request_id"]); sys.exit(1)
-
-# Identity: response echo must match request cell + the deployed image digest.
-for f in ("workload", "strategy", "seed", "first_operation_id",
-          "handle_mode", "pair_id"):
-    if resp.get(f) != req.get(f):
-        print("STOP: identity mismatch on %s: req=%r resp=%r"
-              % (f, req.get(f), resp.get(f))); sys.exit(1)
-rid = resp.get("action_image_digest")
-if rid not in (None, image):
-    print("STOP: action_image_digest mismatch: %r != %r" % (rid, image)); sys.exit(1)
+# Fresh response must be a real handler response whose identity matches the request
+# AND the deployed image digest (rejects synthetic/malformed/foreign responses).
+status, reason = classify_response(req, resp, image)
+if status != "valid":
+    print("STOP: %s (%s)" % (reason, status)); sys.exit(1)
 
 # Observation key (INCLUDES strategy). Reject a completed cell reappearing with a
 # different response identity.
@@ -273,6 +304,15 @@ PY
     ws2_die "stopped: identity mismatch or session break (see exec_log.txt)."
   fi
 done
+
+# --- completion gate ------------------------------------------------------- #
+# PASS is never granted merely because resp_*.json files exist. Every scheduled
+# position must have a validated, non-synthetic, identity-matching real response.
+if ! python3 "$WS2_DIR/response_gate.py" verify-complete "$RAW" "$IMAGE_DIGEST" \
+      >> "$WS2_STAGEDIR/exec_log.txt" 2>&1; then
+  ws2_mark_status "$WS2_STAGEDIR" failed FAIL
+  ws2_die "completion gate failed: not every position has a validated non-synthetic real response (see exec_log.txt)."
+fi
 
 ws2_mark_status "$WS2_STAGEDIR" done PASS
 ws2_log "05_full_matrix executed sequentially; raw responses in $RAW."
