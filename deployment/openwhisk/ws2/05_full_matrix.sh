@@ -16,9 +16,11 @@ Identity inputs:
   OW_ARTIFACT_MANIFEST_SHA256  (required for real execution: identity gate)
 
 IMPLEMENTATION GATE: real invocation happens ONLY when WS2_MATRIX_IMPL_READY=1 AND
-every requested strategy is one the action implements (baseline, 2d). Otherwise
-the stage validates the matrix, writes the schedule, and STOPS (result=GATED) --
-no invocation.
+every requested strategy is one the action implements (baseline, 2d, layers_5).
+Otherwise the stage validates the matrix, writes the schedule, and STOPS
+(result=GATED) -- no invocation. (Note: which strategies may appear in a matrix at
+all is a separate, stricter gate -- matrix validation above accepts only the
+strategy_plans keys of the frozen replay pin.)
 
 Resume: re-running skips a position ONLY when its existing response parses as a
 real, identity-matching, non-synthetic handler response. A DRY_RUN placeholder is
@@ -199,12 +201,13 @@ print("requests ready: %d invocations" % len(s["invocations"]))
 PY
 
 # --- IMPLEMENTATION GATE --------------------------------------------------- #
-# The action implements baseline + 2d only. Until full strategy support lands,
-# real invocation is blocked. Validation + scheduling above have already run.
+# The action implements baseline + 2d + layers_5 (Batch 1). Any strategy outside
+# this set blocks real invocation. Validation + scheduling above have already run.
+# Keep this set in sync with action/main.py SUPPORTED_STRATEGIES.
 UNSUPPORTED="$(python3 - "$MATRIX" <<'PY'
 import json, sys
 m = json.load(open(sys.argv[1]))
-impl = {"baseline", "2d"}
+impl = {"baseline", "2d", "layers_5"}
 bad = [s for s in m["strategies"] if s not in impl]
 print(",".join(bad))
 PY
@@ -213,7 +216,7 @@ if [ "${WS2_MATRIX_IMPL_READY:-0}" != 1 ] || [ -n "$UNSUPPORTED" ]; then
   {
     echo "IMPLEMENTATION GATE: real matrix invocation is blocked."
     echo "  WS2_MATRIX_IMPL_READY=${WS2_MATRIX_IMPL_READY:-0} (must be 1 to execute)"
-    [ -n "$UNSUPPORTED" ] && echo "  unsupported strategies requested: $UNSUPPORTED (action implements baseline,2d)"
+    [ -n "$UNSUPPORTED" ] && echo "  unsupported strategies requested: $UNSUPPORTED (action implements baseline,2d,layers_5)"
     echo "  Validated matrix + deterministic schedule are ready at: $SCHED"
     echo "  No invocation performed."
   } | ws2_atomic_write "$WS2_STAGEDIR/gate.txt"

@@ -71,6 +71,15 @@ class Session:
         # plan offsets cached at process init (off the invocation critical path)
         self.interior_offsets = list(self.manifest["interior_page_list"]["offsets"])
         self.interior_offset_set = set(self.interior_offsets)
+        # Generic static-plan cache: any strategy plan carrying an inline frozen
+        # offset list (e.g. layers_5) is cached here at init, off the measured
+        # critical path. 2d (interior_page_list) and baseline (no prefetch) are
+        # handled separately and carry no inline "offsets", so they are excluded.
+        self.static_plan_offsets = {
+            name: list(plan["offsets"])
+            for name, plan in self.manifest.get("strategy_plans", {}).items()
+            if isinstance(plan.get("offsets"), list)
+        }
         # runtime + image identity, captured once
         try:
             self.sqlite_library_version = sqlite_bridge.libversion()
@@ -160,6 +169,9 @@ class Session:
         # plan structural invariants (aligned / unique / within DB / count / ==offsets)
         r += self._validate_plan_invariants(page_size, page_count)
 
+        # inline-offset static strategy plans (e.g. layers_5) validate fail-closed
+        r += self._validate_static_plans(page_size, page_count)
+
         # every supported workload trace must match its manifest hash
         for wl, wentry in m.get("workload_traces", {}).items():
             for seed, tentry in wentry.get("seeds", {}).items():
@@ -203,6 +215,59 @@ class Session:
                 r.append("plan offsets != manifest offsets")
         except (OSError, ValueError, KeyError) as e:
             r.append("plan unreadable: %s" % e)
+        return r
+
+    def _validate_static_plans(self, page_size, page_count):
+        """Fail-closed validation of every inline-offset static strategy plan
+        (e.g. layers_5): the frozen CSV sha matches, the CSV round-trips to the
+        manifest's inline offsets under the page formula, the count matches
+        expected_pages, and every offset is one of the validated 92 interiors (so
+        expected_interior_pages == count and expected_leaf_pages == 0 hold). 2d
+        and baseline carry no inline offsets and are validated elsewhere."""
+        import csv
+        r = []
+        for name, plan in self.manifest.get("strategy_plans", {}).items():
+            offs = self.static_plan_offsets.get(name)
+            if offs is None:
+                continue
+            path = plan.get("path")
+            if not path:
+                r.append("%s plan missing path" % name); continue
+            ap = self._abspath(path)
+            if not os.path.exists(ap):
+                r.append("%s plan file missing" % name); continue
+            if sha256_file(ap) != plan.get("sha256"):
+                r.append("%s plan sha256 mismatch" % name)
+            exp = plan.get("expected_pages")
+            if exp is not None and len(offs) != exp:
+                r.append("%s plan has %d offsets, expected %d" % (name, len(offs), exp))
+            if len(set(offs)) != len(offs):
+                r.append("%s plan has duplicate offsets" % name)
+            # CSV round-trip against inline offsets + page formula
+            try:
+                file_offs = []
+                with open(ap, newline="") as f:
+                    for row in csv.DictReader(f):
+                        pn = int(row["page_number"]); fo = int(row["file_offset"])
+                        if fo != (pn - 1) * page_size:
+                            r.append("%s plan offset != (page-1)*page_size" % name); break
+                        file_offs.append(fo)
+                if file_offs != list(offs):
+                    r.append("%s plan offsets != manifest offsets" % name)
+            except (OSError, ValueError, KeyError) as e:
+                r.append("%s plan unreadable: %s" % (name, e)); continue
+            # every offset aligned, within the DB, and an interior of the 92-skeleton
+            for off in offs:
+                if off % page_size != 0 or not (0 <= off < page_count * page_size):
+                    r.append("%s plan offset %d misaligned/out-of-range" % (name, off)); break
+                if off not in self.interior_offset_set:
+                    r.append("%s plan offset %d is not an interior" % (name, off)); break
+            # declared interior/leaf split must be self-consistent (interior_prefix)
+            eip = plan.get("expected_interior_pages")
+            if eip is not None and eip != len(offs):
+                r.append("%s expected_interior_pages != plan length" % name)
+            if plan.get("expected_leaf_pages") not in (None, 0):
+                r.append("%s expected_leaf_pages must be 0 (interior prefix)" % name)
         return r
 
     # ------------------------------------------------------------- warm handle

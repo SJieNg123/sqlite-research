@@ -6,6 +6,8 @@ traces) and records their SHA-256 plus structural invariants so the OpenWhisk
 action can fail closed on anything but the exact frozen data. It also:
 
   * derives + validates the mandatory-interior (2d) skeleton from the classifier;
+  * derives + validates the layers_5 static plan (first 5 interior pages by native
+    (file_offset, page_number) order; a strict prefix of the 2d skeleton);
   * pins the canonical SQLite pragmas (cache_size=0, mmap_size=file size);
   * records a first-query correctness oracle (expected hit + result digest) for
     every supported first operation.
@@ -52,6 +54,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 DB_REL = "pipeline/preparation/layout_rewriter/runs/test.db"
 CLASSIFY_REL = "pipeline/preparation/layout_rewriter/runs/classify_before.csv"
 PLAN_REL = "deployment/openwhisk/config/plans/interior_pages.csv"
+LAYERS5_PLAN_REL = "deployment/openwhisk/config/plans/layers_5_pages.csv"
 PIN_REL = "deployment/openwhisk/config/artifacts.native_ycsb.json"
 # The single canonical measured workload for this phase: native YCSB-C read (zipf).
 # The manifest keys workload_traces/first_query_oracle on this id; the ws2 diagnostic
@@ -61,6 +64,7 @@ YC_TRACE_REL = "workloads_refined/traces/seeds/workload_YC_%d.txt"
 SEEDS = list(range(1, 11))
 EXPECTED_PAGE_SIZE = 4096
 EXPECTED_INTERIORS = 92
+LAYERS5_N = 5
 SUPPORTED_FIRST_OPS = [0]
 
 
@@ -121,6 +125,50 @@ def derive_and_validate_plan(classify_path, plan_path, page_size, page_count):
     manifest_offsets = [off for _, off in rows]
     if plan_offsets != manifest_offsets:
         sys.exit("plan offsets differ from manifest offsets")
+    return manifest_offsets
+
+
+def derive_layers_prefix(classify_path, plan_path, n, page_size, page_count,
+                         interior_offsets):
+    """Freeze the layers_N static plan: the first N interior pages by canonical
+    native ordering (file_offset, page_number). This mirrors run_experiment.py's
+    ``layers`` kind (sort interiors by offset, take the first N) and is a STRICT
+    PREFIX of the 92-interior skeleton -- workload/seed/first-op independent, no
+    leaf pages. ``interior_offsets`` is the already-validated 92-offset set; each
+    selected page must be a member (subset invariant). Writes the plan in the same
+    CSV schema as the 2d plan and confirms round-trip equality."""
+    rows = []
+    with open(classify_path, newline="") as f:
+        for r in csv.DictReader(f):
+            if r["page_type"].startswith("interior"):
+                rows.append((int(r["file_offset"]), int(r["page_number"])))
+    rows.sort()  # canonical native order: (file_offset, page_number)
+    if len(rows) < n:
+        sys.exit("cannot take first %d interiors; only %d present" % (n, len(rows)))
+    interior_set = set(interior_offsets)
+    out = []  # (page_number, file_offset) -- same schema/order as the 2d plan
+    for off, pn in rows[:n]:
+        if off != (pn - 1) * page_size:
+            sys.exit("layers offset %d != (%d-1)*%d" % (off, pn, page_size))
+        if off % page_size != 0:
+            sys.exit("layers offset %d not %d-aligned" % (off, page_size))
+        if not (0 <= off < page_count * page_size):
+            sys.exit("layers offset %d outside DB" % off)
+        if off not in interior_set:
+            sys.exit("layers offset %d not in validated interior skeleton" % off)
+        out.append((pn, off))
+    os.makedirs(os.path.dirname(plan_path), exist_ok=True)
+    with open(plan_path, "w", newline="") as f:
+        w = csv.writer(f, lineterminator="\n")
+        w.writerow(["page_number", "file_offset"])
+        w.writerows(out)
+    plan_offsets = []
+    with open(plan_path, newline="") as f:
+        for r in csv.DictReader(f):
+            plan_offsets.append(int(r["file_offset"]))
+    manifest_offsets = [off for _, off in out]
+    if plan_offsets != manifest_offsets:
+        sys.exit("layers plan offsets differ from manifest offsets")
     return manifest_offsets
 
 
@@ -219,6 +267,12 @@ def main():
 
     offsets = derive_and_validate_plan(classify, plan, page_size, page_count)
 
+    # layers_5 static plan: first 5 interiors (native order), strict prefix of 2d.
+    layers5_plan = os.path.join(ROOT, LAYERS5_PLAN_REL)
+    layers5_offsets = derive_layers_prefix(classify, layers5_plan, LAYERS5_N,
+                                           page_size, page_count, offsets)
+    layers5_sha = sha256_file(layers5_plan)
+
     # all native YCSB-C seeds required
     seedmap = {}
     for s in SEEDS:
@@ -290,6 +344,17 @@ def main():
         "strategy_plans": {
             "2d": {"path": PLAN_REL, "sha256": plan_sha,
                    "kind": "interior_skeleton", "expected_pages": EXPECTED_INTERIORS},
+            "layers_5": {
+                "path": LAYERS5_PLAN_REL, "sha256": layers5_sha,
+                "kind": "interior_prefix", "expected_pages": LAYERS5_N,
+                "expected_interior_pages": LAYERS5_N, "expected_leaf_pages": 0,
+                "offsets": layers5_offsets,
+                "note": ("first %d interior pages by native (file_offset, "
+                         "page_number) order; strict prefix of the 92-interior "
+                         "skeleton; workload/seed/first-op independent. "
+                         "Transitively pinned via the classifier sha in the "
+                         "native-YCSB replay pin." % LAYERS5_N),
+            },
             "baseline": {"path": None, "sha256": None, "kind": "no_prefetch",
                          "expected_pages": 0},
         },

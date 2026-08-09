@@ -20,7 +20,7 @@ deployment/openwhisk/
   action/
     residency.py                non-root mmap/mincore/madvise primitives (mirror of benchmark_harness.c)
     session.py                  warm-process identity + artifact validation
-    main.py                     OpenWhisk handler; baseline + 2d paths
+    main.py                     OpenWhisk handler; baseline + 2d + layers_5 paths
   client/
     collect.py                  invocation collector + session classification (no OpenWhisk in 5A)
     summarize.py                per-seed paired summary under the atomic rules
@@ -29,6 +29,7 @@ deployment/openwhisk/
     artifacts.example.json      committed example manifest (no device/inode)
     example.json                example run configuration (placeholders only)
     plans/interior_pages.csv    frozen mandatory-interior (2d) skeleton, 92 pages
+    plans/layers_5_pages.csv    frozen layers_5 plan, first 5 interior pages (strict prefix of 2d)
   tests/                        local unit/dry tests (no OpenWhisk)
 ```
 
@@ -42,6 +43,22 @@ be a **long-lived warm process** across invocations, which the one-shot C harnes
 does not model. The reference DB, the page classifier (from which the 2d interior
 skeleton is derived), and the workload traces are the same canonical artifacts
 `run_experiment.py` uses.
+
+## Implemented strategies (Batch 1)
+
+The action implements three first-query strategies (`main.SUPPORTED_STRATEGIES`):
+
+- `baseline` — no prefetch (0 pages).
+- `2d` — the full 92-page mandatory-interior skeleton (`plans/interior_pages.csv`).
+- `layers_5` — the first 5 structural interior pages by native canonical
+  `(file_offset, page_number)` order; a **strict prefix** of the 2d skeleton.
+  Fixed delivery invariant **5/5/0/5** (selected / interior / leaf / delivered),
+  static and seed/workload/first-op independent, delivered via `MADV_WILLNEED`.
+  Frozen at `plans/layers_5_pages.csv` and transitively pinned via the classifier
+  sha in the native-YCSB replay pin.
+
+`2d` semantics are unchanged by this batch. The per-(workload, seed) variable /
+leaf machinery for `2e_K10` and `2f_slru` is **not yet implemented**.
 
 ## Workstation prerequisites
 

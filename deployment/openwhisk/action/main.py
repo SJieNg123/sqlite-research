@@ -25,7 +25,7 @@ except ImportError:  # pragma: no cover - OpenWhisk flat layout
     import sqlite_bridge
     from session import Session, validate_request_semantics
 
-SUPPORTED_STRATEGIES = ("baseline", "2d")
+SUPPORTED_STRATEGIES = ("baseline", "2d", "layers_5")
 HANDLE_MODES = ("warm", "standalone")
 REQUIRED_REQUEST_FIELDS = ("request_id", "workload", "strategy", "seed",
                            "first_operation_id", "diagnostic_mode", "cold_reset",
@@ -41,6 +41,8 @@ DELIVERY_INVARIANTS = {
                  "selected_leaf_count": 0, "delivered_page_count": 0},
     "2d": {"selected_page_count": 92, "selected_interior_count": 92,
            "selected_leaf_count": 0, "delivered_page_count": 92},
+    "layers_5": {"selected_page_count": 5, "selected_interior_count": 5,
+                 "selected_leaf_count": 0, "delivered_page_count": 5},
 }
 _SESSION = None
 
@@ -102,8 +104,9 @@ def validate_request(request):
 
 def select_offsets(strategy, session):
     """Return the delivery offsets for a strategy from the process-init cache.
-    baseline delivers nothing; 2d delivers exactly the 92 mandatory interiors.
-    Fails closed on any count disagreement."""
+    baseline delivers nothing; 2d delivers exactly the 92 mandatory interiors;
+    layers_5 delivers the frozen 5-interior prefix. Fails closed on any count or
+    interior-membership disagreement."""
     if strategy == "baseline":
         return []
     if strategy == "2d":
@@ -113,6 +116,15 @@ def select_offsets(strategy, session):
             raise ValueError("2d plan has %d interiors, expected 92" % len(offs))
         if any(o not in session.interior_offset_set for o in offs):
             raise ValueError("2d plan contains a non-interior offset")
+        return list(offs)
+    if strategy == "layers_5":
+        offs = session.static_plan_offsets.get("layers_5")
+        expected = session.manifest["strategy_plans"]["layers_5"]["expected_pages"]
+        if offs is None or len(offs) != expected or expected != 5:
+            raise ValueError("layers_5 plan has %s offsets, expected 5"
+                             % (None if offs is None else len(offs)))
+        if any(o not in session.interior_offset_set for o in offs):
+            raise ValueError("layers_5 plan contains a non-interior offset")
         return list(offs)
     raise ValueError("unsupported strategy: %s" % strategy)
 
@@ -232,8 +244,9 @@ def handle(request, session):
         # trace / oracle metadata (cached at init; select is off the critical path)
         trace_rel, trace_sha = session.trace_meta(workload, seed)
         resp["trace_sha256"] = trace_sha
-        plan = session.manifest["strategy_plans"]["2d"]
-        resp["plan_sha256"] = plan["sha256"] if strategy == "2d" else ""
+        # plan sha for the requested strategy (2d/layers_5 have one; baseline none)
+        splan = session.manifest["strategy_plans"].get(strategy, {})
+        resp["plan_sha256"] = splan.get("sha256") or ""
         oc = session.oracle_for(workload, seed, first_op)
         if oc is None:
             return _envelope(session, request, "oracle",

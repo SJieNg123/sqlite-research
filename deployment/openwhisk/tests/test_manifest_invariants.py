@@ -100,6 +100,52 @@ class TestPlanInvariants(unittest.TestCase):
             self._run(rows)
 
 
+class TestLayersPrefix(unittest.TestCase):
+    """layers_5 generator: first N interiors by native (file_offset, page_number)
+    order, a strict prefix of the 92-skeleton, deterministic and SHA-stable."""
+
+    def _derive(self, rows, n=5, interiors=None):
+        cp = write_classify(rows)
+        pp = tempfile.mktemp(suffix=".csv")
+        if interiors is None:
+            interiors = [off for _, off in rows]
+        try:
+            offs = gen.derive_layers_prefix(cp, pp, n, PAGE, PAGE_COUNT, interiors)
+            with open(pp, "rb") as f:
+                sha = hashlib.sha256(f.read()).hexdigest()
+            return offs, sha
+        finally:
+            os.remove(cp)
+            if os.path.exists(pp):
+                os.remove(pp)
+
+    def test_prefix_is_first_five_interiors(self):
+        offs, _ = self._derive(good_rows(), 5)
+        self.assertEqual(offs, [(pn - 1) * PAGE for pn in range(2, 7)])
+        self.assertEqual(len(offs), 5)
+
+    def test_all_selected_are_interiors_subset(self):
+        offs, _ = self._derive(good_rows(), 5)
+        self.assertTrue(set(offs).issubset({(pn - 1) * PAGE for pn in range(2, 94)}))
+
+    def test_deterministic_sha_stable_across_regeneration(self):
+        a_offs, a_sha = self._derive(good_rows(), 5)
+        b_offs, b_sha = self._derive(good_rows(), 5)
+        self.assertEqual(a_offs, b_offs)
+        self.assertEqual(a_sha, b_sha)
+
+    def test_fewer_than_n_interiors_fails(self):
+        with self.assertRaises(SystemExit):
+            self._derive(good_rows()[:3], 5)
+
+    def test_selected_page_not_in_skeleton_fails(self):
+        # interior_offsets omits page 2 (offset PAGE), which is the first selected
+        # -> subset invariant must fail closed.
+        interiors = [(pn - 1) * PAGE for pn in range(3, 94)]
+        with self.assertRaises(SystemExit):
+            self._derive(good_rows(), 5, interiors=interiors)
+
+
 @unittest.skipUnless(os.path.exists(EXAMPLE), "example manifest missing")
 class TestOracleSingleSource(unittest.TestCase):
     def test_manifest_oracle_matches_action_oracle(self):
@@ -287,6 +333,43 @@ class TestNativeYcsbLiveManifestAgreement(unittest.TestCase):
                          self.art["expected_relevant_page_count"])
         self.assertEqual(self.pin["expected_page_count"],
                          self.pin["database"]["page_count"])
+
+
+@unittest.skipUnless(os.path.exists(ARTIFACTS), "live artifacts.json missing")
+class TestLayersFivePlanInManifest(unittest.TestCase):
+    """The generated live manifest carries a well-formed layers_5 plan whose frozen
+    CSV matches on disk and whose offsets are a strict prefix of the 92-skeleton."""
+
+    @classmethod
+    def setUpClass(cls):
+        with open(ARTIFACTS) as f:
+            cls.art = json.load(f)
+
+    def test_layers5_plan_shape(self):
+        p = self.art["strategy_plans"]["layers_5"]
+        self.assertEqual(p["kind"], "interior_prefix")
+        self.assertEqual(p["expected_pages"], 5)
+        self.assertEqual(p["expected_interior_pages"], 5)
+        self.assertEqual(p["expected_leaf_pages"], 0)
+        self.assertEqual(len(p["offsets"]), 5)
+
+    def test_layers5_csv_on_disk_matches_manifest(self):
+        p = self.art["strategy_plans"]["layers_5"]
+        plan_file = os.path.join(REPO, p["path"])
+        if not os.path.exists(plan_file):
+            self.skipTest("layers_5 plan CSV absent")
+        self.assertEqual(_sha256_file(plan_file), p["sha256"])
+        file_offs = []
+        with open(plan_file, newline="") as f:
+            for row in csv.DictReader(f):
+                file_offs.append(int(row["file_offset"]))
+        self.assertEqual(file_offs, p["offsets"])
+
+    def test_layers5_is_strict_prefix_of_2d(self):
+        offs = self.art["strategy_plans"]["layers_5"]["offsets"]
+        interiors = set(self.art["interior_page_list"]["offsets"])
+        self.assertTrue(set(offs).issubset(interiors))
+        self.assertLess(len(offs), len(interiors))
 
 
 if __name__ == "__main__":
