@@ -534,3 +534,290 @@ modify the accepted OpenWhisk model unless the audit discovers a concrete correc
 blocker" is **not triggered**: identity/cold/oracle/delivery gates, first-query
 semantics, and pairing/pacing are internally consistent and sufficient for the ready-now
 sub-matrix. All expansion is additive.
+
+---
+---
+
+# Follow-up Audit — 2d Identity & Concrete Arm Inventory
+
+*Added after a focused second-pass audit (three parallel evidence sweeps + first-hand
+code reading + direct measurement of the frozen residency CSVs). Where this pass corrects
+or sharpens a statement in the first audit above, it is marked **CORRECTION** or
+**SHARPENING** with the reason. The first audit is not removed; only proven errors are
+flagged.*
+
+## 2d Semantic Resolution
+
+**There are two distinct constructions both called "2d" in this repository, and they are
+not the same object.**
+
+**Native `2d` (`kind: resident_interior`)** — `run_experiment.py:295-301`
+(byte-identical `run_experiment_ycsb.py:294-300`):
+```
+if kind == "resident_interior":   # 2d: resident interior pages
+    root = SLRU_RUNS if SEED is not None else ACCESS_RUNS
+    src = root / f"hotpages_{w.lower()}{SLRU_SUFFIX[layout]}{_seed_suffix()}.csv"
+    res = _resident_pages(_require_hotset(src))
+    return {pn for pn in res if classify.get(pn, ("", 0))[0].startswith("interior")}
+```
+= **resident ∩ interior**, read from a **per-workload, per-seed** mincore residency CSV.
+Interpretation **A (resident-interior subset)**, `interior_count ≤ 92`, workload/seed
+dependent. Corroborated: `strategies/access/PREFETCH_ACCESS.md:29,137` ("4~32 interior…只
+prefetch resident interior，不是全部 92"); `REPORT.md:682` ("只 prefetch resident 的
+interior"). **The headline result plots use this construction** —
+`figures/13_strategy_firstq_bars.py:21` and `figures/14_strategy_endtoend_stacked.py:21`
+read `results/unified_v2/matrix/summary.csv`, whose `2d` column is the resident-subset
+selection.
+
+**OpenWhisk `2d`** — `build_artifact_manifest.py:82-109` derives the plan by taking
+**every** `page_type.startswith("interior")` from the classifier and asserting the count
+is exactly 92; `action/main.py:109-116` delivers `session.interior_offsets` and *raises*
+unless `len == 92`. This is the **full structural interior skeleton**, workload/seed
+independent. Interpretation **B**. It is mechanically **native `layers_92`**
+(`run_experiment.py:291-294`: first-N interiors by offset; N=92 = all 92), **not** native
+`2d`. This relabel is **intentional and documented**, not an accidental simplification:
+`artifacts.native_ycsb.json:37,41` pins it as `kind: "interior_skeleton"`,
+"workload-independent"; `build_artifact_manifest.py:8` calls it "the mandatory-interior
+(2d) skeleton from the classifier"; `main.py:105` "92 mandatory interiors".
+
+**Do they coincide? Yes — but only on residency-saturating workloads, which YC is.**
+Measured directly from the frozen CSVs against `classify_before.csv` (92 interior pages
+total):
+
+| workload | resident pages | resident∩interior (native 2d) | == structural 92? |
+|---|---|---|---|
+| **YC** (`hotpages_yc.csv`) | **26331 (entire DB)** | **92** | **YES** |
+| YCh01 (`hotpages_ych01.csv`) | 26295 | 92 | YES |
+| C (`hotpages_c.csv`) | 483 | **4** | no (strict subset) |
+| A (`hotpages_a.csv`) | 4416 | **18** | no (strict subset) |
+
+YC (YCSB-C zipf over 600 000 rows) touches essentially the whole B-tree, so **every** one
+of the 92 interior pages becomes resident → native `2d` = 92 = `layers_92` = the structural
+skeleton **exactly**. On non-saturating workloads (C→4, A→18) native `2d` is a strict
+subset and the structural pin would **over-deliver**.
+
+**SHARPENING of the first audit** (Strategy Inventory §3, Semantic Mapping): the first
+audit correctly said OpenWhisk-2d is structural and native-2d is a variable resident
+subset "coinciding only when all interiors are resident." This pass **quantifies** that:
+on the pinned OpenWhisk workload YC they coincide at 92 (so the pin is *faithful to native
+2d for YC*), and it is a real divergence only if workload breadth expands to
+non-saturating workloads.
+
+**Answers.**
+1. **Canonical native meaning of 2d:** resident-interior subset (A), per-workload/seed,
+   `≤92`; strongest citation `run_experiment.py:295-301`.
+2. **Meaning in headline plots:** same (A) — `figures/13,14` read the resident-subset
+   `summary.csv`. Narrative hazard: `REPORT.md` repeatedly calls resident-2d "interior
+   skeleton," a label that structurally belongs to `layers_92`.
+3. **OpenWhisk structural-92:** an **intentional, documented** redefinition (kind
+   `interior_skeleton`, "workload-independent"), faithful to native 2d **only because YC
+   saturates residency**. Not an accidental acceptance-stage simplification.
+4. **If native semantics must be preserved elsewhere:** the structural arm already has a
+   canonical repo name — **`layers_92`** (a.k.a. OpenWhisk `interior_skeleton`). The
+   resident arm is **`2d`/`resident_interior`**. For YC no rename is required (they are
+   equal); for non-saturating workloads, deliver the resident subset under the name `2d`
+   and reserve `layers_92`/`interior_skeleton` for the full 92.
+5. **Distinct names (only needed if the structural arm is ever run under the "2d" label on
+   a non-saturating workload):** keep `2d` = resident-interior (native claim);
+   `layers_92` / `interior_skeleton` = full structural skeleton. Both names already exist
+   in-repo — **no PROPOSED new name is required.**
+
+## Concrete Arm Inventory
+
+Roles are evidence-based: "final-figure" = appears in `paper/figures/` and/or the canonical
+figure order `figures/plot_utils.py:75`
+`STRAT_ORDER = [baseline, layers_5, layers_92, 2d, 2e_K10, 2e_K500, 2f_slru]`; "native
+head-to-head" = `results/native_headtohead`.
+
+| Arm | Family | Param | Role | In final figures/tables? | Canonical source |
+|---|---|---|---|---|---|
+| `baseline` | baseline | — | CONTROL (denominator) | yes (every fig; STRAT_ORDER) | `main.py:107`; pinned |
+| `layers_5` | layers | 5 | HEADLINE (structural cheap pick) | yes (figs 13/14/16; STRAT_ORDER) | `run_experiment.py:157` |
+| `layers_92` | layers | 92 | STRUCTURAL (**≡ `2d` skeleton on orig**) | yes (STRAT_ORDER) | `run_experiment.py:158,291` |
+| `2d` | resident_interior | — | HEADLINE (targeted interior skeleton; the OpenWhisk claim) | yes (figs 13/14/17; STRAT_ORDER; h2h) | `run_experiment.py:159,295` |
+| `2e_K10` | hot2e | 10 | HEADLINE (**primary method**) | yes (figs 13/14/17/18; STRAT_ORDER; h2h) | `run_experiment.py:160` |
+| `2e_K500` | hot2e | 500 | HEADLINE-adjacent (large-K) | yes (figs 13/15/16; STRAT_ORDER) | `run_experiment.py:161` |
+| `2e_K40`,`2e_K50`,`2e_K92`,`2e_K100` | hot2e | 40/50/92/100 | SENSITIVITY (K-sweep, tie-break) | measured, **not** plotted arms | regex `run_experiment.py:178`; `results/ksweep` |
+| `leaf_freq_K10` | leaf_freq | 10 | ABLATION lever (tied to `2e_K10`) | yes (**paper fig 17**) | `run_experiment.py:185`; `17_lever_ablation.py:24` |
+| `leaf_rand_K10` | leaf_rand | 10 | CONTROL (equal-count random leaves) | yes (**paper fig 17**) | `run_experiment.py:188` |
+| `leaf_freq_K500`,`leaf_rand_K500` | leaf_* | 500 | ABLATION replicate | no (`results/ablation_k500`) | `run_experiment.py:185,188` |
+| `2f_top14` | freqdump | 14 | PRIOR_WORK (InnoDB dump, **budget-matched to `2e_K10` on C = 14 pp**) | yes (**paper fig 18**; h2h) | `run_experiment.py:194`; `18_competitive_baseline.py:22` |
+| `2f_top28` | freqdump | 28 | PRIOR_WORK (2× budget) | yes (fig 18; h2h) | `18_competitive_baseline.py:22` |
+| `2f_top100`,`2f_top500` | freqdump | 100/500 | SENSITIVITY (fig-18 curve points) | curve only | `18_competitive_baseline.py:22` |
+| `2f_slru` | slru | — | FOIL (first-query trap) | yes (figs 13/14/15/18; STRAT_ORDER) | `run_experiment.py:162` |
+| `learned_markov_14`,`learned_markov_28` | learned_markov | 14/28 | PRIOR_WORK (Chen 1st-order Markov, LOSO) | yes (**native h2h table**; not a paper figure) | `run_experiment.py:201`; **UNFROZEN** `.gitignore:216` |
+| `frequency_14`,`frequency_28` | frequency | 14/28 | PRIOR_WORK analysis twin | **NO — defined but never run** (no results CSV) | `run_experiment.py:204`; **UNFROZEN** `.gitignore:217` |
+| `lp_sorted`,`lp_shuf` | lp | order | PRIOR_WORK (libprefetch; metric `deliver_us`) | yes (native h2h; **separate metric axis**) | `run_experiment.py:210,212`; `DESIGN_lp.md` |
+| `lp_desc` | lp | order | DEBUG — **defined but never run** | no | `run_experiment.py:214` |
+| `layers_{1..64}` (dense) | layers | dense | SENSITIVITY (plateau curve) | curve lines only (figs 04/11/09) | regex `run_experiment.py:175`; `results/nsweep_dense` |
+| `*_static` (`2d_static`, `2e_K10_static`, …) | delivery-mode × strategy | — | SENSITIVITY (aging/churn robustness — **separate experiment axis**) | figs 07/12 | `churn.py`; `results/aging*` |
+
+**The "14" budget is derived, not arbitrary, and is workload-specific.** `2e_K10`'s
+footprint on legacy **C** = 14 pages (4 interior + 10 leaf), which is what `2f_top14` and
+`learned_markov_14` are budget-matched to (`18_competitive_baseline.py:35-37`;
+`overall_strategies.md:155`). **Measured on YC, `2e_K10` = 102 pages (92 interior + 10
+leaf)** — so a YC budget-matched dump would be ≈`2f_top102`, **not** `2f_top14`. The
+existing `2f_top14`/`learned_markov_14` are **C-calibrated**; the YC-matched N must be
+re-derived (≈102) and is **UNKNOWN as a pre-existing named arm** — not guessed here.
+
+**CORRECTION to the first audit's Strategy Inventory.** The first audit listed
+`frequency_N` as a strategy family "requiring implementation/artifact work" (a Group-B
+member). Deeper evidence shows `frequency_N` (a) selects **byte-identical page sets to
+`learned_markov_N` in all 140 orig cells** and (b) **has no committed result rows at all**.
+It is therefore a **duplicate cell**, not an independent arm — it should be **excluded**
+from the matrix and kept only as a narrative twin (see below). The count of families
+"requiring work" drops accordingly.
+
+## Duplicate / Equivalent Arms
+
+Proven from the selection code (`select_pages`, `run_experiment.py:288-348`) and direct
+measurement on the canonical orig DB / YC residency.
+
+| Relationship | Sets identical? | Order differs? | Metric differs? | Verdict for a first-query matrix |
+|---|---|---|---|---|
+| OpenWhisk structural `2d` **vs** `layers_92` | **YES** (both = the 92 interiors) | no | no | **Alias.** `layers_92` is the in-repo executable twin of the pinned skeleton. |
+| native `2d` (resident) **vs** `layers_92` | **on YC: YES (both 92)**; on C/A: strict subset (4/18) | no | no | On YC they are **one cell** → do not include both. |
+| `2e_K` **vs** `2d(interior) ∪ leaf_freq_K` | **YES by construction** (same `hot2e_*_K.csv`; interior part == 2d) | no | no | `leaf_freq_K` is a *component* of `2e_K`, not a duplicate; keep as ablation lever. |
+| `lp_sorted` **vs** `2f_slru` | **YES** (byte-identical hotset, same offset order) | no | no | **Duplicate cell.** `lp_sorted` is a same-batch faithfulness cross-check only. |
+| `lp_shuf`/`lp_desc` **vs** `2f_slru` | YES (same set) | **yes** | **yes** (`deliver_us`) | Delivery-order probe → **out of the first-query axis** (P4). |
+| `frequency_N` **vs** `learned_markov_N` | **YES — all 140 orig cells** (empirical) | no | no | **Duplicate cell.** Keep one; the pair *is* the finding ("learning didn't change the set"). |
+| `2f_topN` **vs** `2f_slru` | subset (top-N ⊂ resident) | n/a | no | Keep — partial-dump baseline vs full dump. |
+| native `2d` **vs** `2f_slru` | subset (interiors ⊂ resident) | n/a | no | Keep — skeleton vs whole set. |
+
+**True duplicate cells to collapse in the YC first-query matrix:** `layers_92`≡`2d`
+(on YC), `lp_sorted`≡`2f_slru`, `frequency_N`≡`learned_markov_N`. Everything else is a
+genuine subset/lever/order relationship, not a duplicate.
+
+*(Caveat, Rule 12: `frequency ≡ learned_markov` is proven on orig 140/140 cells,
+empirical not structural — the code paths are distinct and could diverge on another DB or
+larger N. It holds for the arms and DB in scope.)*
+
+## Resolved Primary First-Query Matrix
+
+Concrete arms (not families), partitioned. Measured YC footprints shown as the
+`{selected,interior,leaf}` a `DELIVERY_INVARIANTS` entry *would* carry (master/seed-1
+residency; on YC the 92-interior half is seed-stable, only leaf identity varies per seed).
+
+### A. MUST INCLUDE — the minimal set the stated first-query claims require
+| Arm | YC footprint (measured) | Why it must be in | Canonical citation |
+|---|---|---|---|
+| `baseline` | 0 | no-prefetch denominator for every ratio | `plot_utils.py:75`; already pinned |
+| `2d` | 92 / 92 / 0 | **headline** targeted interior skeleton; already implemented; on YC = the structural 92 | `run_experiment.py:159`; figs 13/14 |
+| `2e_K10` | **102 / 92 / 10** | **primary method** (interior ∪ hot leaves) | `run_experiment.py:160`; figs 13/14/17/18 |
+| `2f_slru` | **26331 / 92 / 26239** | **first-query-trap FOIL** — the reason a first-query matrix that also records e2e exists | `run_experiment.py:162`; figs 13/14 |
+| `layers_5` | 5 / 5 / 0 | structural "how few interiors still help"; the **only `layers` arm distinct from `2d` on YC**; lowest-risk to add | `run_experiment.py:157`; figs 13/14/16 |
+
+`baseline` and `2d` are already implemented/pinned; the three new MUST arms are `2e_K10`,
+`2f_slru`, `layers_5`.
+
+### B. SECONDARY / SENSITIVITY — strengthen the claims; belong in a separate sweep/table
+| Arm | Note |
+|---|---|
+| `2e_K500` (YC 592/92/500) | large-K point of our method; in STRAT_ORDER + paper figs → strong secondary |
+| `leaf_freq_K10`, `leaf_rand_K10` | paper fig-17 leaf-lever ablation + control; first-query-compatible; need leaf delivery |
+| `2f_top{N}` prior-work dump | **N must be re-derived for YC (≈102 to match `2e_K10`, not 14)**; `2f_top14/28` are C-calibrated |
+| `learned_markov_{N}` | prior-work; **UNFROZEN** (`.gitignore:216`); N likewise YC-specific; blocked on freeze |
+
+### C. EXCLUDE from the first-query matrix
+| Arm | Reason |
+|---|---|
+| `layers_92` | **duplicate-equivalent of `2d` on YC** (same 92 interiors); keep only as explanatory alias |
+| `lp_sorted` | **duplicate of `2f_slru`** (byte-identical) |
+| `lp_shuf`, `lp_desc` | **metric mismatch** — benefit is delivery order → `deliver_us` (P4); `lp_desc` also never run |
+| `frequency_14/28` | **duplicate of `learned_markov`** (140/140) **and never run** in committed results |
+| `2e_K40/50/92/100`, `layers_{1..64}` dense, `2f_top100/500`, `leaf_*_K500` | sensitivity sweeps → separate tables, not primary cells |
+| `*_static` | different (aging/churn) experiment axis, not first-query |
+
+```
+FINAL_FIRST_QUERY_STRATEGIES (MUST) = [baseline, 2d, 2e_K10, 2f_slru, layers_5]
+SECONDARY = [2e_K500, leaf_freq_K10, leaf_rand_K10, 2f_top<N_YC>, learned_markov_<N_YC>]
+EXCLUDED  = [layers_92 (alias of 2d on YC), lp_sorted (=2f_slru), lp_shuf, lp_desc,
+             frequency_14, frequency_28, 2e_K40/50/92/100, layers_dense,
+             2f_top100/500, leaf_freq_K500, leaf_rand_K500, *_static]
+```
+
+**Remaining ambiguity (not guessed):** the YC budget-matched dump/learned N (≈102) is not
+a pre-existing named arm; and per-seed leaf identity for `2e_K`/`2f_slru`/`learned_markov`
+is not frozen in any pinned artifact (derivable from `strategies/access/runs/*_seed*.csv`).
+
+## Matrix Size Impact
+
+Pairing (`client/build_schedule.py:55-78`): one `pair_id` per
+`(workload, seed, first_operation_id, handle_mode, repetition_id, target)`, each pair =
+**2 invocations** (a `baseline` arm + the `target` arm, order AB/BA from `schedule_seed`).
+`baseline` is never a standalone target — it is the paired reference. So
+
+```
+pairs        = workloads × seeds × first_ops × handle_modes × repetitions × |targets|
+invocations  = 2 × pairs         (targets = the non-baseline MUST arms)
+```
+
+Fixed YC axes (`matrix.example.json`): workloads=1 (YC), seeds=10, first_ops=1 (id 0),
+handle_modes=2 (warm, standalone), repetitions=10.
+
+**Sanity check against the accepted milestone:** current pinned targets = {`2d`} (1) →
+pairs = 1·10·1·2·10·1 = **200**, invocations = **400**, baseline=200, 2d=200, 40 per seed
+— exactly the accepted WS2 acceptance counts. Formula validated.
+
+**MUST INCLUDE** — non-baseline targets = {`2d`, `2e_K10`, `2f_slru`, `layers_5`} = 4:
+```
+pairs        = 1·10·1·2·10·4 = 800
+invocations  = 1600            (800 baseline references + 200 each × 4 targets)
+```
+Incremental over the accepted 400: **+1200 invocations** (adds `layers_5`, `2e_K10`,
+`2f_slru` as targets).
+
+**MUST + SECONDARY** — add {`2e_K500`, `leaf_freq_K10`, `leaf_rand_K10`, `2f_top<N>`,
+`learned_markov_<N>`} = 5 more targets → 9 targets:
+```
+pairs        = 1·10·1·2·10·9 = 1800
+invocations  = 3600
+```
+(Several secondary targets are **gated**: `learned_markov` is unfrozen; `2f_top<N>` needs
+the YC budget re-derived. The 3600 is the count *if implemented*.) Workload breadth is not
+expanded here (YC only), per instruction.
+
+## Revised Implementation Priority
+
+**CORRECTION to the first audit's roadmap.** The first audit recommended `layers_5` as the
+first batch on a **lowest-coding-risk** basis. Weighting by **final-arm importance** (as
+instructed) changes the emphasis: `layers_5` is the lowest-risk *mechanism*, but its
+research value is small (a structural reference point, not a headline claim). The
+highest-value OpenWhisk arms are `2e_K10` (our primary method) and `2f_slru` (the
+first-query-trap foil) — and both require the same new machinery.
+
+1. **Lowest-risk implementation:** `layers_5`. Interior-only (0 leaf), seed/workload-
+   independent, fixed count — reuses the exact `2d` skeleton delivery + cold-gate path;
+   needs only a classify-derived 5-offset artifact, a `select_offsets` branch, and a
+   `DELIVERY_INVARIANTS` entry `{5,5,0,5}`. **No per-seed or leaf machinery.**
+2. **Highest-value implementation:** `2e_K10` (primary method) and `2f_slru` (foil). On
+   YC these are 102 pages (92 interior + 10 leaf) and 26331 pages (whole DB) respectively
+   — both need **leaf delivery + per-(workload,seed) plans + a variable/per-key
+   `DELIVERY_INVARIANTS`**.
+3. **Shared machinery to build first (minimizes throwaway):** the **per-(workload,seed)
+   frozen plan table + leaf-capable, variable delivery-counts contract** (widen
+   `select_offsets` to read a per-identity cached offset array; per-key counts). This one
+   piece unlocks `2e_K10`, `2f_slru`, and every secondary prior-work/ablation arm. Build
+   it once; do not special-case per strategy.
+4. **Recommended order:**
+   - **Do NOT lead with native-faithful-2d rework** — on YC the current structural `2d`
+     already equals native `2d` (both 92), so there is nothing to fix for the pinned
+     workload. Defer that only to if/when a non-saturating workload enters the matrix.
+   - **Batch 1 (de-risk the extension pattern):** `layers_5` — a small PR that establishes
+     the full "add an arm" path (`SUPPORTED_STRATEGIES` + `select_offsets` branch +
+     `DELIVERY_INVARIANTS` + manifest-builder derivation + tests) **without** yet needing
+     per-seed/leaf machinery. Low value but low cost and it proves the plumbing.
+   - **Batch 2 (the real headline):** build the shared per-(workload,seed) leaf/variable
+     machinery with **`2e_K10` as first consumer**, then **`2f_slru`**. This is where the
+     paper's OpenWhisk claim actually lands.
+   - **Batch 3:** ablation levers (`leaf_freq_K10`, `leaf_rand_K10`) and prior-work
+     (`2f_top<N_YC>` after re-deriving N; `learned_markov_<N_YC>` after **freezing** its
+     plans/models with LOSO provenance).
+   - **Separate track:** `lp_*` delivery-cost (`deliver_us`) experiment — not the
+     first-query matrix.
+
+   **Net recommendation:** keep `layers_5` as the first (cheap, pattern-establishing) PR,
+   but treat it as a warm-up — the priority in *value* terms is Batch 2 (`2e_K10` +
+   `2f_slru` via the shared per-seed leaf machinery), which is the actual paper headline on
+   OpenWhisk. This supersedes the first audit's "`layers_5` first" as the *value* ranking
+   while preserving it as the *risk* ranking.
