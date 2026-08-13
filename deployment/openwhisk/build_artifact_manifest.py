@@ -212,10 +212,12 @@ def build_oracle(db_path):
     return out
 
 
-def crosscheck_pin(db_sha, plan_sha, classifier_sha, trace_shas):
+def crosscheck_pin(db_sha, plan_sha, classifier_sha, trace_shas,
+                   layers5_sha, layers5_offsets):
     """Fail closed unless every generated hash matches the frozen replay pin.
     Ties the live image manifest byte-for-byte to config/artifacts.native_ycsb.json
-    (single source of truth for DB / 2d plan / classifier / YC trace identity)."""
+    (single source of truth for DB / 2d plan / layers_5 plan / classifier / YC trace
+    identity)."""
     pin_path = os.path.join(ROOT, PIN_REL)
     if not os.path.exists(pin_path):
         sys.exit("missing frozen native-YCSB pin: %s" % PIN_REL)
@@ -231,6 +233,17 @@ def crosscheck_pin(db_sha, plan_sha, classifier_sha, trace_shas):
     need(db_sha, pin["database"]["sha256"], "db")
     need(plan_sha, pin["strategy_plans"]["2d"]["sha256"], "2d_plan")
     need(classifier_sha, pin["classifier"]["sha256"], "classifier")
+    # layers_5 is explicitly pinned (sha + counts + offsets), not only transitively
+    # via the classifier sha; the generated plan must match it byte-for-byte.
+    l5 = pin["strategy_plans"].get("layers_5")
+    if l5 is None:
+        sys.exit("pin mismatch layers_5: strategy_plans has no layers_5 entry")
+    need(layers5_sha, l5["sha256"], "layers_5_plan")
+    need(len(layers5_offsets), l5["expected_pages"], "layers_5_expected_pages")
+    need(len(layers5_offsets), l5.get("expected_interior_pages"),
+         "layers_5_expected_interior_pages")
+    need(0, l5.get("expected_leaf_pages"), "layers_5_expected_leaf_pages")
+    need(list(layers5_offsets), list(l5.get("offsets", [])), "layers_5_offsets")
     pin_traces = {str(e["seed"]): e["trace_sha256"]
                   for e in pin["representative_workload"]["seed_family"]}
     for s in SEEDS:
@@ -288,7 +301,8 @@ def main():
     plan_sha = sha256_file(plan)
     classifier_sha = sha256_file(classify)
     crosscheck_pin(db_sha, plan_sha, classifier_sha,
-                   {s: seedmap[s]["sha256"] for s in seedmap})
+                   {s: seedmap[s]["sha256"] for s in seedmap},
+                   layers5_sha, layers5_offsets)
 
     st = os.stat(db)
     manifest = {

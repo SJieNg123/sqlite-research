@@ -40,6 +40,23 @@
       "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
       "note": "2d interior-skeleton plan is DB-specific and workload-independent; valid ONLY against bound_db_sha256 (test.db, 26331 pages). Verified: max plan offset 106520576 -> page idx 26006 < 26331."
     },
+    "layers_5": {
+      "path": "deployment/openwhisk/config/plans/layers_5_pages.csv",
+      "sha256": "eecb179459970a14889106aaf4df8ae19761cab38f174831dba9643223724f3a",
+      "kind": "interior_prefix",
+      "expected_pages": 5,
+      "expected_interior_pages": 5,
+      "expected_leaf_pages": 0,
+      "offsets": [4096, 8192, 12288, 2756608, 2760704],
+      "db_specific": true,
+      "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+      "static": true,
+      "workload_independent": true,
+      "seed_independent": true,
+      "prefix_of": "2d",
+      "derived_from_classifier_sha256": "6ec6837dc6a801c28e1cc08e90ccac570ee9a517765c0f6f03ab1b723349cc32",
+      "note": "layers_5 static plan: the first 5 interior pages by native (file_offset, page_number) order derived from the pinned classifier -- a STRICT PREFIX of the 92-interior 2d skeleton. Fixed delivery invariant 5/5/0/5; workload/seed/first-op independent; DB-specific, valid ONLY against bound_db_sha256 (test.db, 26331). Explicitly pinned here (sha + counts + offsets), not only transitively via the classifier sha."
+    },
     "baseline": {
       "path": null,
       "sha256": null,
@@ -174,7 +191,8 @@
     ],
     "strategies": [
       "baseline",
-      "2d"
+      "2d",
+      "layers_5"
     ],
     "handle_modes": [
       "warm",
@@ -183,6 +201,6 @@
     "concurrency": 1,
     "sequential": true
   },
-  "run_config_sha256": "8fd7ddeb60f74f2cf7bb8106701f47d9107e10b80fdef4bbd22db46e09bb41b5",
+  "run_config_sha256": "496f4b918cf80fcc35341b16807565606a4470b3385524d863058dbabb010a01",
   "run_config_sha256_note": "Deterministic sha256 over the canonical invocation_plan (sorted-key compact JSON). Pins the replay configuration; the executed OpenWhisk run_config (run_id/action_image_digest/etc. per run_config.schema.json) is authored at replay time, out of scope for this no-execution freeze."
 }

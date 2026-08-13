@@ -240,6 +240,65 @@ class TestNativeYcsbPinFrozenSources(unittest.TestCase):
         if os.path.exists(plan_file):
             self.assertEqual(_sha256_file(plan_file), pplan["sha256"])
 
+    def test_layers5_plan_pin_is_static_prefix_and_on_disk(self):
+        l5 = self.pin["strategy_plans"]["layers_5"]
+        self.assertEqual(l5["kind"], "interior_prefix")
+        self.assertEqual(l5["expected_pages"], 5)
+        self.assertEqual(l5["expected_interior_pages"], 5)
+        self.assertEqual(l5["expected_leaf_pages"], 0)
+        self.assertEqual(len(l5["offsets"]), 5)
+        # static / workload / seed independent semantics recorded
+        self.assertTrue(l5["static"])
+        self.assertTrue(l5["workload_independent"])
+        self.assertTrue(l5["seed_independent"])
+        self.assertEqual(l5["prefix_of"], "2d")
+        # provenance back to the pinned DB + classifier
+        self.assertEqual(l5["bound_db_sha256"], self.pin["database"]["sha256"])
+        self.assertEqual(l5["derived_from_classifier_sha256"],
+                         self.pin["classifier"]["sha256"])
+        # strict prefix of the 2d skeleton (offsets subset; strictly fewer)
+        d2 = self.pin["strategy_plans"]["2d"]
+        self.assertLess(l5["expected_pages"], d2["expected_pages"])
+        # explicit sha + on-disk agreement (fail-closed if tampered)
+        plan_file = os.path.join(REPO, l5["path"])
+        if os.path.exists(plan_file):
+            self.assertEqual(_sha256_file(plan_file), l5["sha256"])
+            file_offs = []
+            with open(plan_file, newline="") as f:
+                for row in csv.DictReader(f):
+                    file_offs.append(int(row["file_offset"]))
+            self.assertEqual(file_offs, l5["offsets"])
+
+    def test_baseline_and_2d_pins_unchanged(self):
+        # semantic freeze of the two pre-existing arms -- widening the pin must not
+        # perturb them.
+        self.assertEqual(self.pin["strategy_plans"]["baseline"],
+                         {"path": None, "sha256": None,
+                          "kind": "no_prefetch", "expected_pages": 0})
+        d2 = self.pin["strategy_plans"]["2d"]
+        self.assertEqual(d2["sha256"],
+                         "37ed5e4682d1771c735edc93133bb8ecb77d772a992721b180a9cabaae28745e")
+        self.assertEqual(d2["expected_pages"], 92)
+        self.assertEqual(d2["kind"], "interior_skeleton")
+
+    def test_matrix_allowed_strategies_gate(self):
+        # 05_full_matrix.sh derives allowed strategies straight from the pin's
+        # strategy_plans keys; the widened pin must accept exactly {baseline,2d,
+        # layers_5} and reject anything else (e.g. not-yet-implemented arms).
+        allowed = set(self.pin["strategy_plans"].keys())
+        self.assertEqual(allowed, {"baseline", "2d", "layers_5"})
+        for ok in ("baseline", "2d", "layers_5"):
+            self.assertIn(ok, allowed)
+        for bad in ("2e_K10", "2f_slru", "leaf_freq", "bogus"):
+            self.assertNotIn(bad, allowed)
+
+    def test_invocation_plan_strategies_widened(self):
+        # invocation_plan is the hashed replay config; must list layers_5 and match
+        # the strategy_plans keys (baseline paired arm always present).
+        strat = self.pin["invocation_plan"]["strategies"]
+        self.assertEqual(strat, ["baseline", "2d", "layers_5"])
+        self.assertIn("baseline", strat)
+
     def test_expected_page_count_is_full_db_not_92(self):
         self.assertEqual(self.pin["expected_page_count"],
                          self.pin["database"]["page_count"])
@@ -324,6 +383,18 @@ class TestNativeYcsbLiveManifestAgreement(unittest.TestCase):
         if os.path.exists(plan_file):
             self.assertEqual(_sha256_file(plan_file), pplan["sha256"])
 
+    def test_layers5_plan_hash_agrees(self):
+        # generated live manifest and frozen pin must agree on layers_5 sha/counts/
+        # offsets (crosscheck_pin enforces this at generation; assert it holds here).
+        pl5 = self.pin["strategy_plans"]["layers_5"]
+        al5 = self.art["strategy_plans"]["layers_5"]
+        self.assertEqual(pl5["sha256"], al5["sha256"])
+        self.assertEqual(pl5["expected_pages"], al5["expected_pages"])
+        self.assertEqual(pl5["expected_interior_pages"], al5["expected_interior_pages"])
+        self.assertEqual(pl5["expected_leaf_pages"], al5["expected_leaf_pages"])
+        self.assertEqual(pl5["offsets"], al5["offsets"])
+        self.assertEqual(pl5["bound_db_sha256"], self.pin["database"]["sha256"])
+
     def test_classifier_hash_agrees(self):
         self.assertEqual(self.pin["classifier"]["sha256"],
                          self.art["classifier"]["sha256"])
@@ -370,6 +441,51 @@ class TestLayersFivePlanInManifest(unittest.TestCase):
         interiors = set(self.art["interior_page_list"]["offsets"])
         self.assertTrue(set(offs).issubset(interiors))
         self.assertLess(len(offs), len(interiors))
+
+
+@unittest.skipUnless(os.path.exists(NATIVE_PIN), "native-YCSB pin missing")
+class TestCrosscheckPinLayers5FailsClosed(unittest.TestCase):
+    """crosscheck_pin (generation-time gate) explicitly pins layers_5 and must fail
+    closed on any sha / count / offset disagreement -- not rely on transitive
+    classifier provenance."""
+
+    @classmethod
+    def setUpClass(cls):
+        with open(NATIVE_PIN) as f:
+            cls.pin = json.load(f)
+        l5 = cls.pin["strategy_plans"]["layers_5"]
+        cls.good = dict(
+            db_sha=cls.pin["database"]["sha256"],
+            plan_sha=cls.pin["strategy_plans"]["2d"]["sha256"],
+            classifier_sha=cls.pin["classifier"]["sha256"],
+            trace_shas={str(e["seed"]): e["trace_sha256"]
+                        for e in cls.pin["representative_workload"]["seed_family"]},
+            layers5_sha=l5["sha256"],
+            layers5_offsets=list(l5["offsets"]),
+        )
+
+    def _call(self, **over):
+        args = dict(self.good)
+        args.update(over)
+        return gen.crosscheck_pin(
+            args["db_sha"], args["plan_sha"], args["classifier_sha"],
+            args["trace_shas"], args["layers5_sha"], args["layers5_offsets"])
+
+    def test_matching_layers5_passes(self):
+        self._call()  # must not raise
+
+    def test_tampered_layers5_sha_fails_closed(self):
+        with self.assertRaises(SystemExit):
+            self._call(layers5_sha="0" * 64)
+
+    def test_layers5_count_mismatch_fails_closed(self):
+        with self.assertRaises(SystemExit):
+            self._call(layers5_offsets=self.good["layers5_offsets"][:4])
+
+    def test_layers5_offset_reorder_fails_closed(self):
+        reordered = list(reversed(self.good["layers5_offsets"]))
+        with self.assertRaises(SystemExit):
+            self._call(layers5_offsets=reordered)
 
 
 if __name__ == "__main__":
