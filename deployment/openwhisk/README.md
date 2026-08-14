@@ -20,7 +20,7 @@ deployment/openwhisk/
   action/
     residency.py                non-root mmap/mincore/madvise primitives (mirror of benchmark_harness.c)
     session.py                  warm-process identity + artifact validation
-    main.py                     OpenWhisk handler; baseline + 2d + layers_5 paths
+    main.py                     OpenWhisk handler; baseline + 2d + layers_5 + 2e_K10 paths
   client/
     collect.py                  invocation collector + session classification (no OpenWhisk in 5A)
     summarize.py                per-seed paired summary under the atomic rules
@@ -30,6 +30,7 @@ deployment/openwhisk/
     example.json                example run configuration (placeholders only)
     plans/interior_pages.csv    frozen mandatory-interior (2d) skeleton, 92 pages
     plans/layers_5_pages.csv    frozen layers_5 plan, first 5 interior pages (strict prefix of 2d)
+    plans/keyed/                frozen per-(workload,seed) plans; 2e_K10 YC seeds 1..10 (+ seed6 native source)
   tests/                        local unit/dry tests (no OpenWhisk)
 ```
 
@@ -57,8 +58,33 @@ The action implements three first-query strategies (`main.SUPPORTED_STRATEGIES`)
   Frozen at `plans/layers_5_pages.csv` and transitively pinned via the classifier
   sha in the native-YCSB replay pin.
 
-`2d` semantics are unchanged by this batch. The per-(workload, seed) variable /
-leaf machinery for `2e_K10` and `2f_slru` is **not yet implemented**.
+`2d` semantics are unchanged by this batch.
+
+## Keyed / leaf-capable strategies (Batch 2)
+
+Batch 2 adds the reusable machinery for strategies whose frozen delivery plan
+varies by `(workload, seed)` and may include **leaf** pages, with `2e_K10` as the
+first consumer:
+
+- `2e_K10` — the resident 92-interior 2d skeleton **UNION** that seed's top-10 hot
+  leaf pages (102 pages total). Workload/seed dependent: the interior half is the
+  fixed 92-skeleton across seeds; the 10 hot leaves are selected per seed from its
+  access trace. The delivery invariant **102/92/10/102** is derived from the frozen
+  plan metadata, not hard-coded. Scope is the currently pinned
+  `native_ycsb_c_read_zipf` (YC) only.
+- The plans are frozen, deterministic, and image-pinned at
+  `plans/keyed/2e_K10_native_ycsb_c_read_zipf_seed{1..10}.csv`
+  (`page_number,file_offset`), never regenerated on WS2. The manifest carries a
+  per-seed sha and counts under `keyed_strategy_plans[workload][seed][strategy]`;
+  the session caches and fail-closed-validates every plan at process init (sha,
+  round-trip, counts, interior half == 92-skeleton, leaves disjoint) so the measured
+  path never parses. Each seed's plan is native-parity tested against the canonical
+  `run_experiment.py` `hot2e` selection (exact set equality); seeds 1–5,7–10 share
+  one native selection and seed 6 is the sole divergence (see
+  `plans/keyed/native_source/PROVENANCE.md`).
+
+`2f_slru` and the learned/frequency strategies reuse this same keyed/leaf machinery
+but are **not yet implemented**.
 
 ## Workstation prerequisites
 

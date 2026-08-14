@@ -25,7 +25,7 @@ except ImportError:  # pragma: no cover - OpenWhisk flat layout
     import sqlite_bridge
     from session import Session, validate_request_semantics
 
-SUPPORTED_STRATEGIES = ("baseline", "2d", "layers_5")
+SUPPORTED_STRATEGIES = ("baseline", "2d", "layers_5", "2e_K10")
 HANDLE_MODES = ("warm", "standalone")
 REQUIRED_REQUEST_FIELDS = ("request_id", "workload", "strategy", "seed",
                            "first_operation_id", "diagnostic_mode", "cold_reset",
@@ -35,7 +35,10 @@ REQUIRED_REQUEST_FIELDS = ("request_id", "workload", "strategy", "seed",
 # request identity fields echoed verbatim in the response
 ECHO_FIELDS = ("pair_id", "repetition_id", "schedule_position", "schedule_seed",
                "run_config_sha256", "expected_action_image_digest", "handle_mode")
-# exact per-strategy delivery invariants required for measured validity
+# exact per-strategy delivery invariants required for measured validity. STATIC
+# strategies carry globally fixed counts here; KEYED strategies (e.g. 2e_K10) are
+# per-(workload,seed) and derive their expected counts from the validated frozen
+# plan metadata at request time (see delivery_invariants_for) -- not hard-coded.
 DELIVERY_INVARIANTS = {
     "baseline": {"selected_page_count": 0, "selected_interior_count": 0,
                  "selected_leaf_count": 0, "delivered_page_count": 0},
@@ -44,6 +47,9 @@ DELIVERY_INVARIANTS = {
     "layers_5": {"selected_page_count": 5, "selected_interior_count": 5,
                  "selected_leaf_count": 0, "delivered_page_count": 5},
 }
+# strategies whose plan varies by (workload, seed); expected counts come from the
+# frozen keyed plan, never a global constant.
+KEYED_STRATEGIES = ("2e_K10",)
 _SESSION = None
 
 # The image bakes the artifacts under a FIXED absolute root. OpenWhisk extracts
@@ -102,11 +108,14 @@ def validate_request(request):
     return validate_request_schema(request)
 
 
-def select_offsets(strategy, session):
-    """Return the delivery offsets for a strategy from the process-init cache.
-    baseline delivers nothing; 2d delivers exactly the 92 mandatory interiors;
-    layers_5 delivers the frozen 5-interior prefix. Fails closed on any count or
-    interior-membership disagreement."""
+def select_offsets(strategy, session, workload=None, seed=None):
+    """Return the delivery offsets for a request from the process-init cache.
+    STATIC strategies ignore workload/seed: baseline delivers nothing; 2d delivers
+    exactly the 92 mandatory interiors; layers_5 delivers the frozen 5-interior
+    prefix. KEYED strategies (2e_K10) select the frozen plan for the exact request
+    (workload, seed). No FS parsing or plan generation happens here -- every plan
+    was parsed + cached at process init. Fails closed on any count or
+    interior/leaf-membership disagreement."""
     if strategy == "baseline":
         return []
     if strategy == "2d":
@@ -126,7 +135,44 @@ def select_offsets(strategy, session):
         if any(o not in session.interior_offset_set for o in offs):
             raise ValueError("layers_5 plan contains a non-interior offset")
         return list(offs)
+    if strategy in KEYED_STRATEGIES:
+        plan = session.strategy_plan(strategy, workload, seed)
+        if plan is None:
+            raise ValueError("no keyed %s plan for workload=%r seed=%r"
+                             % (strategy, workload, seed))
+        offs = plan["offsets"]
+        exp = plan["expected_pages"]
+        if exp is not None and len(offs) != exp:
+            raise ValueError("%s plan has %d offsets, expected %s"
+                             % (strategy, len(offs), exp))
+        interior = sum(1 for o in offs if o in session.interior_offset_set)
+        leaf = len(offs) - interior
+        eip = plan["expected_interior_pages"]; elp = plan["expected_leaf_pages"]
+        if eip is not None and interior != eip:
+            raise ValueError("%s plan has %d interiors, expected %s"
+                             % (strategy, interior, eip))
+        if elp is not None and leaf != elp:
+            raise ValueError("%s plan has %d leaves, expected %s"
+                             % (strategy, leaf, elp))
+        return list(offs)
     raise ValueError("unsupported strategy: %s" % strategy)
+
+
+def delivery_invariants_for(strategy, session, workload, seed):
+    """Expected delivery counts for a request. STATIC strategies use the global
+    DELIVERY_INVARIANTS; KEYED strategies derive the four counts from the validated
+    frozen plan metadata for the exact (workload, seed). Fails closed if a keyed
+    plan is absent."""
+    if strategy in DELIVERY_INVARIANTS:
+        return DELIVERY_INVARIANTS[strategy]
+    plan = session.strategy_plan(strategy, workload, seed)
+    if plan is None:
+        raise ValueError("no keyed %s plan for workload=%r seed=%r"
+                         % (strategy, workload, seed))
+    return {"selected_page_count": plan["expected_pages"],
+            "selected_interior_count": plan["expected_interior_pages"],
+            "selected_leaf_count": plan["expected_leaf_pages"],
+            "delivered_page_count": plan["expected_pages"]}
 
 
 def _run_query(session, key, handle_mode):
@@ -244,9 +290,15 @@ def handle(request, session):
         # trace / oracle metadata (cached at init; select is off the critical path)
         trace_rel, trace_sha = session.trace_meta(workload, seed)
         resp["trace_sha256"] = trace_sha
-        # plan sha for the requested strategy (2d/layers_5 have one; baseline none)
-        splan = session.manifest["strategy_plans"].get(strategy, {})
-        resp["plan_sha256"] = splan.get("sha256") or ""
+        # plan sha for the requested strategy: static plans carry one on the
+        # strategy_plans entry; keyed plans (2e_K10) carry a per-(workload,seed) sha
+        # on the frozen keyed plan; baseline has none.
+        kp = session.strategy_plan(strategy, workload, seed)
+        if kp is not None:
+            resp["plan_sha256"] = kp["plan_sha256"] or ""
+        else:
+            splan = session.manifest["strategy_plans"].get(strategy, {})
+            resp["plan_sha256"] = splan.get("sha256") or ""
         oc = session.oracle_for(workload, seed, first_op)
         if oc is None:
             return _envelope(session, request, "oracle",
@@ -296,7 +348,8 @@ def handle(request, session):
         # ---- stage: select (cached plan; off critical path) ----
         try:
             t0 = time.monotonic_ns()
-            offsets = select_offsets(strategy, session)
+            offsets = select_offsets(strategy, session, workload, seed)
+            inv = delivery_invariants_for(strategy, session, workload, seed)
             resp["select_us"] = (time.monotonic_ns() - t0) / 1000.0
         except ValueError as e:
             return _envelope(session, request, "select", str(e), resp)
@@ -341,7 +394,6 @@ def handle(request, session):
         oracle_ok = (hit == oc["expected_hit"] and digest == oc["expected_digest"]
                      and sqlite_err is None)
         resp["oracle_passed"] = oracle_ok
-        inv = DELIVERY_INVARIANTS[strategy]
         delivery_ok = all(resp.get(k) == v for k, v in inv.items())
         resp["delivery_valid"] = delivery_ok
         resp["handler_total_us"] = (time.monotonic_ns() - t_handler) / 1000.0

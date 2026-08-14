@@ -47,7 +47,13 @@
       "expected_pages": 5,
       "expected_interior_pages": 5,
       "expected_leaf_pages": 0,
-      "offsets": [4096, 8192, 12288, 2756608, 2760704],
+      "offsets": [
+        4096,
+        8192,
+        12288,
+        2756608,
+        2760704
+      ],
       "db_specific": true,
       "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
       "static": true,
@@ -62,6 +68,34 @@
       "sha256": null,
       "kind": "no_prefetch",
       "expected_pages": 0
+    },
+    "2e_K10": {
+      "path": null,
+      "sha256": null,
+      "kind": "hot2e_keyed_per_seed",
+      "keyed": true,
+      "per_seed": true,
+      "workload_dependent": true,
+      "seed_dependent": true,
+      "expected_pages": 102,
+      "expected_interior_pages": 92,
+      "expected_leaf_pages": 10,
+      "workload": "native_ycsb_c_read_zipf",
+      "seeds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+      "keyed_plans_ref": "keyed_strategy_plans",
+      "note": "2e_K10 = resident 92-interior 2d skeleton UNION top-10 hot leaf pages; leaf half is seed-dependent. Per-seed frozen plans (sha + counts) pinned under keyed_strategy_plans; explicitly widens the allowed strategy set to {baseline,2d,layers_5,2e_K10}. Derived from the canonical native hot2e research method; never regenerated on WS2."
     }
   },
   "expected_page_count": 26331,
@@ -144,7 +178,10 @@
     "source": "results/native_headtohead/summary.csv ; results/native_headtohead/agg_h2h.py (same-batch ours-vs-prior-work re-canonicalization, 10-seed LOSO)",
     "superseded_ref": {
       "seed_mean_pct": -38.4,
-      "ci95_pct": [-46.2, -30.5],
+      "ci95_pct": [
+        -46.2,
+        -30.5
+      ],
       "source": "results/ycsb_full/data/fig17_abl_YC_orig_s{1..10}.csv (frozen breadth+seed run; CI overlaps, relative effect consistent)"
     },
     "scope_note": "single-workload (canonical YCSB-C) 10-seed CI -- NOT a 12-config breadth CI. Re-canonicalized from the same batch that ran prior-work (libprefetch, learned_markov) head-to-head on the same frozen inputs (test.db 26331, seed traces workload_YC_{1..10}); relative %delta is machine-state-portable so the value tracks the frozen -38.4 within CI."
@@ -159,7 +196,10 @@
         "access_pattern": "uniform",
         "strategy": "2d",
         "seed_mean_pct": -35.9,
-        "ci95_pct": [-46.1, -25.7],
+        "ci95_pct": [
+          -46.1,
+          -25.7
+        ],
         "source": "results/native_headtohead_YCu/summary.csv ; results/native_headtohead/agg_h2h.py",
         "prior_work_same_budget": "learned_markov_14 -6.7% [-15.8,+2.4] ~= 2f_top14 -7.2% [-15.2,+0.7] (both CI cross zero: no physical skew to learn); learned never beats frequency at equal budget"
       },
@@ -169,7 +209,10 @@
         "access_pattern": "hotspot_1pct",
         "strategy": "2d",
         "seed_mean_pct": -41.6,
-        "ci95_pct": [-45.7, -37.4],
+        "ci95_pct": [
+          -45.7,
+          -37.4
+        ],
         "source": "results/native_headtohead_YCh01/summary.csv ; results/native_headtohead/agg_h2h.py",
         "prior_work_same_budget": "learned_markov_14 -23.2% [-37.3,-9.2] ~= 2f_top14 -22.8% [-37.2,-8.4] (CI excludes 0: physical hot leaf present); learned never beats frequency at equal budget"
       }
@@ -192,7 +235,8 @@
     "strategies": [
       "baseline",
       "2d",
-      "layers_5"
+      "layers_5",
+      "2e_K10"
     ],
     "handle_modes": [
       "warm",
@@ -201,6 +245,191 @@
     "concurrency": 1,
     "sequential": true
   },
-  "run_config_sha256": "496f4b918cf80fcc35341b16807565606a4470b3385524d863058dbabb010a01",
-  "run_config_sha256_note": "Deterministic sha256 over the canonical invocation_plan (sorted-key compact JSON). Pins the replay configuration; the executed OpenWhisk run_config (run_id/action_image_digest/etc. per run_config.schema.json) is authored at replay time, out of scope for this no-execution freeze."
+  "run_config_sha256": "c82b1000a76ba9795bfec58f28961c77d04fe447a23ebeb2fc8fb6e8dba0887b",
+  "run_config_sha256_note": "Deterministic sha256 over the canonical invocation_plan (sorted-key compact JSON). Pins the replay configuration; the executed OpenWhisk run_config (run_id/action_image_digest/etc. per run_config.schema.json) is authored at replay time, out of scope for this no-execution freeze.",
+  "keyed_strategy_plans": {
+    "native_ycsb_c_read_zipf": {
+      "1": {
+        "2e_K10": {
+          "path": "deployment/openwhisk/config/plans/keyed/2e_K10_native_ycsb_c_read_zipf_seed1.csv",
+          "sha256": "453e05463fa50f5892659262b8eac2dd6273744d467ee02ee7fbdff787081400",
+          "kind": "hot2e_interior_union_leaf",
+          "expected_pages": 102,
+          "expected_interior_pages": 92,
+          "expected_leaf_pages": 10,
+          "workload": "native_ycsb_c_read_zipf",
+          "seed": 1,
+          "strategy": "2e_K10",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/hot2e_YC_orig_K10.csv",
+            "sha256": "e4d3390e087db16cd48c8f44195de62a281066a8677db3eb26c6d690a662f102"
+          }
+        }
+      },
+      "2": {
+        "2e_K10": {
+          "path": "deployment/openwhisk/config/plans/keyed/2e_K10_native_ycsb_c_read_zipf_seed2.csv",
+          "sha256": "453e05463fa50f5892659262b8eac2dd6273744d467ee02ee7fbdff787081400",
+          "kind": "hot2e_interior_union_leaf",
+          "expected_pages": 102,
+          "expected_interior_pages": 92,
+          "expected_leaf_pages": 10,
+          "workload": "native_ycsb_c_read_zipf",
+          "seed": 2,
+          "strategy": "2e_K10",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/hot2e_YC_orig_K10.csv",
+            "sha256": "e4d3390e087db16cd48c8f44195de62a281066a8677db3eb26c6d690a662f102"
+          }
+        }
+      },
+      "3": {
+        "2e_K10": {
+          "path": "deployment/openwhisk/config/plans/keyed/2e_K10_native_ycsb_c_read_zipf_seed3.csv",
+          "sha256": "453e05463fa50f5892659262b8eac2dd6273744d467ee02ee7fbdff787081400",
+          "kind": "hot2e_interior_union_leaf",
+          "expected_pages": 102,
+          "expected_interior_pages": 92,
+          "expected_leaf_pages": 10,
+          "workload": "native_ycsb_c_read_zipf",
+          "seed": 3,
+          "strategy": "2e_K10",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/hot2e_YC_orig_K10.csv",
+            "sha256": "e4d3390e087db16cd48c8f44195de62a281066a8677db3eb26c6d690a662f102"
+          }
+        }
+      },
+      "4": {
+        "2e_K10": {
+          "path": "deployment/openwhisk/config/plans/keyed/2e_K10_native_ycsb_c_read_zipf_seed4.csv",
+          "sha256": "453e05463fa50f5892659262b8eac2dd6273744d467ee02ee7fbdff787081400",
+          "kind": "hot2e_interior_union_leaf",
+          "expected_pages": 102,
+          "expected_interior_pages": 92,
+          "expected_leaf_pages": 10,
+          "workload": "native_ycsb_c_read_zipf",
+          "seed": 4,
+          "strategy": "2e_K10",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/hot2e_YC_orig_K10.csv",
+            "sha256": "e4d3390e087db16cd48c8f44195de62a281066a8677db3eb26c6d690a662f102"
+          }
+        }
+      },
+      "5": {
+        "2e_K10": {
+          "path": "deployment/openwhisk/config/plans/keyed/2e_K10_native_ycsb_c_read_zipf_seed5.csv",
+          "sha256": "453e05463fa50f5892659262b8eac2dd6273744d467ee02ee7fbdff787081400",
+          "kind": "hot2e_interior_union_leaf",
+          "expected_pages": 102,
+          "expected_interior_pages": 92,
+          "expected_leaf_pages": 10,
+          "workload": "native_ycsb_c_read_zipf",
+          "seed": 5,
+          "strategy": "2e_K10",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/hot2e_YC_orig_K10.csv",
+            "sha256": "e4d3390e087db16cd48c8f44195de62a281066a8677db3eb26c6d690a662f102"
+          }
+        }
+      },
+      "6": {
+        "2e_K10": {
+          "path": "deployment/openwhisk/config/plans/keyed/2e_K10_native_ycsb_c_read_zipf_seed6.csv",
+          "sha256": "6f123144a5aba82972494d14a216f9fc746b8c2c59fbfe867f93a03180cba77b",
+          "kind": "hot2e_interior_union_leaf",
+          "expected_pages": 102,
+          "expected_interior_pages": 92,
+          "expected_leaf_pages": 10,
+          "workload": "native_ycsb_c_read_zipf",
+          "seed": 6,
+          "strategy": "2e_K10",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "deployment/openwhisk/config/plans/keyed/native_source/hot2e_YC_orig_K10_seed6.csv",
+            "sha256": "94da1e7f57ece645f918e8bffd6f89fed15004d57c0cc18c03ec74839ce3b741"
+          }
+        }
+      },
+      "7": {
+        "2e_K10": {
+          "path": "deployment/openwhisk/config/plans/keyed/2e_K10_native_ycsb_c_read_zipf_seed7.csv",
+          "sha256": "453e05463fa50f5892659262b8eac2dd6273744d467ee02ee7fbdff787081400",
+          "kind": "hot2e_interior_union_leaf",
+          "expected_pages": 102,
+          "expected_interior_pages": 92,
+          "expected_leaf_pages": 10,
+          "workload": "native_ycsb_c_read_zipf",
+          "seed": 7,
+          "strategy": "2e_K10",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/hot2e_YC_orig_K10.csv",
+            "sha256": "e4d3390e087db16cd48c8f44195de62a281066a8677db3eb26c6d690a662f102"
+          }
+        }
+      },
+      "8": {
+        "2e_K10": {
+          "path": "deployment/openwhisk/config/plans/keyed/2e_K10_native_ycsb_c_read_zipf_seed8.csv",
+          "sha256": "453e05463fa50f5892659262b8eac2dd6273744d467ee02ee7fbdff787081400",
+          "kind": "hot2e_interior_union_leaf",
+          "expected_pages": 102,
+          "expected_interior_pages": 92,
+          "expected_leaf_pages": 10,
+          "workload": "native_ycsb_c_read_zipf",
+          "seed": 8,
+          "strategy": "2e_K10",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/hot2e_YC_orig_K10.csv",
+            "sha256": "e4d3390e087db16cd48c8f44195de62a281066a8677db3eb26c6d690a662f102"
+          }
+        }
+      },
+      "9": {
+        "2e_K10": {
+          "path": "deployment/openwhisk/config/plans/keyed/2e_K10_native_ycsb_c_read_zipf_seed9.csv",
+          "sha256": "453e05463fa50f5892659262b8eac2dd6273744d467ee02ee7fbdff787081400",
+          "kind": "hot2e_interior_union_leaf",
+          "expected_pages": 102,
+          "expected_interior_pages": 92,
+          "expected_leaf_pages": 10,
+          "workload": "native_ycsb_c_read_zipf",
+          "seed": 9,
+          "strategy": "2e_K10",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/hot2e_YC_orig_K10.csv",
+            "sha256": "e4d3390e087db16cd48c8f44195de62a281066a8677db3eb26c6d690a662f102"
+          }
+        }
+      },
+      "10": {
+        "2e_K10": {
+          "path": "deployment/openwhisk/config/plans/keyed/2e_K10_native_ycsb_c_read_zipf_seed10.csv",
+          "sha256": "453e05463fa50f5892659262b8eac2dd6273744d467ee02ee7fbdff787081400",
+          "kind": "hot2e_interior_union_leaf",
+          "expected_pages": 102,
+          "expected_interior_pages": 92,
+          "expected_leaf_pages": 10,
+          "workload": "native_ycsb_c_read_zipf",
+          "seed": 10,
+          "strategy": "2e_K10",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/hot2e_YC_orig_K10.csv",
+            "sha256": "e4d3390e087db16cd48c8f44195de62a281066a8677db3eb26c6d690a662f102"
+          }
+        }
+      }
+    }
+  },
+  "keyed_strategy_plans_note": "Generic keyed per-(workload,seed) strategy plans. 2e_K10 is the first consumer. Seeds 1-5,7-10 share one native selection (byte-identical to the in-repo master strategies/access/runs/hot2e_YC_orig_K10.csv); seed 6 diverges (hot leaf 24837 -> 18314), native source committed under config/plans/keyed/native_source/. Runtime replays these exact frozen bytes; the fork is never read at runtime. See config/plans/keyed/native_source/PROVENANCE.md."
 }

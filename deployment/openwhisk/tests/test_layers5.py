@@ -51,7 +51,8 @@ class TestLayersFivePureInvariants(unittest.TestCase):
     """No canonical artifacts needed."""
 
     def test_supported_strategies_include_layers5(self):
-        self.assertEqual(main.SUPPORTED_STRATEGIES, ("baseline", "2d", "layers_5"))
+        self.assertEqual(main.SUPPORTED_STRATEGIES,
+                         ("baseline", "2d", "layers_5", "2e_K10"))
 
     def test_delivery_invariant_is_five_five_zero_five(self):
         self.assertEqual(main.DELIVERY_INVARIANTS["layers_5"],

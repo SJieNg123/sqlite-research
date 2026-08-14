@@ -80,6 +80,24 @@ class Session:
             for name, plan in self.manifest.get("strategy_plans", {}).items()
             if isinstance(plan.get("offsets"), list)
         }
+        # Generic keyed-plan cache: strategies whose frozen delivery plan varies by
+        # (workload, seed) -- e.g. 2e_K10 (resident interiors UNION top-K hot
+        # leaves). Parsed offsets are cached here at process init so the measured
+        # critical path never parses CSV/JSON. Keyed by (strategy, workload, seed).
+        self.keyed_plans = {}
+        for wl, seeds in self.manifest.get("keyed_strategy_plans", {}).items():
+            for seed_str, strats in seeds.items():
+                for strat, plan in strats.items():
+                    self.keyed_plans[(strat, wl, str(seed_str))] = {
+                        "offsets": list(plan["offsets"]),
+                        "interior_offsets": list(plan.get("interior_offsets", [])),
+                        "leaf_offsets": list(plan.get("leaf_offsets", [])),
+                        "plan_sha256": plan.get("sha256"),
+                        "path": plan.get("path"),
+                        "expected_pages": plan.get("expected_pages"),
+                        "expected_interior_pages": plan.get("expected_interior_pages"),
+                        "expected_leaf_pages": plan.get("expected_leaf_pages"),
+                    }
         # runtime + image identity, captured once
         try:
             self.sqlite_library_version = sqlite_bridge.libversion()
@@ -171,6 +189,9 @@ class Session:
 
         # inline-offset static strategy plans (e.g. layers_5) validate fail-closed
         r += self._validate_static_plans(page_size, page_count)
+
+        # keyed per-(workload,seed) strategy plans (e.g. 2e_K10) validate fail-closed
+        r += self._validate_keyed_plans(page_size, page_count)
 
         # every supported workload trace must match its manifest hash
         for wl, wentry in m.get("workload_traces", {}).items():
@@ -269,6 +290,85 @@ class Session:
             if plan.get("expected_leaf_pages") not in (None, 0):
                 r.append("%s expected_leaf_pages must be 0 (interior prefix)" % name)
         return r
+
+    def _validate_keyed_plans(self, page_size, page_count):
+        """Fail-closed validation of every keyed per-(workload,seed) strategy plan
+        (e.g. 2e_K10). For each: the frozen CSV sha matches the manifest, the CSV
+        round-trips to the manifest's inline offsets under the page formula, the
+        page/interior/leaf counts match the declared expectations, offsets are
+        unique/aligned/within the DB, the interior half is EXACTLY the validated
+        92-interior skeleton (set equality), the leaf half is disjoint from it, and
+        interior_offsets + leaf_offsets partition offsets. Any disagreement --
+        sha, count, duplicate, out-of-range, or type-split -- fails closed."""
+        import csv
+        r = []
+        for wl, seeds in self.manifest.get("keyed_strategy_plans", {}).items():
+            for seed_str, strats in seeds.items():
+                for strat, plan in strats.items():
+                    tag = "%s/%s/%s" % (strat, wl, seed_str)
+                    cached = self.keyed_plans.get((strat, wl, str(seed_str)))
+                    if cached is None:
+                        r.append("%s not cached" % tag); continue
+                    offs = cached["offsets"]
+                    path = plan.get("path")
+                    if not path:
+                        r.append("%s plan missing path" % tag); continue
+                    ap = self._abspath(path)
+                    if not os.path.exists(ap):
+                        r.append("%s plan file missing" % tag); continue
+                    if sha256_file(ap) != plan.get("sha256"):
+                        r.append("%s plan sha256 mismatch" % tag)
+                    exp = plan.get("expected_pages")
+                    if exp is not None and len(offs) != exp:
+                        r.append("%s has %d offsets, expected %d" % (tag, len(offs), exp))
+                    if len(set(offs)) != len(offs):
+                        r.append("%s has duplicate offsets" % tag)
+                    # CSV round-trip against inline offsets + page formula
+                    try:
+                        file_offs = []
+                        with open(ap, newline="") as f:
+                            for row in csv.DictReader(f):
+                                pn = int(row["page_number"]); fo = int(row["file_offset"])
+                                if fo != (pn - 1) * page_size:
+                                    r.append("%s offset != (page-1)*page_size" % tag); break
+                                file_offs.append(fo)
+                        if file_offs != list(offs):
+                            r.append("%s plan offsets != manifest offsets" % tag)
+                    except (OSError, ValueError, KeyError) as e:
+                        r.append("%s plan unreadable: %s" % (tag, e)); continue
+                    # aligned + within DB
+                    for off in offs:
+                        if off % page_size != 0 or not (0 <= off < page_count * page_size):
+                            r.append("%s offset %d misaligned/out-of-range" % (tag, off)); break
+                    # interior/leaf split via the validated 92-interior skeleton
+                    interior_hit = [o for o in offs if o in self.interior_offset_set]
+                    leaf_hit = [o for o in offs if o not in self.interior_offset_set]
+                    eip = plan.get("expected_interior_pages")
+                    elp = plan.get("expected_leaf_pages")
+                    if eip is not None and len(interior_hit) != eip:
+                        r.append("%s interior count %d != expected %d"
+                                 % (tag, len(interior_hit), eip))
+                    if elp is not None and len(leaf_hit) != elp:
+                        r.append("%s leaf count %d != expected %d"
+                                 % (tag, len(leaf_hit), elp))
+                    # the interior half must be the FULL 92-interior skeleton
+                    if eip == len(self.interior_offset_set) and \
+                            set(interior_hit) != self.interior_offset_set:
+                        r.append("%s interior half != 92-interior skeleton" % tag)
+                    # manifest-declared interior/leaf offset lists must agree
+                    if set(plan.get("interior_offsets", interior_hit)) != set(interior_hit):
+                        r.append("%s interior_offsets disagree with classification" % tag)
+                    if set(plan.get("leaf_offsets", leaf_hit)) != set(leaf_hit):
+                        r.append("%s leaf_offsets disagree with classification" % tag)
+        return r
+
+    def strategy_plan(self, strategy, workload, seed):
+        """Generic keyed-plan lookup: return the cached frozen plan for an exact
+        (strategy, workload, seed) request, or None if there is none. The returned
+        dict exposes offsets / interior_offsets / leaf_offsets / plan_sha256 /
+        expected_pages / expected_interior_pages / expected_leaf_pages. No parsing
+        happens here -- offsets were cached at process init."""
+        return self.keyed_plans.get((strategy, workload, str(seed)))
 
     # ------------------------------------------------------------- warm handle
     def pragmas(self):
