@@ -20,7 +20,7 @@ deployment/openwhisk/
   action/
     residency.py                non-root mmap/mincore/madvise primitives (mirror of benchmark_harness.c)
     session.py                  warm-process identity + artifact validation
-    main.py                     OpenWhisk handler; baseline + 2d + layers_5 + 2e_K10 paths
+    main.py                     OpenWhisk handler; baseline + 2d + layers_5 + 2e_K10 + 2f_slru paths
   client/
     collect.py                  invocation collector + session classification (no OpenWhisk in 5A)
     summarize.py                per-seed paired summary under the atomic rules
@@ -30,7 +30,7 @@ deployment/openwhisk/
     example.json                example run configuration (placeholders only)
     plans/interior_pages.csv    frozen mandatory-interior (2d) skeleton, 92 pages
     plans/layers_5_pages.csv    frozen layers_5 plan, first 5 interior pages (strict prefix of 2d)
-    plans/keyed/                frozen per-(workload,seed) plans; 2e_K10 YC seeds 1..10 (+ seed6 native source)
+    plans/keyed/                frozen per-(workload,seed) plans; 2e_K10 + 2f_slru YC seeds 1..10 (+ native_source/)
   tests/                        local unit/dry tests (no OpenWhisk)
 ```
 
@@ -64,7 +64,7 @@ The action implements three first-query strategies (`main.SUPPORTED_STRATEGIES`)
 
 Batch 2 adds the reusable machinery for strategies whose frozen delivery plan
 varies by `(workload, seed)` and may include **leaf** pages, with `2e_K10` as the
-first consumer:
+first consumer and `2f_slru` as the second:
 
 - `2e_K10` — the resident 92-interior 2d skeleton **UNION** that seed's top-10 hot
   leaf pages (102 pages total). Workload/seed dependent: the interior half is the
@@ -82,9 +82,26 @@ first consumer:
   `run_experiment.py` `hot2e` selection (exact set equality); seeds 1–5,7–10 share
   one native selection and seed 6 is the sole divergence (see
   `plans/keyed/native_source/PROVENANCE.md`).
+- `2f_slru` — the seed's **entire resident working set** (SLRU) delivered before the
+  one measured first query; a first-query foil. The footprint is per-seed data, not
+  a constant: resident totals span 26323–26331 pages across seeds 1–10 (seed 8
+  happens to be the whole 26331-page DB — treated as per-key data, not an
+  invariant). The interior half is again the fixed 92-page 2d skeleton (set
+  equality); the leaf half is `total − 92` and seed-dependent. The delivery
+  invariant is derived per-seed from the frozen plan metadata
+  (`per_seed_expected_pages`/`per_seed_expected_leaf_pages`), never a global
+  `DELIVERY_INVARIANTS` entry. Plans are frozen at
+  `plans/keyed/2f_slru_native_ycsb_c_read_zipf_seed{1..10}.csv` with a per-seed sha,
+  native-parity tested for exact set equality against the canonical `run_experiment.py`
+  SLRU residency (`plans/keyed/native_source/hotpages_yc_seed{1..10}.csv`, all 10
+  distinct). Scope is the pinned `native_ycsb_c_read_zipf` (YC) only. This validates
+  that the keyed abstraction serves a large, per-seed-sized mixed interior+leaf plan
+  through the **same** generic lookup that serves `2e_K10` — no strategy-specific
+  runtime path. Its per-seed TTFQ figures are a first-query foil and do **not** claim
+  to prove any cumulative/e2e degradation.
 
-`2f_slru` and the learned/frequency strategies reuse this same keyed/leaf machinery
-but are **not yet implemented**.
+The learned/frequency strategies reuse this same keyed/leaf machinery but are **not
+yet implemented**.
 
 ## Workstation prerequisites
 

@@ -138,7 +138,7 @@ class TestPureInvariants(unittest.TestCase):
 
     def test_supported_and_keyed_sets(self):
         self.assertIn("2e_K10", main.SUPPORTED_STRATEGIES)
-        self.assertEqual(main.KEYED_STRATEGIES, ("2e_K10",))
+        self.assertIn("2e_K10", main.KEYED_STRATEGIES)
         # 2e_K10 is keyed, so it must NOT carry a static global delivery invariant.
         self.assertNotIn("2e_K10", main.DELIVERY_INVARIANTS)
 
@@ -181,6 +181,14 @@ class TestCrosscheckPinKeyedFailsClosed(unittest.TestCase):
             cls.pin = json.load(f)
         l5 = cls.pin["strategy_plans"]["layers_5"]
         keyed = cls.pin["keyed_strategy_plans"][WORKLOAD]
+        # per-seed sha + counts for every keyed strategy, read from the pin.
+        cls.good_meta = {
+            strat: {s: {"sha": keyed[str(s)][strat]["sha256"],
+                        "pages": keyed[str(s)][strat]["expected_pages"],
+                        "interior": keyed[str(s)][strat]["expected_interior_pages"],
+                        "leaf": keyed[str(s)][strat]["expected_leaf_pages"]}
+                    for s in SEEDS}
+            for strat in ("2e_K10", "2f_slru")}
         cls.good = dict(
             db_sha=cls.pin["database"]["sha256"],
             plan_sha=cls.pin["strategy_plans"]["2d"]["sha256"],
@@ -189,27 +197,30 @@ class TestCrosscheckPinKeyedFailsClosed(unittest.TestCase):
                         for e in cls.pin["representative_workload"]["seed_family"]},
             layers5_sha=l5["sha256"],
             layers5_offsets=list(l5["offsets"]),
-            keyed_shas={s: keyed[str(s)]["2e_K10"]["sha256"] for s in SEEDS},
         )
 
-    def _call(self, keyed_shas):
+    def _meta_copy(self):
+        return {strat: {s: dict(m) for s, m in seeds.items()}
+                for strat, seeds in self.good_meta.items()}
+
+    def _call(self, keyed_meta):
         g = self.good
         return gen.crosscheck_pin(
             g["db_sha"], g["plan_sha"], g["classifier_sha"], g["trace_shas"],
-            g["layers5_sha"], g["layers5_offsets"], keyed_shas)
+            g["layers5_sha"], g["layers5_offsets"], keyed_meta)
 
     def test_matching_keyed_shas_pass(self):
-        self._call(dict(self.good["keyed_shas"]))  # must not raise
+        self._call(self._meta_copy())  # must not raise
 
     def test_tampered_keyed_sha_fails_closed(self):
-        bad = dict(self.good["keyed_shas"])
-        bad[6] = "0" * 64
+        bad = self._meta_copy()
+        bad["2e_K10"][6]["sha"] = "0" * 64
         with self.assertRaises(SystemExit):
             self._call(bad)
 
     def test_missing_keyed_seed_fails_closed(self):
-        bad = dict(self.good["keyed_shas"])
-        del bad[10]
+        bad = self._meta_copy()
+        del bad["2e_K10"][10]
         with self.assertRaises((SystemExit, KeyError)):
             self._call(bad)
 
@@ -238,7 +249,7 @@ class TestSessionKeyedLoad(unittest.TestCase):
         # at the caller, never a stale hit).
         self.assertIsNone(self.s.strategy_plan("2e_K10", WORKLOAD, 99))
         self.assertIsNone(self.s.strategy_plan("2e_K10", "workload_a", 1))
-        self.assertIsNone(self.s.strategy_plan("2f_slru", WORKLOAD, 1))
+        self.assertIsNone(self.s.strategy_plan("2f_topN", WORKLOAD, 1))
 
     def test_interior_half_is_the_92_skeleton(self):
         for seed in SEEDS:

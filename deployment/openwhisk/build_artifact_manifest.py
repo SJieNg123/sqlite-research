@@ -8,9 +8,12 @@ action can fail closed on anything but the exact frozen data. It also:
   * derives + validates the mandatory-interior (2d) skeleton from the classifier;
   * derives + validates the layers_5 static plan (first 5 interior pages by native
     (file_offset, page_number) order; a strict prefix of the 2d skeleton);
-  * reads + validates the keyed per-(workload,seed) 2e_K10 delivery plans (resident
-    92-interior skeleton UNION top-10 hot leaf pages; leaf half seed-dependent),
-    which are committed frozen artifacts -- never regenerated here;
+  * reads + validates the keyed per-(workload,seed) delivery plans for every keyed
+    strategy in KEYED_SPECS (2e_K10 = 92-interior skeleton UNION top-10 hot leaves,
+    fixed 102; 2f_slru = the whole resident working set, per-seed footprint). Each
+    plan's interior half always equals the 92-page skeleton (set equality); totals/
+    leaves may vary per seed. These are committed frozen artifacts -- never
+    regenerated here;
   * pins the canonical SQLite pragmas (cache_size=0, mmap_size=file size);
   * records a first-query correctness oracle (expected hit + result digest) for
     every supported first operation.
@@ -70,28 +73,68 @@ EXPECTED_INTERIORS = 92
 LAYERS5_N = 5
 SUPPORTED_FIRST_OPS = [0]
 
-# Keyed (per workload+seed) strategy plans. 2e_K10 is the first consumer: its
-# frozen delivery plan is the resident 92-interior skeleton UNION the top-10 hot
-# leaf pages, and the leaf half is seed-dependent. These CSVs are committed,
-# hash-pinned artifacts derived from the canonical native hot2e research method
-# (see config/plans/keyed/native_source/PROVENANCE.md); the generator READS and
-# validates them (never regenerates the research method).
-KEYED_STRATEGY = "2e_K10"
-KEYED_PLAN_REL = ("deployment/openwhisk/config/plans/keyed/"
-                  "2e_K10_native_ycsb_c_read_zipf_seed%d.csv")
-KEYED_EXPECTED_PAGES = 102
-KEYED_EXPECTED_INTERIOR = 92
-KEYED_EXPECTED_LEAF = 10
-# Native source of record per seed (committed, durable): the 9 common seeds share
-# this repo's in-repo unseeded master; seed 6 diverges (fork-only) and its native
-# source is committed under keyed/native_source/.
+# Keyed (per workload+seed) strategy plans. Each keyed strategy freezes a
+# per-(workload,seed) delivery plan whose interior half is ALWAYS the 92-page 2d
+# skeleton (set equality, enforced for every seed) but whose total/leaf footprint
+# may vary per seed. These CSVs are committed, hash-pinned artifacts derived from
+# the canonical native research method (see config/plans/keyed/native_source/
+# PROVENANCE.md); the generator READS and validates them, never regenerating the
+# research method. A spec's expected_pages/expected_leaf of None means "derive per
+# seed from the plan" (do not enforce a universal count).
+KEYED_EXPECTED_INTERIOR = EXPECTED_INTERIORS  # 92-page skeleton, fixed for all keyed plans
+
+# 2e_K10 native source of record per seed (committed, durable): the 9 common seeds
+# share this repo's in-repo unseeded master; seed 6 diverges (fork-only) and its
+# native source is committed under keyed/native_source/.
 NATIVE_MASTER_REL = "strategies/access/runs/hot2e_YC_orig_K10.csv"
 SEED6_NATIVE_REL = ("deployment/openwhisk/config/plans/keyed/native_source/"
                     "hot2e_YC_orig_K10_seed6.csv")
 
 
-def native_source_rel(seed):
+def _hot2e_native_rel(seed):
     return SEED6_NATIVE_REL if seed == 6 else NATIVE_MASTER_REL
+
+
+def _slru_native_rel(seed):
+    # 2f_slru per-seed resident-set sources are fork-only (in-repo has only the
+    # unseeded whole-DB hotpages_yc.csv), so all ten are committed here.
+    return ("deployment/openwhisk/config/plans/keyed/native_source/"
+            "hotpages_yc_seed%d.csv" % seed)
+
+
+KEYED_SPECS = [
+    {
+        "strategy": "2e_K10",
+        "plan_rel": ("deployment/openwhisk/config/plans/keyed/"
+                     "2e_K10_native_ycsb_c_read_zipf_seed%d.csv"),
+        "kind": "hot2e_interior_union_leaf",
+        "marker_kind": "hot2e_keyed_per_seed",
+        "expected_pages": 102,   # fixed across seeds
+        "expected_leaf": 10,     # fixed across seeds
+        "native_source_rel": _hot2e_native_rel,
+        "marker_note": ("2e_K10 = resident 92-interior 2d skeleton UNION top-10 hot "
+                        "leaf pages; leaf half is seed-dependent. Per-seed frozen "
+                        "plans in keyed_strategy_plans[%s][<seed>][2e_K10]."
+                        % CANONICAL_WORKLOAD_ID),
+    },
+    {
+        "strategy": "2f_slru",
+        "plan_rel": ("deployment/openwhisk/config/plans/keyed/"
+                     "2f_slru_native_ycsb_c_read_zipf_seed%d.csv"),
+        "kind": "slru_resident_working_set",
+        "marker_kind": "slru_keyed_per_seed",
+        "expected_pages": None,  # per-seed (whole resident working set)
+        "expected_leaf": None,   # per-seed = total - 92
+        "native_source_rel": _slru_native_rel,
+        "marker_note": ("2f_slru = the entire resident working set (SLRU) for the "
+                        "workload+seed, delivered before the measured first query "
+                        "(first-query foil). Interior half is the 92-page skeleton; "
+                        "total/leaf footprint is per-seed (seed 8 = whole DB). "
+                        "Per-seed frozen plans in "
+                        "keyed_strategy_plans[%s][<seed>][2f_slru]."
+                        % CANONICAL_WORKLOAD_ID),
+    },
+]
 
 
 def sha256_file(path, _b=1 << 20):
@@ -198,14 +241,18 @@ def derive_layers_prefix(classify_path, plan_path, n, page_size, page_count,
     return manifest_offsets
 
 
-def read_keyed_plan(csv_path, page_size, page_count, interior_offsets):
+def read_keyed_plan(csv_path, page_size, page_count, interior_offsets,
+                    expected_pages=None, expected_leaf=None,
+                    expected_interior=KEYED_EXPECTED_INTERIOR):
     """Read and validate a committed keyed delivery plan (page_number,file_offset).
     The plan is NOT regenerated here; it is the frozen native selection. Fails
     closed unless: every offset == (page-1)*page_size, aligned, within the DB, and
-    unique; exactly KEYED_EXPECTED_PAGES pages; the interior half equals (set
-    equality) the validated 92-interior skeleton; exactly KEYED_EXPECTED_LEAF leaf
-    pages disjoint from the skeleton. Returns (offsets, interior_offsets_sorted,
-    leaf_offsets) in CSV (page) order for offsets/leaves."""
+    unique; the interior half equals (set equality) the validated 92-interior
+    skeleton (ALWAYS enforced). ``expected_pages``/``expected_leaf`` of None means
+    the count is per-seed data and is derived rather than enforced against a
+    universal invariant; when given, the total/leaf count must match exactly.
+    Returns (offsets, interior_offsets_sorted, leaf_offsets) in CSV (page) order
+    for offsets/leaves."""
     interior_set = set(interior_offsets)
     offs, seen = [], set()
     with open(csv_path, newline="") as f:
@@ -222,60 +269,68 @@ def read_keyed_plan(csv_path, page_size, page_count, interior_offsets):
             if fo in seen:
                 sys.exit("duplicate keyed plan offset %d in %s" % (fo, csv_path))
             seen.add(fo); offs.append(fo)
-    if len(offs) != KEYED_EXPECTED_PAGES:
+    if expected_pages is not None and len(offs) != expected_pages:
         sys.exit("keyed plan %s has %d pages, expected %d"
-                 % (csv_path, len(offs), KEYED_EXPECTED_PAGES))
+                 % (csv_path, len(offs), expected_pages))
     interior_hit = [o for o in offs if o in interior_set]
     leaf = [o for o in offs if o not in interior_set]
-    if len(interior_hit) != KEYED_EXPECTED_INTERIOR:
+    if len(interior_hit) != expected_interior:
         sys.exit("keyed plan %s has %d interiors, expected %d"
-                 % (csv_path, len(interior_hit), KEYED_EXPECTED_INTERIOR))
+                 % (csv_path, len(interior_hit), expected_interior))
     if set(interior_hit) != interior_set:
         sys.exit("keyed plan %s interior half != 92-interior skeleton" % csv_path)
-    if len(leaf) != KEYED_EXPECTED_LEAF:
+    if expected_leaf is not None and len(leaf) != expected_leaf:
         sys.exit("keyed plan %s has %d leaves, expected %d"
-                 % (csv_path, len(leaf), KEYED_EXPECTED_LEAF))
+                 % (csv_path, len(leaf), expected_leaf))
     return offs, sorted(interior_hit), leaf
 
 
 def build_keyed_strategy_plans(page_size, page_count, interior_offsets, db_sha):
-    """Read + validate all committed 2e_K10 seed plans and return the generic
-    keyed_strategy_plans[workload][seed][strategy] manifest block plus the per-seed
-    plan SHA map (for the pin cross-check)."""
+    """Read + validate every committed keyed seed plan for every strategy in
+    KEYED_SPECS and return the generic keyed_strategy_plans[workload][seed][strategy]
+    manifest block plus a nested per-seed meta map keyed_meta[strategy][seed] =
+    {sha, pages, interior, leaf} (for the pin cross-check). Counts are the actual
+    per-seed derived values, so strategies whose footprint varies per seed (2f_slru)
+    are pinned as per-seed data rather than a universal invariant."""
     block = {CANONICAL_WORKLOAD_ID: {}}
-    shas = {}
-    for s in SEEDS:
-        rel = KEYED_PLAN_REL % s
-        ap = os.path.join(ROOT, rel)
-        if not os.path.exists(ap):
-            sys.exit("missing committed keyed 2e_K10 plan: %s" % rel)
-        offs, interior_offs, leaf_offs = read_keyed_plan(
-            ap, page_size, page_count, interior_offsets)
-        plan_sha = sha256_file(ap)
-        shas[s] = plan_sha
-        nrel = native_source_rel(s)
-        nap = os.path.join(ROOT, nrel)
-        if not os.path.exists(nap):
-            sys.exit("missing committed native source of record: %s" % nrel)
-        block[CANONICAL_WORKLOAD_ID][str(s)] = {
-            KEYED_STRATEGY: {
+    meta = {}
+    for spec in KEYED_SPECS:
+        strat = spec["strategy"]
+        meta[strat] = {}
+        for s in SEEDS:
+            rel = spec["plan_rel"] % s
+            ap = os.path.join(ROOT, rel)
+            if not os.path.exists(ap):
+                sys.exit("missing committed keyed %s plan: %s" % (strat, rel))
+            offs, interior_offs, leaf_offs = read_keyed_plan(
+                ap, page_size, page_count, interior_offsets,
+                expected_pages=spec["expected_pages"],
+                expected_leaf=spec["expected_leaf"])
+            plan_sha = sha256_file(ap)
+            pages, interior, leaf = len(offs), len(interior_offs), len(leaf_offs)
+            meta[strat][s] = {"sha": plan_sha, "pages": pages,
+                              "interior": interior, "leaf": leaf}
+            nrel = spec["native_source_rel"](s)
+            nap = os.path.join(ROOT, nrel)
+            if not os.path.exists(nap):
+                sys.exit("missing committed native source of record: %s" % nrel)
+            block[CANONICAL_WORKLOAD_ID].setdefault(str(s), {})[strat] = {
                 "path": rel,
                 "sha256": plan_sha,
-                "kind": "hot2e_interior_union_leaf",
-                "expected_pages": KEYED_EXPECTED_PAGES,
-                "expected_interior_pages": KEYED_EXPECTED_INTERIOR,
-                "expected_leaf_pages": KEYED_EXPECTED_LEAF,
+                "kind": spec["kind"],
+                "expected_pages": pages,
+                "expected_interior_pages": interior,
+                "expected_leaf_pages": leaf,
                 "offsets": offs,
                 "interior_offsets": interior_offs,
                 "leaf_offsets": leaf_offs,
                 "bound_db_sha256": db_sha,
                 "workload": CANONICAL_WORKLOAD_ID,
                 "seed": s,
-                "strategy": KEYED_STRATEGY,
+                "strategy": strat,
                 "native_source": {"path": nrel, "sha256": sha256_file(nap)},
             }
-        }
-    return block, shas
+    return block, meta
 
 
 def git_commit():
@@ -319,7 +374,7 @@ def build_oracle(db_path):
 
 
 def crosscheck_pin(db_sha, plan_sha, classifier_sha, trace_shas,
-                   layers5_sha, layers5_offsets, keyed_shas):
+                   layers5_sha, layers5_offsets, keyed_meta):
     """Fail closed unless every generated hash matches the frozen replay pin.
     Ties the live image manifest byte-for-byte to config/artifacts.native_ycsb.json
     (single source of truth for DB / 2d plan / layers_5 plan / classifier / YC trace
@@ -354,25 +409,30 @@ def crosscheck_pin(db_sha, plan_sha, classifier_sha, trace_shas,
                   for e in pin["representative_workload"]["seed_family"]}
     for s in SEEDS:
         need(trace_shas[str(s)], pin_traces[str(s)], "trace_seed_%d" % s)
-    # keyed 2e_K10 plans: each seed's frozen delivery-plan sha + counts are pinned
-    # explicitly, and the strategy must appear in strategy_plans so the ws2 matrix
-    # validation gate (allowed_strategies = pin.strategy_plans.keys()) widens.
-    if KEYED_STRATEGY not in pin.get("strategy_plans", {}):
-        sys.exit("pin mismatch: strategy_plans has no %s marker" % KEYED_STRATEGY)
+    # keyed plans: for every keyed strategy, each seed's frozen delivery-plan sha +
+    # per-seed counts are pinned explicitly, and the strategy must appear in
+    # strategy_plans so the ws2 matrix validation gate (allowed_strategies =
+    # pin.strategy_plans.keys()) widens. Counts are per-seed data (2f_slru varies by
+    # seed), so the pin carries the exact per-seed values, not one universal count.
     pin_keyed = pin.get("keyed_strategy_plans", {}).get(CANONICAL_WORKLOAD_ID)
     if pin_keyed is None:
         sys.exit("pin mismatch: no keyed_strategy_plans for %s" % CANONICAL_WORKLOAD_ID)
-    for s in SEEDS:
-        entry = pin_keyed.get(str(s), {}).get(KEYED_STRATEGY)
-        if entry is None:
-            sys.exit("pin mismatch: no keyed %s plan for seed %d" % (KEYED_STRATEGY, s))
-        need(keyed_shas[s], entry["sha256"], "keyed_%s_seed_%d" % (KEYED_STRATEGY, s))
-        need(KEYED_EXPECTED_PAGES, entry["expected_pages"],
-             "keyed_%s_seed_%d_pages" % (KEYED_STRATEGY, s))
-        need(KEYED_EXPECTED_INTERIOR, entry["expected_interior_pages"],
-             "keyed_%s_seed_%d_interior" % (KEYED_STRATEGY, s))
-        need(KEYED_EXPECTED_LEAF, entry["expected_leaf_pages"],
-             "keyed_%s_seed_%d_leaf" % (KEYED_STRATEGY, s))
+    for spec in KEYED_SPECS:
+        strat = spec["strategy"]
+        if strat not in pin.get("strategy_plans", {}):
+            sys.exit("pin mismatch: strategy_plans has no %s marker" % strat)
+        for s in SEEDS:
+            entry = pin_keyed.get(str(s), {}).get(strat)
+            if entry is None:
+                sys.exit("pin mismatch: no keyed %s plan for seed %d" % (strat, s))
+            m = keyed_meta[strat][s]
+            need(m["sha"], entry["sha256"], "keyed_%s_seed_%d" % (strat, s))
+            need(m["pages"], entry["expected_pages"],
+                 "keyed_%s_seed_%d_pages" % (strat, s))
+            need(m["interior"], entry["expected_interior_pages"],
+                 "keyed_%s_seed_%d_interior" % (strat, s))
+            need(m["leaf"], entry["expected_leaf_pages"],
+                 "keyed_%s_seed_%d_leaf" % (strat, s))
 
 
 def main():
@@ -425,14 +485,42 @@ def main():
     plan_sha = sha256_file(plan)
     classifier_sha = sha256_file(classify)
 
-    # keyed per-seed 2e_K10 plans (read + validate committed frozen selections)
-    keyed_block, keyed_shas = build_keyed_strategy_plans(
+    # keyed per-seed plans for every keyed strategy (read + validate committed
+    # frozen selections); keyed_meta carries per-seed sha + counts for the pin gate.
+    keyed_block, keyed_meta = build_keyed_strategy_plans(
         page_size, page_count, offsets, db_sha)
+
+    # keyed strategy_plans markers (one per keyed strategy) -- present so the ws2
+    # matrix validation allowed set (pin.strategy_plans.keys()) widens; carry NO
+    # inline offsets (excluded from the static-plan cache). Fixed-footprint
+    # strategies record a single expected count; per-seed strategies record the
+    # per-seed count maps.
+    keyed_markers = {}
+    for spec in KEYED_SPECS:
+        strat = spec["strategy"]
+        marker = {
+            "path": None, "sha256": None, "kind": spec["marker_kind"],
+            "keyed": True, "per_seed": True,
+            "workload_dependent": True, "seed_dependent": True,
+            "expected_interior_pages": KEYED_EXPECTED_INTERIOR,
+            "workload": CANONICAL_WORKLOAD_ID, "seeds": SEEDS,
+            "keyed_plans_ref": "keyed_strategy_plans",
+            "note": spec["marker_note"],
+        }
+        if spec["expected_pages"] is not None:
+            marker["expected_pages"] = spec["expected_pages"]
+            marker["expected_leaf_pages"] = spec["expected_leaf"]
+        else:
+            marker["per_seed_expected_pages"] = {
+                str(s): keyed_meta[strat][s]["pages"] for s in SEEDS}
+            marker["per_seed_expected_leaf_pages"] = {
+                str(s): keyed_meta[strat][s]["leaf"] for s in SEEDS}
+        keyed_markers[strat] = marker
 
     # Byte-tie the live manifest to the frozen replay pin (fail closed).
     crosscheck_pin(db_sha, plan_sha, classifier_sha,
                    {s: seedmap[s]["sha256"] for s in seedmap},
-                   layers5_sha, layers5_offsets, keyed_shas)
+                   layers5_sha, layers5_offsets, keyed_meta)
 
     st = os.stat(db)
     manifest = {
@@ -501,26 +589,11 @@ def main():
             },
             "baseline": {"path": None, "sha256": None, "kind": "no_prefetch",
                          "expected_pages": 0},
-            # Keyed per-(workload,seed) strategy marker. Carries NO inline offsets
-            # (so it is excluded from the static-plan cache); the per-seed plans
-            # live in keyed_strategy_plans below. Present here so it is a member of
+            # Keyed per-(workload,seed) strategy markers (2e_K10, 2f_slru) are
+            # merged in below via keyed_markers -- each carries NO inline offsets
+            # (excluded from the static-plan cache); the per-seed plans live in
+            # keyed_strategy_plans. Present so they are members of
             # strategy_plans.keys() -- the ws2 matrix validation allowed set.
-            KEYED_STRATEGY: {
-                "path": None, "sha256": None, "kind": "hot2e_keyed_per_seed",
-                "keyed": True, "per_seed": True,
-                "workload_dependent": True, "seed_dependent": True,
-                "expected_pages": KEYED_EXPECTED_PAGES,
-                "expected_interior_pages": KEYED_EXPECTED_INTERIOR,
-                "expected_leaf_pages": KEYED_EXPECTED_LEAF,
-                "workload": CANONICAL_WORKLOAD_ID,
-                "seeds": SEEDS,
-                "keyed_plans_ref": "keyed_strategy_plans",
-                "note": ("2e_K10 = resident 92-interior 2d skeleton UNION top-%d "
-                         "hot leaf pages; leaf half is seed-dependent. Per-seed "
-                         "frozen plans in keyed_strategy_plans[%s][<seed>][%s]."
-                         % (KEYED_EXPECTED_LEAF, CANONICAL_WORKLOAD_ID,
-                            KEYED_STRATEGY)),
-            },
         },
         "keyed_strategy_plans": keyed_block,
         "workload_traces": traces,
@@ -532,6 +605,8 @@ def main():
                   "OW_ARTIFACT_ROOT. expected_relevant_page_count is the whole-DB "
                   "page count; interior_page_count is the 92-page skeleton."),
     }
+
+    manifest["strategy_plans"].update(keyed_markers)
 
     os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
     with open(args.out, "w") as f:

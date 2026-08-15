@@ -25,7 +25,7 @@ except ImportError:  # pragma: no cover - OpenWhisk flat layout
     import sqlite_bridge
     from session import Session, validate_request_semantics
 
-SUPPORTED_STRATEGIES = ("baseline", "2d", "layers_5", "2e_K10")
+SUPPORTED_STRATEGIES = ("baseline", "2d", "layers_5", "2e_K10", "2f_slru")
 HANDLE_MODES = ("warm", "standalone")
 REQUIRED_REQUEST_FIELDS = ("request_id", "workload", "strategy", "seed",
                            "first_operation_id", "diagnostic_mode", "cold_reset",
@@ -49,7 +49,7 @@ DELIVERY_INVARIANTS = {
 }
 # strategies whose plan varies by (workload, seed); expected counts come from the
 # frozen keyed plan, never a global constant.
-KEYED_STRATEGIES = ("2e_K10",)
+KEYED_STRATEGIES = ("2e_K10", "2f_slru")
 _SESSION = None
 
 # The image bakes the artifacts under a FIXED absolute root. OpenWhisk extracts

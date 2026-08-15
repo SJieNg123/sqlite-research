@@ -59,7 +59,7 @@ class TestSelectOffsets(unittest.TestCase):
 
     def test_unsupported_fails(self):
         with self.assertRaises(ValueError):
-            main.select_offsets("2f_slru", fake_session([1]))
+            main.select_offsets("frequency_14", fake_session([1]))
 
 
 @unittest.skipUnless(os.path.exists(DB), "reference DB missing")

@@ -52,7 +52,7 @@ class TestLayersFivePureInvariants(unittest.TestCase):
 
     def test_supported_strategies_include_layers5(self):
         self.assertEqual(main.SUPPORTED_STRATEGIES,
-                         ("baseline", "2d", "layers_5", "2e_K10"))
+                         ("baseline", "2d", "layers_5", "2e_K10", "2f_slru"))
 
     def test_delivery_invariant_is_five_five_zero_five(self):
         self.assertEqual(main.DELIVERY_INVARIANTS["layers_5"],

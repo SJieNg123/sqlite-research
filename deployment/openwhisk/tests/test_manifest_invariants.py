@@ -283,20 +283,22 @@ class TestNativeYcsbPinFrozenSources(unittest.TestCase):
 
     def test_matrix_allowed_strategies_gate(self):
         # 05_full_matrix.sh derives allowed strategies straight from the pin's
-        # strategy_plans keys; the widened pin must accept exactly {baseline,2d,
-        # layers_5,2e_K10} and reject anything else (e.g. not-yet-implemented arms).
+        # strategy_plans keys; the Batch-2 pin must accept exactly {baseline,2d,
+        # layers_5,2e_K10,2f_slru} and reject anything else (e.g. not-yet-implemented
+        # arms).
         allowed = set(self.pin["strategy_plans"].keys())
-        self.assertEqual(allowed, {"baseline", "2d", "layers_5", "2e_K10"})
-        for ok in ("baseline", "2d", "layers_5", "2e_K10"):
+        self.assertEqual(allowed, {"baseline", "2d", "layers_5", "2e_K10", "2f_slru"})
+        for ok in ("baseline", "2d", "layers_5", "2e_K10", "2f_slru"):
             self.assertIn(ok, allowed)
-        for bad in ("2f_slru", "leaf_freq", "leaf_rand", "learned_markov", "bogus"):
+        for bad in ("leaf_freq", "leaf_rand", "2e_K500", "2f_topN", "learned_markov",
+                    "bogus"):
             self.assertNotIn(bad, allowed)
 
     def test_invocation_plan_strategies_widened(self):
-        # invocation_plan is the hashed replay config; must list 2e_K10 and match
-        # the strategy_plans keys (baseline paired arm always present).
+        # invocation_plan is the hashed replay config; must list both keyed consumers
+        # and match the strategy_plans keys (baseline paired arm always present).
         strat = self.pin["invocation_plan"]["strategies"]
-        self.assertEqual(strat, ["baseline", "2d", "layers_5", "2e_K10"])
+        self.assertEqual(strat, ["baseline", "2d", "layers_5", "2e_K10", "2f_slru"])
         self.assertIn("baseline", strat)
 
     def test_expected_page_count_is_full_db_not_92(self):
@@ -463,7 +465,15 @@ class TestCrosscheckPinLayers5FailsClosed(unittest.TestCase):
                         for e in cls.pin["representative_workload"]["seed_family"]},
             layers5_sha=l5["sha256"],
             layers5_offsets=list(l5["offsets"]),
-            keyed_shas={s: keyed[str(s)]["2e_K10"]["sha256"] for s in range(1, 11)},
+            # per-seed sha + counts for every keyed strategy (2e_K10, 2f_slru),
+            # read straight from the pin -- crosscheck_pin compares meta to the pin.
+            keyed_meta={
+                strat: {s: {"sha": keyed[str(s)][strat]["sha256"],
+                            "pages": keyed[str(s)][strat]["expected_pages"],
+                            "interior": keyed[str(s)][strat]["expected_interior_pages"],
+                            "leaf": keyed[str(s)][strat]["expected_leaf_pages"]}
+                        for s in range(1, 11)}
+                for strat in ("2e_K10", "2f_slru")},
         )
 
     def _call(self, **over):
@@ -472,7 +482,7 @@ class TestCrosscheckPinLayers5FailsClosed(unittest.TestCase):
         return gen.crosscheck_pin(
             args["db_sha"], args["plan_sha"], args["classifier_sha"],
             args["trace_shas"], args["layers5_sha"], args["layers5_offsets"],
-            args["keyed_shas"])
+            args["keyed_meta"])
 
     def test_matching_layers5_passes(self):
         self._call()  # must not raise
