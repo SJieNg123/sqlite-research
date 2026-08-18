@@ -28,6 +28,9 @@ from pathlib import Path
 _ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(_ROOT / "config"))
 from workload_registry import normalize_workload_id  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from validate_schedule import (  # noqa: E402
+    normalized_contract, matrix_fingerprint, validate_schedule)
 
 
 def _order(schedule_seed, pair_id, target):
@@ -85,9 +88,20 @@ def build_schedule(workloads, seeds, first_ops, handle_modes, targets,
               "expected_artifact_manifest_hash": ids["artifact_manifest_sha256"],
               "expected_action_image_digest": ids["action_image_digest"],
               "note": "warmup-only; never measured; driver repeats on each new process_uuid"}
-    return {"schema_version": 1, "schedule_seed": schedule_seed, "identity": ids,
-            "counts": {"pairs": len(pairs), "invocations": len(invocations)},
-            "warmup": warmup, "pairs": pairs, "invocations": invocations}
+    contract = normalized_contract(workloads, seeds, first_ops, handle_modes,
+                                   targets, repetitions, schedule_seed)
+    sched = {"schema_version": 2, "schedule_seed": schedule_seed, "identity": ids,
+             "matrix_fingerprint": matrix_fingerprint(contract, ids),
+             "contract": contract,
+             "counts": {"pairs": len(pairs), "invocations": len(invocations)},
+             "warmup": warmup, "pairs": pairs, "invocations": invocations}
+    # Fail closed: a generator that ever emits an imbalanced schedule must abort
+    # here, before the schedule is persisted or any request is invoked.
+    problems = validate_schedule(sched, contract)
+    if problems:
+        raise ValueError("build_schedule produced an INVALID schedule:\n  "
+                         + "\n  ".join(problems))
+    return sched
 
 
 def main():

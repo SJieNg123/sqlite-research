@@ -185,6 +185,44 @@ else
   ws2_log "schedule built -> $SCHED"
 fi
 
+# --- fail-closed schedule balance + identity gate -------------------------- #
+# Prove the schedule (freshly built OR reused on resume) is a BALANCED matrix and
+# was built for THIS matrix, BEFORE exploding a single request. This rejects the
+# malformed-but-total-correct class (e.g. per-target 198/198/198/206) and refuses
+# to reuse a stale/foreign schedule.json left from a different matrix. A total
+# count that happens to be right is NOT sufficient to proceed.
+SCHED_VALIDATION="$WS2_STAGEDIR/schedule_validation.txt"
+if ! python3 "$WS2_OW_DIR/client/validate_schedule.py" "$SCHED" "$MATRIX" \
+      > "$SCHED_VALIDATION" 2>&1; then
+  cat "$SCHED_VALIDATION" >&2
+  ws2_mark_status "$WS2_STAGEDIR" done FAIL
+  ws2_die "schedule balance/identity validation FAILED (see $SCHED_VALIDATION). \
+If this is a stale schedule from a different matrix, re-run with WS2_FORCE=1 to \
+rebuild and purge stale responses. No request was invoked."
+fi
+cat "$SCHED_VALIDATION" >&2
+
+# --- bind raw/ to the schedule identity (resume safety) -------------------- #
+# req_/resp_ files are keyed by schedule POSITION. If a rebuilt schedule maps a
+# different request to a position while a stale resp_ from an earlier (e.g.
+# malformed) schedule survives, the resume classifier could match the stale
+# request/response pair and skip it -- silently resuming invalid evidence. Tie the
+# raw/ tree to the validated schedule's matrix_fingerprint: when raw/ was populated
+# for a DIFFERENT schedule (or WS2_FORCE), clear req_/resp_/stderr so the current
+# schedule re-explodes fresh and no old response is resumable.
+SCHED_FP="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["matrix_fingerprint"])' "$SCHED")"
+FP_MARKER="$RAW/.schedule_fingerprint"
+RAW_FP_PREV=""
+[ -f "$FP_MARKER" ] && RAW_FP_PREV="$(cat "$FP_MARKER")"
+if [ "${WS2_FORCE:-0}" = 1 ] || [ "$RAW_FP_PREV" != "$SCHED_FP" ]; then
+  if [ -n "$RAW_FP_PREV" ] && [ "$RAW_FP_PREV" != "$SCHED_FP" ]; then
+    ws2_warn "raw/ belongs to a different schedule (fingerprint $RAW_FP_PREV != $SCHED_FP); \
+clearing stale requests/responses so old evidence cannot be resumed."
+  fi
+  rm -f "$RAW"/req_*.json "$RAW"/resp_*.json "$RAW"/*.stderr
+  printf '%s\n' "$SCHED_FP" > "$FP_MARKER"
+fi
+
 # Explode requests (idempotent; identity de-dup enforced).
 python3 - "$SCHED" "$RAW" <<'PY'
 import json, os, sys
