@@ -401,3 +401,48 @@ reason the *recently-touched* leaf is skipped by best-effort
 `invalidate_mapping_pages` while settled interiors are dropped; the precise reason
 standalone's effect is weaker; the absolute ~2–3 ms cold-fault cost. None of these
 change the conclusions; they refine the eviction story.
+
+---
+
+## Addendum (2026-08-25) — how to read the YC SECONDARY matrix
+
+The original audit above stands unchanged. A **secondary** matrix was subsequently
+added — five more strategies (`2e_K500`, `leaf_freq_K10`, `leaf_rand_K10`,
+`2f_top102`, `learned_markov_102`) on the same canonical workload
+`native_ycsb_c_read_zipf`, seeds 1..10, warm+standalone, 10 reps, under a **new**
+`schedule_seed=20260825` (5 × 10 × 2 × 10 × 2 = **2000 invocations**;
+`secondary_run_config_sha256=441609e6…`). The primary 1600-run YC matrix
+(`run_config_sha256=022fbeb0…`) is **untouched immutable evidence**. Interpretation
+constraints carry over verbatim:
+
+- **The positional effect is real and systematic, not noise.** The primary audit
+  found a strong *immediate positional* effect in warm-handle `first_query_us` even
+  though the per-invocation gate certifies zero Linux DB page-cache residency
+  (interiors == 0) after reset. This is a **systematic short-lived
+  execution/storage-state or order effect** — explicitly **NOT** random hardware
+  fluctuation. The exact mechanism (which non-page-cache state, or which recently
+  touched leaf, survives the reset) is unresolved and **out of scope** here.
+
+- **Warm paired ratios are not headline strategy estimates.** As established above,
+  the within-pair baseline-vs-target statistic is an order artifact. The secondary
+  strategies inherit this: do **not** read their warm paired ratios as strategy
+  speedups. First-arm-only, between-arm randomized comparison is the salvageable
+  reading, subject to the same §8–§9 exclusions.
+
+- **This does not change the cost-accounting thesis.** "Faster first query ≠ faster
+  end-to-end performance" is unaffected. The secondary matrix does not attempt to
+  overturn or restate that thesis.
+
+- **What the secondary matrix IS for.** Deployment/feasibility (the generic keyed
+  machinery serves 5 more strategies with no per-strategy runtime code), delivery
+  correctness, and **footprint / qualitative mechanism-space** characterization
+  around the 2e_K10 headline — deep leaf union (`2e_K500`), the leaf-only
+  frequency-vs-random ablation (`leaf_freq_K10` / `leaf_rand_K10`), and the
+  budget-matched (N=102) ranked / learned competitors (`2f_top102`,
+  `learned_markov_102`). The last two rank with **no page-type knowledge** yet land
+  on an emergent, seed-uniform **51 interior / 51 leaf** split — a recorded property,
+  never imposed by the gate. These are qualitative/feasibility results, **not** new
+  warm-latency claims.
+
+None of the fail-closed identity gates were weakened to admit the five strategies;
+the primary run identity is byte-frozen.

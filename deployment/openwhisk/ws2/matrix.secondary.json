@@ -1,0 +1,11 @@
+{
+  "_comment": "YC SECONDARY matrix manifest for 05_full_matrix.sh -- the 5 mechanism-space strategies (2e_K500, leaf_freq_K10, leaf_rand_K10, 2f_top102, learned_markov_102) on canonical native_ycsb_c_read_zipf, seeds 1..10, warm+standalone, 10 reps. Runs under a NEW schedule_seed=20260825 and run_config_key=secondary_run_config_sha256 so its identity is distinct from the frozen primary (schedule_seed=20260804, run_config_sha256). baseline is the paired A-arm anchor (not a 6th target): 5 targets x 10 seeds x 2 handle_modes x 10 reps = 1000 pairs = 2000 invocations. Copy/pass explicitly with --matrix; every field is validated against the frozen runtime artifact pin before anything runs, and real invocation still requires WS2_MATRIX_IMPL_READY=1.",
+  "schedule_seed": 20260825,
+  "run_config_key": "secondary_run_config_sha256",
+  "workloads": ["native_ycsb_c_read_zipf"],
+  "strategies": ["baseline", "2e_K500", "leaf_freq_K10", "leaf_rand_K10", "2f_top102", "learned_markov_102"],
+  "seeds": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+  "handle_modes": ["warm", "standalone"],
+  "first_operation_ids": [0],
+  "repetitions_per_cell": 10
+}

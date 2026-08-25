@@ -1,0 +1,41 @@
+{
+  "artifacts": {
+    "marginal": "YC_orig_test2_marginal.csv",
+    "scores": "YC_orig_test2_scores.csv",
+    "transitions": "YC_orig_test2_transitions.csv"
+  },
+  "budget_pages": [
+    102
+  ],
+  "horizon": 4,
+  "input_sha256": {
+    "1": "e07bb0dae1c595b5335d4fe41834474690845d7dd31755cbf6c2449017a29603",
+    "10": "6c3d1bcd1e3e27d0029865a81a9b178c7cf1a112e0cfd81b0f57b624b30c2299",
+    "3": "86e866b8fcb18ee036f55f7e973e0de8def77f76e5c45dd5fd43956168d0b84d",
+    "4": "74b99282b80c014e9288cd20938e71abb44ca14106e46629c7bd8296c0ae2781",
+    "5": "913a1fd4eb83c5be14b884ff08546789135d831c8bfd9605dc56eca497398357",
+    "6": "ac51b9ba4be6dae4bc015886f2c8d3863a8782fe8aa2c1cfbd151414c547a558",
+    "7": "a2a589f6c60e721adb5dd6f9b74c119926dc71ee609976f730203791c905f71e",
+    "8": "945305b2d81f9c100fc5c4ec4d9597200ef841fbe5145360ed684b4e556e62b2",
+    "9": "142d92eacce927277ae1864ae34a028c1d68098d12a41b8a7fd0115431880205"
+  },
+  "layout": "orig",
+  "max_real_depth": 3,
+  "model": "first_order_markov",
+  "model_version": 2,
+  "reads_only": false,
+  "test_seed": 2,
+  "tie_break": "score_desc_page_asc",
+  "train_seeds": [
+    1,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10
+  ],
+  "workload": "YC"
+}

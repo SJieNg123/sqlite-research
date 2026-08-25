@@ -16,7 +16,8 @@ Identity inputs:
   OW_ARTIFACT_MANIFEST_SHA256  (required for real execution: identity gate)
 
 IMPLEMENTATION GATE: real invocation happens ONLY when WS2_MATRIX_IMPL_READY=1 AND
-every requested strategy is one the action implements (baseline, 2d, layers_5, 2e_K10, 2f_slru).
+every requested strategy is one the action implements (baseline, 2d, layers_5, 2e_K10,
+2f_slru, 2e_K500, leaf_freq_K10, leaf_rand_K10, 2f_top102, learned_markov_102).
 Otherwise the stage validates the matrix, writes the schedule, and STOPS
 (result=GATED) -- no invocation. (Note: which strategies may appear in a matrix at
 all is a separate, stricter gate -- matrix validation above accepts only the
@@ -150,7 +151,31 @@ print(",".join(t) if t else "2d")
 PY
 )"
 
-RUN_CONFIG_SHA="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["run_config_sha256"])' "$WS2_PIN_JSON")"
+# Select which run-config identity to stamp on every request. Defaults to the
+# primary `run_config_sha256`; a secondary matrix sets `run_config_key`
+# (e.g. "secondary_run_config_sha256") to run under a distinct identity without
+# touching the frozen primary. Fail loud if this matrix requests any strategy
+# OUTSIDE the chosen run-config's declared invocation_plan.strategies -- stamping
+# that identity on a strategy it never declared makes the run-config tag lie
+# (e.g. a secondary strategy under the primary run_config_sha256).
+RUN_CONFIG_SHA="$(python3 - "$WS2_PIN_JSON" "$MATRIX" 2>&1 <<'PY'
+import json, sys
+pin = json.load(open(sys.argv[1]))
+m = json.load(open(sys.argv[2]))
+key = m.get("run_config_key", "run_config_sha256")
+if key not in pin:
+    sys.exit("FAIL run_config_key %r absent from pin" % key)
+ip_key = key.replace("run_config_sha256", "invocation_plan")  # secondary_* -> secondary_invocation_plan
+if ip_key not in pin:
+    sys.exit("FAIL invocation-plan block %r absent from pin (for run_config_key %r)" % (ip_key, key))
+plan_strats = set(pin[ip_key]["strategies"])
+extra = sorted(set(m["strategies"]) - plan_strats)
+if extra:
+    sys.exit("FAIL matrix strategies %s not declared by %s.strategies %s (wrong run_config_key?)"
+             % (extra, ip_key, sorted(plan_strats)))
+print(pin[key])
+PY
+)" || ws2_die "run-config selection/consistency check failed: $RUN_CONFIG_SHA"
 SCHED="$WS2_STAGEDIR/schedule.json"
 RAW="$WS2_STAGEDIR/raw"; mkdir -p "$RAW"
 # DRY_RUN synthetic responses are written HERE, never into the measured raw/ tree,
@@ -239,13 +264,16 @@ print("requests ready: %d invocations" % len(s["invocations"]))
 PY
 
 # --- IMPLEMENTATION GATE --------------------------------------------------- #
-# The action implements baseline + 2d + layers_5 + 2e_K10 + 2f_slru (Batch 2). Any
-# strategy outside this set blocks real invocation. Validation + scheduling above
-# have already run. Keep this set in sync with action/main.py SUPPORTED_STRATEGIES.
+# The action implements baseline + 2d + layers_5 + 2e_K10 + 2f_slru (Batch 2) plus
+# the YC secondary set 2e_K500 + leaf_freq_K10 + leaf_rand_K10 + 2f_top102 +
+# learned_markov_102 (Batch 3). Any strategy outside this set blocks real
+# invocation. Validation + scheduling above have already run. Keep this set in sync
+# with action/main.py SUPPORTED_STRATEGIES.
 UNSUPPORTED="$(python3 - "$MATRIX" <<'PY'
 import json, sys
 m = json.load(open(sys.argv[1]))
-impl = {"baseline", "2d", "layers_5", "2e_K10", "2f_slru"}
+impl = {"baseline", "2d", "layers_5", "2e_K10", "2f_slru",
+        "2e_K500", "leaf_freq_K10", "leaf_rand_K10", "2f_top102", "learned_markov_102"}
 bad = [s for s in m["strategies"] if s not in impl]
 print(",".join(bad))
 PY
@@ -254,7 +282,7 @@ if [ "${WS2_MATRIX_IMPL_READY:-0}" != 1 ] || [ -n "$UNSUPPORTED" ]; then
   {
     echo "IMPLEMENTATION GATE: real matrix invocation is blocked."
     echo "  WS2_MATRIX_IMPL_READY=${WS2_MATRIX_IMPL_READY:-0} (must be 1 to execute)"
-    [ -n "$UNSUPPORTED" ] && echo "  unsupported strategies requested: $UNSUPPORTED (action implements baseline,2d,layers_5,2e_K10,2f_slru)"
+    [ -n "$UNSUPPORTED" ] && echo "  unsupported strategies requested: $UNSUPPORTED (action implements baseline,2d,layers_5,2e_K10,2f_slru,2e_K500,leaf_freq_K10,leaf_rand_K10,2f_top102,learned_markov_102)"
     echo "  Validated matrix + deterministic schedule are ready at: $SCHED"
     echo "  No invocation performed."
   } | ws2_atomic_write "$WS2_STAGEDIR/gate.txt"

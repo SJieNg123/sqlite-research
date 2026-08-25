@@ -102,6 +102,23 @@ def _slru_native_rel(seed):
             "hotpages_yc_seed%d.csv" % seed)
 
 
+# --- secondary strategy native sources of record (committed per seed) ---
+def _hot2e_k500_native_rel(seed):
+    return ("deployment/openwhisk/config/plans/keyed/native_source/"
+            "hot2e_YC_orig_K500_seed%d.csv" % seed)
+
+
+def _freqdump_native_rel(seed):
+    return ("deployment/openwhisk/config/plans/keyed/native_source/"
+            "freqdump_YC_orig_N102_seed%d.csv" % seed)
+
+
+def _markov_native_rel(seed):
+    # LOSO test-seed model hotset (trained on the other 9 seeds).
+    return ("deployment/openwhisk/config/plans/keyed/native_source/"
+            "learned_markov_YC_orig_N102_test%d.csv" % seed)
+
+
 KEYED_SPECS = [
     {
         "strategy": "2e_K10",
@@ -111,6 +128,7 @@ KEYED_SPECS = [
         "marker_kind": "hot2e_keyed_per_seed",
         "expected_pages": 102,   # fixed across seeds
         "expected_leaf": 10,     # fixed across seeds
+        "expected_interior": EXPECTED_INTERIORS,  # full 92-skeleton (set-equality)
         "native_source_rel": _hot2e_native_rel,
         "marker_note": ("2e_K10 = resident 92-interior 2d skeleton UNION top-10 hot "
                         "leaf pages; leaf half is seed-dependent. Per-seed frozen "
@@ -125,6 +143,7 @@ KEYED_SPECS = [
         "marker_kind": "slru_keyed_per_seed",
         "expected_pages": None,  # per-seed (whole resident working set)
         "expected_leaf": None,   # per-seed = total - 92
+        "expected_interior": EXPECTED_INTERIORS,  # full 92-skeleton (set-equality)
         "native_source_rel": _slru_native_rel,
         "marker_note": ("2f_slru = the entire resident working set (SLRU) for the "
                         "workload+seed, delivered before the measured first query "
@@ -132,6 +151,97 @@ KEYED_SPECS = [
                         "total/leaf footprint is per-seed (seed 8 = whole DB). "
                         "Per-seed frozen plans in "
                         "keyed_strategy_plans[%s][<seed>][2f_slru]."
+                        % CANONICAL_WORKLOAD_ID),
+    },
+    # --- YC SECONDARY strategies (mechanism-space characterization around 2e_K10;
+    # NOT headline warm-latency claims -- see the interpretation note). N_YC=102 =
+    # 92 interior + 10 leaf, frozen from the 2e_K10 artifact. Three interior gate
+    # classes: 92 (full skeleton, set-equality), 0 (leaf-only), None (emergent split
+    # for rank-by-frequency/score strategies, recorded per seed but not enforced). ---
+    {
+        "strategy": "2e_K500",
+        "plan_rel": ("deployment/openwhisk/config/plans/keyed/"
+                     "2e_K500_native_ycsb_c_read_zipf_seed%d.csv"),
+        "kind": "hot2e_interior_union_leaf",
+        "marker_kind": "hot2e_keyed_per_seed",
+        "expected_pages": None,  # per-seed (92 skeleton + top-500 leaves; here 592)
+        "expected_leaf": None,   # per-seed = total - 92
+        "expected_interior": EXPECTED_INTERIORS,  # full 92-skeleton (set-equality)
+        "native_source_rel": _hot2e_k500_native_rel,
+        "marker_note": ("2e_K500 = resident 92-interior 2d skeleton UNION top-500 hot "
+                        "leaf pages (deep leaf union; K=500 vs 2e_K10's K=10). Leaf "
+                        "half is seed-dependent. Per-seed frozen plans in "
+                        "keyed_strategy_plans[%s][<seed>][2e_K500]."
+                        % CANONICAL_WORKLOAD_ID),
+    },
+    {
+        "strategy": "leaf_freq_K10",
+        "plan_rel": ("deployment/openwhisk/config/plans/keyed/"
+                     "leaf_freq_K10_native_ycsb_c_read_zipf_seed%d.csv"),
+        "kind": "leaf_only_frequency",
+        "marker_kind": "leaf_keyed_per_seed",
+        "expected_pages": 10,    # fixed across seeds
+        "expected_leaf": 10,     # fixed across seeds
+        "expected_interior": 0,  # leaf-only ablation (interior skeleton omitted)
+        "native_source_rel": _hot2e_native_rel,  # top-10 hot leaves OF the 2e_K10 source
+        "marker_note": ("leaf_freq_K10 = the top-10 hot LEAF pages only -- the leaf "
+                        "half of 2e_K10 with the interior skeleton removed (frequency "
+                        "arm of the leaf-only ablation). Per-seed frozen plans in "
+                        "keyed_strategy_plans[%s][<seed>][leaf_freq_K10]."
+                        % CANONICAL_WORKLOAD_ID),
+    },
+    {
+        "strategy": "leaf_rand_K10",
+        "plan_rel": ("deployment/openwhisk/config/plans/keyed/"
+                     "leaf_rand_K10_native_ycsb_c_read_zipf_seed%d.csv"),
+        "kind": "leaf_only_random",
+        "marker_kind": "leaf_keyed_per_seed",
+        "expected_pages": 10,    # fixed across seeds
+        "expected_leaf": 10,     # fixed across seeds
+        "expected_interior": 0,  # leaf-only ablation (interior skeleton omitted)
+        "native_source_rel": _hot2e_native_rel,  # defines the excluded-hot-leaf pool
+        "marker_note": ("leaf_rand_K10 = 10 RANDOM leaf pages of the same leaf "
+                        "type(s) as the top-10 hot leaves, drawn by a deterministic "
+                        "seeded RNG (random arm of the leaf-only ablation; interior "
+                        "skeleton omitted). Per-seed frozen plans in "
+                        "keyed_strategy_plans[%s][<seed>][leaf_rand_K10]."
+                        % CANONICAL_WORKLOAD_ID),
+    },
+    {
+        "strategy": "2f_top102",
+        "plan_rel": ("deployment/openwhisk/config/plans/keyed/"
+                     "2f_top102_native_ycsb_c_read_zipf_seed%d.csv"),
+        "kind": "freqdump_ranked_partial",
+        "marker_kind": "freqdump_keyed_per_seed",
+        "expected_pages": 102,      # budget-matched to 2e_K10 (exact)
+        "expected_leaf": None,      # emergent
+        "expected_interior": None,  # EMERGENT split (ranks with no page-type knowledge)
+        "native_source_rel": _freqdump_native_rel,
+        "marker_note": ("2f_top102 = the top-102 resident pages by root->leaf "
+                        "traversal frequency (total budget-matched to 2e_K10's 102). "
+                        "Ranks with NO page-type knowledge, so the interior/leaf "
+                        "split is EMERGENT (observed 51/51 across seeds), recorded "
+                        "per seed but NOT enforced. Per-seed frozen plans in "
+                        "keyed_strategy_plans[%s][<seed>][2f_top102]."
+                        % CANONICAL_WORKLOAD_ID),
+    },
+    {
+        "strategy": "learned_markov_102",
+        "plan_rel": ("deployment/openwhisk/config/plans/keyed/"
+                     "learned_markov_102_native_ycsb_c_read_zipf_seed%d.csv"),
+        "kind": "learned_markov_partial",
+        "marker_kind": "learned_markov_keyed_per_seed",
+        "expected_pages": 102,      # budget-matched to 2e_K10 (exact)
+        "expected_leaf": None,      # emergent
+        "expected_interior": None,  # EMERGENT split (ranks by transition score)
+        "native_source_rel": _markov_native_rel,
+        "marker_note": ("learned_markov_102 = the top-102 pages by first-order Markov "
+                        "expected-visit score from a HELD-OUT (LOSO) transition model "
+                        "trained on the other 9 seeds (budget-matched to 102). Ranks "
+                        "by transition score with no page-type knowledge, so the "
+                        "interior/leaf split is EMERGENT (observed 51/51 across "
+                        "seeds), recorded per seed but NOT enforced. Per-seed frozen "
+                        "plans in keyed_strategy_plans[%s][<seed>][learned_markov_102]."
                         % CANONICAL_WORKLOAD_ID),
     },
 ]
@@ -274,11 +384,21 @@ def read_keyed_plan(csv_path, page_size, page_count, interior_offsets,
                  % (csv_path, len(offs), expected_pages))
     interior_hit = [o for o in offs if o in interior_set]
     leaf = [o for o in offs if o not in interior_set]
-    if len(interior_hit) != expected_interior:
-        sys.exit("keyed plan %s has %d interiors, expected %d"
-                 % (csv_path, len(interior_hit), expected_interior))
-    if set(interior_hit) != interior_set:
-        sys.exit("keyed plan %s interior half != 92-interior skeleton" % csv_path)
+    # 3-class interior gate. ``expected_interior`` is one of:
+    #   92 (EXPECTED_INTERIORS) -> the plan carries the full interior skeleton:
+    #       enforce BOTH the count and set-equality with the 92-page skeleton
+    #       (2e_K10, 2e_K500, 2f_slru);
+    #   0 -> a leaf-only plan: enforce zero interiors (leaf_freq_K10, leaf_rand_K10);
+    #   None -> an emergent split (2f_top102, learned_markov_102 rank by frequency /
+    #       transition score with no page-type knowledge): record the interior half,
+    #       do NOT force a count or the skeleton (forcing either would inject the very
+    #       page-type structure these strategies are defined to lack).
+    if expected_interior is not None:
+        if len(interior_hit) != expected_interior:
+            sys.exit("keyed plan %s has %d interiors, expected %d"
+                     % (csv_path, len(interior_hit), expected_interior))
+        if expected_interior == EXPECTED_INTERIORS and set(interior_hit) != interior_set:
+            sys.exit("keyed plan %s interior half != 92-interior skeleton" % csv_path)
     if expected_leaf is not None and len(leaf) != expected_leaf:
         sys.exit("keyed plan %s has %d leaves, expected %d"
                  % (csv_path, len(leaf), expected_leaf))
@@ -305,7 +425,8 @@ def build_keyed_strategy_plans(page_size, page_count, interior_offsets, db_sha):
             offs, interior_offs, leaf_offs = read_keyed_plan(
                 ap, page_size, page_count, interior_offsets,
                 expected_pages=spec["expected_pages"],
-                expected_leaf=spec["expected_leaf"])
+                expected_leaf=spec["expected_leaf"],
+                expected_interior=spec["expected_interior"])
             plan_sha = sha256_file(ap)
             pages, interior, leaf = len(offs), len(interior_offs), len(leaf_offs)
             meta[strat][s] = {"sha": plan_sha, "pages": pages,
@@ -502,11 +623,18 @@ def main():
             "path": None, "sha256": None, "kind": spec["marker_kind"],
             "keyed": True, "per_seed": True,
             "workload_dependent": True, "seed_dependent": True,
-            "expected_interior_pages": KEYED_EXPECTED_INTERIOR,
             "workload": CANONICAL_WORKLOAD_ID, "seeds": SEEDS,
             "keyed_plans_ref": "keyed_strategy_plans",
             "note": spec["marker_note"],
         }
+        # interior footprint declaration: a fixed count for full-skeleton (92) and
+        # leaf-only (0) strategies; per-seed data for emergent-split strategies
+        # (2f_top102/learned_markov_102), which rank without page-type knowledge.
+        if spec["expected_interior"] is not None:
+            marker["expected_interior_pages"] = spec["expected_interior"]
+        else:
+            marker["per_seed_expected_interior_pages"] = {
+                str(s): keyed_meta[strat][s]["interior"] for s in SEEDS}
         if spec["expected_pages"] is not None:
             marker["expected_pages"] = spec["expected_pages"]
             marker["expected_leaf_pages"] = spec["expected_leaf"]

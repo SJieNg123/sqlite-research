@@ -33,6 +33,9 @@ WL = "native_ycsb_c_read_zipf"
 SEEDS = list(range(1, 11))
 MODES = ["warm", "standalone"]
 PRIMARY_TARGETS = ["2d", "layers_5", "2e_K10", "2f_slru"]
+SECONDARY_TARGETS = ["2e_K500", "leaf_freq_K10", "leaf_rand_K10", "2f_top102",
+                     "learned_markov_102"]
+SECONDARY_SEED = 20260825
 
 
 def build(targets, seeds=SEEDS, modes=MODES, first_ops=(0,), reps=10,
@@ -122,6 +125,33 @@ class TestBalancedGeneration(unittest.TestCase):
                       "repetition_id"):
                 self.assertEqual(b[f], tgt[0][f], "%s %s" % (pid, f))
         self._assert_valid(sched, PRIMARY_TARGETS)
+
+    def test_D_five_targets_exact_secondary_matrix(self):
+        # YC SECONDARY matrix: 5 targets x 10 seeds x 2 modes x 10 reps = 1000 pairs
+        # -> 2000 invocations, under the distinct schedule_seed 20260825. baseline is
+        # the pair anchor (1000 baseline arms), never a 6th target.
+        sched = build(SECONDARY_TARGETS, seed=SECONDARY_SEED)
+        inv = sched["invocations"]
+        self.assertEqual(len(inv), 2000)
+        by_strat, by_seed, by_ts = marginals(sched)
+        self.assertEqual(by_strat["baseline"], 1000)
+        for t in SECONDARY_TARGETS:
+            self.assertEqual(by_strat[t], 200, t)
+        for s in SEEDS:
+            self.assertEqual(by_seed[s], 200, "seed %d" % s)
+        for t in SECONDARY_TARGETS:
+            for s in SEEDS:
+                self.assertEqual(by_ts[(t, s)], 20, "%s x seed%d" % (t, s))
+        tsmr = Counter((i["strategy"], i["seed"], i["handle_mode"],
+                        i["repetition_id"]) for i in inv
+                       if i["strategy"] != "baseline")
+        self.assertTrue(all(v == 1 for v in tsmr.values()))
+        self.assertEqual(len(sched["pairs"]), 1000)
+        self._assert_valid(sched, SECONDARY_TARGETS, seed=SECONDARY_SEED)
+        # the secondary fingerprint must differ from the primary matrix's.
+        primary = build(PRIMARY_TARGETS)
+        self.assertNotEqual(sched["matrix_fingerprint"],
+                            primary["matrix_fingerprint"])
 
 
 class TestABBAOrderOnly(unittest.TestCase):

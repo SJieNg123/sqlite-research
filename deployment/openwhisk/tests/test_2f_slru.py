@@ -216,7 +216,9 @@ class TestCrosscheckPin2fSlruFailsClosed(unittest.TestCase):
                         "interior": keyed[str(s)][strat]["expected_interior_pages"],
                         "leaf": keyed[str(s)][strat]["expected_leaf_pages"]}
                     for s in SEEDS}
-            for strat in ("2e_K10", "2f_slru")}
+            # crosscheck_pin iterates every KEYED_SPECS strategy, so the good meta must
+            # carry them all (not just this module's focus), or it KeyErrors.
+            for strat in (spec["strategy"] for spec in gen.KEYED_SPECS)}
         cls.good = dict(
             db_sha=cls.pin["database"]["sha256"],
             plan_sha=cls.pin["strategy_plans"]["2d"]["sha256"],

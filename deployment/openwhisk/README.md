@@ -20,7 +20,7 @@ deployment/openwhisk/
   action/
     residency.py                non-root mmap/mincore/madvise primitives (mirror of benchmark_harness.c)
     session.py                  warm-process identity + artifact validation
-    main.py                     OpenWhisk handler; baseline + 2d + layers_5 + 2e_K10 + 2f_slru paths
+    main.py                     OpenWhisk handler; baseline + 2d + layers_5 + 7 keyed strategies
   client/
     collect.py                  invocation collector + session classification (no OpenWhisk in 5A)
     summarize.py                per-seed paired summary under the atomic rules
@@ -30,7 +30,7 @@ deployment/openwhisk/
     example.json                example run configuration (placeholders only)
     plans/interior_pages.csv    frozen mandatory-interior (2d) skeleton, 92 pages
     plans/layers_5_pages.csv    frozen layers_5 plan, first 5 interior pages (strict prefix of 2d)
-    plans/keyed/                frozen per-(workload,seed) plans; 2e_K10 + 2f_slru YC seeds 1..10 (+ native_source/)
+    plans/keyed/                frozen per-(workload,seed) plans; 7 keyed strategies, YC seeds 1..10 (+ native_source/)
   tests/                        local unit/dry tests (no OpenWhisk)
 ```
 
@@ -100,8 +100,32 @@ first consumer and `2f_slru` as the second:
   runtime path. Its per-seed TTFQ figures are a first-query foil and do **not** claim
   to prove any cumulative/e2e degradation.
 
-The learned/frequency strategies reuse this same keyed/leaf machinery but are **not
-yet implemented**.
+## YC secondary strategies (Batch 3)
+
+Batch 3 adds five more consumers of the **same** keyed machinery on the pinned
+`native_ycsb_c_read_zipf` (YC), seeds 1..10 — mechanism-space / feasibility around
+the `2e_K10` headline, **not** new warm-latency claims (see
+`PAIR_CARRYOVER_AUDIT.md` addendum). `N_YC = 102 = 92 interior + 10 leaf` is frozen
+from the `2e_K10` artifact; `2f_top102` / `learned_markov_102` are the
+total-page-budget-matched (exactly 102) competitors. Three interior-gate classes:
+
+- `2e_K500` — `hot2e` k=500: the fixed 92-skeleton **UNION** up to 500 hot leaves
+  (592/92/500 per seed). Interior gate = 92 + skeleton set-equality.
+- `leaf_freq_K10` / `leaf_rand_K10` — leaf-only ablation (10/0/10): the top-10 hot
+  leaves vs 10 random non-hot leaves. Interior gate = **0** (leaf-only).
+- `2f_top102` (`freqdump` n=102) / `learned_markov_102` (held-out Markov, LOSO,
+  budget 102) — ranked / learned partial dumps that rank with **no page-type
+  knowledge**. Interior gate = **None**: only `total==102` is enforced; the
+  interior/leaf split is *recorded, not imposed*. Empirically both land on an
+  emergent, seed-uniform **51 interior / 51 leaf** across all 10 seeds.
+
+Plans are frozen at `plans/keyed/<strategy>_native_ycsb_c_read_zipf_seed{1..10}.csv`,
+each native-parity tested and per-seed sha-pinned; provenance (native-source + plan
+shas, per-seed counts, generator commands, N_YC derivation) is in
+`plans/keyed/native_source/PROVENANCE.md`. The secondary matrix
+(`ws2/matrix.secondary.json`, `schedule_seed=20260825`, 2000 invocations,
+`secondary_run_config_sha256`) runs on WS2; the primary 1600-run YC identity
+(`run_config_sha256=022fbeb0…`) is byte-frozen and untouched.
 
 ## Workstation prerequisites
 

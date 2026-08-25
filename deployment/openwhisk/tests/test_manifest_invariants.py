@@ -283,14 +283,20 @@ class TestNativeYcsbPinFrozenSources(unittest.TestCase):
 
     def test_matrix_allowed_strategies_gate(self):
         # 05_full_matrix.sh derives allowed strategies straight from the pin's
-        # strategy_plans keys; the Batch-2 pin must accept exactly {baseline,2d,
-        # layers_5,2e_K10,2f_slru} and reject anything else (e.g. not-yet-implemented
-        # arms).
+        # strategy_plans keys; the Batch-2 primary set {baseline,2d,layers_5,2e_K10,
+        # 2f_slru} plus the Batch-3 YC secondary set {2e_K500,leaf_freq_K10,
+        # leaf_rand_K10,2f_top102,learned_markov_102} must all be accepted, and
+        # anything else rejected.
         allowed = set(self.pin["strategy_plans"].keys())
-        self.assertEqual(allowed, {"baseline", "2d", "layers_5", "2e_K10", "2f_slru"})
-        for ok in ("baseline", "2d", "layers_5", "2e_K10", "2f_slru"):
+        self.assertEqual(allowed, {"baseline", "2d", "layers_5", "2e_K10", "2f_slru",
+                                   "2e_K500", "leaf_freq_K10", "leaf_rand_K10",
+                                   "2f_top102", "learned_markov_102"})
+        for ok in ("baseline", "2d", "layers_5", "2e_K10", "2f_slru", "2e_K500",
+                   "leaf_freq_K10", "leaf_rand_K10", "2f_top102", "learned_markov_102"):
             self.assertIn(ok, allowed)
-        for bad in ("leaf_freq", "leaf_rand", "2e_K500", "2f_topN", "learned_markov",
+        # near-miss names (truncated / renamed variants) must NOT collide with the
+        # exact registered keys.
+        for bad in ("leaf_freq", "leaf_rand", "2e_K1000", "2f_topN", "learned_markov",
                     "bogus"):
             self.assertNotIn(bad, allowed)
 
@@ -334,6 +340,24 @@ class TestNativeYcsbPinFrozenSources(unittest.TestCase):
             self.pin["invocation_plan"], sort_keys=True,
             separators=(",", ":")).encode()).hexdigest()
         self.assertEqual(self.pin["run_config_sha256"], expect)
+
+    def test_secondary_run_config_sha256_recomputes(self):
+        # The YC secondary matrix runs under a DISTINCT run-config identity derived
+        # the same way (sorted-key compact JSON over secondary_invocation_plan), and
+        # must differ from the frozen primary (different target set).
+        sec = self.pin["secondary_invocation_plan"]
+        expect = hashlib.sha256(json.dumps(
+            sec, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        self.assertEqual(self.pin["secondary_run_config_sha256"], expect)
+        self.assertNotEqual(self.pin["secondary_run_config_sha256"],
+                            self.pin["run_config_sha256"])
+        self.assertEqual(sec["strategies"],
+                         ["baseline", "2e_K500", "leaf_freq_K10", "leaf_rand_K10",
+                          "2f_top102", "learned_markov_102"])
+        # the 5 non-baseline keys must be their own targets; baseline is the anchor.
+        self.assertEqual(sec["seeds"], self.pin["invocation_plan"]["seeds"])
+        self.assertEqual(sec["handle_modes"],
+                         self.pin["invocation_plan"]["handle_modes"])
 
     def test_canonical_workload_id_resolves(self):
         sys.path.insert(0, REPO)
@@ -465,15 +489,17 @@ class TestCrosscheckPinLayers5FailsClosed(unittest.TestCase):
                         for e in cls.pin["representative_workload"]["seed_family"]},
             layers5_sha=l5["sha256"],
             layers5_offsets=list(l5["offsets"]),
-            # per-seed sha + counts for every keyed strategy (2e_K10, 2f_slru),
-            # read straight from the pin -- crosscheck_pin compares meta to the pin.
+            # per-seed sha + counts for every keyed strategy (primary 2e_K10, 2f_slru
+            # plus the YC secondary set), read straight from the pin -- crosscheck_pin
+            # iterates KEYED_SPECS and compares each strategy's meta to the pin.
             keyed_meta={
                 strat: {s: {"sha": keyed[str(s)][strat]["sha256"],
                             "pages": keyed[str(s)][strat]["expected_pages"],
                             "interior": keyed[str(s)][strat]["expected_interior_pages"],
                             "leaf": keyed[str(s)][strat]["expected_leaf_pages"]}
                         for s in range(1, 11)}
-                for strat in ("2e_K10", "2f_slru")},
+                for strat in ("2e_K10", "2f_slru", "2e_K500", "leaf_freq_K10",
+                              "leaf_rand_K10", "2f_top102", "learned_markov_102")},
         )
 
     def _call(self, **over):

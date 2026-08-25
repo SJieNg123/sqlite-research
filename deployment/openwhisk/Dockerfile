@@ -52,7 +52,7 @@ COPY _image_stage/ /action/artifacts/
 
 # Build-time fail-closed self-check: every artifact the manifest references must
 # exist in the image, or the build fails now rather than at first invocation.
-RUN python3 -c "import json,os,sys; root=os.environ['OW_ARTIFACT_ROOT']; m=json.load(open(os.environ['OW_ARTIFACT_MANIFEST'])); ps=[m['database']['path'],m['classifier']['path'],m['interior_page_list']['path']]+([m['strategy_plans']['2d']['path']] if m['strategy_plans']['2d']['path'] else [])+[s['path'] for wl in m['workload_traces'].values() for s in wl['seeds'].values()]; miss=[p for p in ps if not os.path.exists(os.path.join(root,p))]; sys.exit('MISSING in image: %s' % miss) if miss else print('image self-check OK: %d artifact paths present' % len(ps))"
+RUN python3 -c "import json,os,sys; root=os.environ['OW_ARTIFACT_ROOT']; m=json.load(open(os.environ['OW_ARTIFACT_MANIFEST'])); ps=[m['database']['path'],m['classifier']['path'],m['interior_page_list']['path']]+([m['strategy_plans']['2d']['path']] if m['strategy_plans']['2d']['path'] else [])+[s['path'] for wl in m['workload_traces'].values() for s in wl['seeds'].values()]+[e['path'] for wl in m.get('keyed_strategy_plans',{}).values() for seed in wl.values() for e in seed.values() if e.get('path')]; miss=[p for p in ps if not os.path.exists(os.path.join(root,p))]; sys.exit('MISSING in image: %s' % miss) if miss else print('image self-check OK: %d artifact paths present' % len(ps))"
 
 # The image digest is recorded and injected as OW_ACTION_IMAGE_DIGEST at
 # deploy time (wsk action create --docker <image@sha256:...>), so the running
