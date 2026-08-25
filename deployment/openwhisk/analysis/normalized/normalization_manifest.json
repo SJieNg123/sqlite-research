@@ -1,0 +1,170 @@
+{
+  "campaigns": [
+    {
+      "action_image_digest": "localhost:5000/sqlite-coldstart@sha256:dc706fa225a726f7cbac6e9289e77168f170232184a4205a55db23779c8cbd40",
+      "artifact_manifest_sha256": "bae8d9c78a7355a468d53b044e1d6aaa583c4697b9e4f5e1e75ef1849e6c2896",
+      "authoritative_run_config_sha256": "022fbeb01a8d9d45686e56823eca1e1ef30712f2a13c4a878cb5f7ef0097b5b7",
+      "bundle_manifest_run_config_matches_authoritative": true,
+      "bundle_manifest_run_config_sha256": "022fbeb01a8d9d45686e56823eca1e1ef30712f2a13c4a878cb5f7ef0097b5b7",
+      "campaign": "primary",
+      "invocations": 1600,
+      "pairs": 800,
+      "per_target_counts": {
+        "2d": 200,
+        "2e_K10": 200,
+        "2f_slru": 200,
+        "layers_5": 200
+      },
+      "schedule_fingerprint": "1a5715a61344dc4625477e307723832e879533a4ba08c5b99a4adff3dba979df",
+      "schedule_fingerprint_recomputed": "1a5715a61344dc4625477e307723832e879533a4ba08c5b99a4adff3dba979df",
+      "source_bundle_filename": "ws2_bundle_cd0ba770795f_20260823T145432Z.tar.gz",
+      "source_bundle_sha256": "e7e93a049eb55624bcf3c18e6b59381ec88a4f6808c72fc38696e81967d85fa7",
+      "source_bundle_sha256_sidecar": "e7e93a049eb55624bcf3c18e6b59381ec88a4f6808c72fc38696e81967d85fa7",
+      "sqlite_research_git_sha": "cd0ba770795ffe59f7fe5b2c755324f19f47dd07",
+      "status": {
+        "git_sha": "cd0ba770795ffe59f7fe5b2c755324f19f47dd07",
+        "result": "PASS",
+        "run_id": "20260823T142023Z-cd0ba770795f",
+        "status": "done",
+        "utc": "2026-08-23T14:51:54Z"
+      }
+    },
+    {
+      "action_image_digest": "localhost:5000/sqlite-coldstart@sha256:204b6f78503eae73f29c2bf78f498d99191f35392ddb3995e20c39f266f248d8",
+      "artifact_manifest_sha256": "54ac9fa7944cf214dcd062a9c3b8b8b0509c69edf7b9dfda36c0a7320340abb3",
+      "authoritative_run_config_sha256": "441609e611a38cb10e1f0a4cfc058991d3b8850d71b83e7092610ee469a58299",
+      "bundle_manifest_run_config_matches_authoritative": false,
+      "bundle_manifest_run_config_sha256": "022fbeb01a8d9d45686e56823eca1e1ef30712f2a13c4a878cb5f7ef0097b5b7",
+      "campaign": "secondary",
+      "invocations": 2000,
+      "pairs": 1000,
+      "per_target_counts": {
+        "2e_K500": 200,
+        "2f_top102": 200,
+        "leaf_freq_K10": 200,
+        "leaf_rand_K10": 200,
+        "learned_markov_102": 200
+      },
+      "schedule_fingerprint": "3eae2dc7d6ccc05a047bcc7900da11084b5ee0b0eb534187177f84a66990ec4b",
+      "schedule_fingerprint_recomputed": "3eae2dc7d6ccc05a047bcc7900da11084b5ee0b0eb534187177f84a66990ec4b",
+      "source_bundle_filename": "ws2_bundle_e07bf0dc6543_20260825T060047Z.tar.gz",
+      "source_bundle_sha256": "6543a925bc2cf551323a0de701da2b0ffbf3df255e31f0184b01a0a768744e67",
+      "source_bundle_sha256_sidecar": "6543a925bc2cf551323a0de701da2b0ffbf3df255e31f0184b01a0a768744e67",
+      "sqlite_research_git_sha": "e07bf0dc6543fc8844b95cb0cf00e4aca6786aa1",
+      "status": {
+        "git_sha": "e07bf0dc6543fc8844b95cb0cf00e4aca6786aa1",
+        "result": "PASS",
+        "run_id": "20260825T055826Z-e07bf0dc6543",
+        "status": "done",
+        "utc": "2026-08-25T05:58:57Z"
+      }
+    }
+  ],
+  "canonical_row_order": "campaign (primary<secondary), then schedule_position",
+  "column_categories": {
+    "invocation_columns": {
+      "action_image_digest": "P",
+      "arm": "S",
+      "artifact_manifest_sha256": "P",
+      "authoritative_run_config_sha256": "P",
+      "bundle_manifest_run_config_sha256": "P",
+      "campaign": "P",
+      "cold_reset_method": "R",
+      "cold_reset_requested": "R",
+      "cold_reset_succeeded": "R",
+      "cold_threshold_passed": "R",
+      "db_device": "R",
+      "db_inode": "R",
+      "db_sha256": "R",
+      "deliver_us": "R",
+      "delivered_page_count": "R",
+      "delivery_valid": "R",
+      "diagnostic_mode": "R",
+      "error": "R",
+      "error_stage": "R",
+      "first_operation_id": "S",
+      "first_query_us": "R",
+      "handle_mode": "S",
+      "handler_total_us": "R",
+      "invocation_counter": "R",
+      "is_first_in_pair": "D",
+      "measured_valid": "R",
+      "open_us": "R",
+      "oracle_expected_digest": "R",
+      "oracle_expected_hit": "R",
+      "oracle_passed": "R",
+      "pair_first_strategy": "D",
+      "pair_id": "S",
+      "pair_second_strategy": "D",
+      "paired_target_strategy": "D",
+      "pid": "R",
+      "plan_sha256": "R",
+      "position_within_pair": "D",
+      "process_uuid": "R",
+      "query_hit": "R",
+      "relevant_pages_total": "R",
+      "repetition_id": "S",
+      "request_id": "S",
+      "reset_us": "R",
+      "resident_interiors_after_prefetch": "R",
+      "resident_interiors_after_reset": "R",
+      "resident_interiors_before_reset": "R",
+      "result_digest": "R",
+      "schedule_fingerprint": "P",
+      "schedule_position": "S",
+      "seed": "S",
+      "select_us": "R",
+      "selected_bytes": "D",
+      "selected_interior_count": "R",
+      "selected_leaf_count": "R",
+      "selected_page_count": "R",
+      "source_bundle_filename": "P",
+      "source_bundle_sha256": "P",
+      "source_request_file": "P",
+      "source_response_file": "P",
+      "sqlite_cache_miss": "R",
+      "sqlite_error": "R",
+      "sqlite_research_git_sha": "P",
+      "strategy": "S",
+      "trace_sha256": "R",
+      "warm_session_id": "D",
+      "workload": "S"
+    },
+    "legend": {
+      "D": "derived bookkeeping",
+      "P": "provenance",
+      "R": "raw response field (verbatim, never reinterpreted)",
+      "S": "raw schedule/request identity"
+    }
+  },
+  "combined": {
+    "baseline": 1800,
+    "invocations": 3600,
+    "pairs": 1800,
+    "target": 1800
+  },
+  "generated_utc": "2026-08-25T09:38:17Z",
+  "known_provenance_notes": [
+    "The secondary 06_collect/bundle_manifest.json records the PRIMARY run_config_sha256 (022fbeb0...). This is a packaging summary mislabel only; it is preserved verbatim as bundle_manifest_run_config_sha256 and NOT used as authority.",
+    "authoritative_run_config_sha256 is taken from schedule.json / req_*.json / resp_*.json, which agree; secondary resolves to 441609e6... and primary to 022fbeb0....",
+    "The historical expected PRIMARY schedule fingerprint 'd08266ca...' is stale/incorrect and is NOT used. The primary schedule fingerprint is derived from evidence (schedule.json, schedule_validation.txt, raw/.schedule_fingerprint, and a recomputation via matrix_fingerprint)."
+  ],
+  "normalizer_git_sha": "3639d69ec6c87a22b45185c7a0158c0f127da678",
+  "ok": true,
+  "outputs": {
+    "normalization_validation.txt": {
+      "sha256": "ac39e76b5933f882c3df7d18457b5d52689bfdf291d15b78804f7fc69b4a904e"
+    },
+    "normalized_invocations.csv": {
+      "rows": 3600,
+      "sha256": "caf94e0ee6503b6e840b8d7fb464615926690c59138f859c6fcbd1151dea9cd1"
+    },
+    "normalized_pairs.csv": {
+      "rows": 1800,
+      "sha256": "a438b5d56fb6c819235cc3e51fc2bad8d2e3a9648a7dee34ff9ee7c48aa14c42"
+    }
+  },
+  "page_size": 4096,
+  "page_size_source": "deployment/openwhisk/config/artifacts.native_ycsb.json:database.page_size",
+  "schema_version": 1
+}
