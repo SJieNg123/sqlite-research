@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="560" viewBox="0 0 900 560" font-family="Helvetica,Arial,sans-serif">
+<rect width="900" height="560" fill="#ffffff"/>
+<text x="90" y="24" font-size="17" font-weight="bold">Figure B -- delivery vs query-phase (descriptive, NOT a Pareto frontier)</text>
+<text x="90" y="43" font-size="12" fill="#555">standalone medians; marker size ~ selected pages; query latency alone is incomplete</text>
+<rect x="90" y="54" width="550" height="436" fill="none" stroke="#333" stroke-width="1"/>
+<line x1="171.0" y1="54" x2="171.0" y2="490" stroke="#e0e0e0"/>
+<text x="171.0" y="508" font-size="11" text-anchor="middle">100</text>
+<line x1="321.8" y1="54" x2="321.8" y2="490" stroke="#e0e0e0"/>
+<text x="321.8" y="508" font-size="11" text-anchor="middle">1000</text>
+<line x1="472.5" y1="54" x2="472.5" y2="490" stroke="#e0e0e0"/>
+<text x="472.5" y="508" font-size="11" text-anchor="middle">10000</text>
+<line x1="623.3" y1="54" x2="623.3" y2="490" stroke="#e0e0e0"/>
+<text x="623.3" y="508" font-size="11" text-anchor="middle">100000</text>
+<line x1="90" y1="197.1" x2="640" y2="197.1" stroke="#e0e0e0"/>
+<text x="82" y="201.1" font-size="11" text-anchor="end">100</text>
+<text x="365" y="536" font-size="13" text-anchor="middle">median deliver_us (log)</text>
+<text x="22" y="272" font-size="13" text-anchor="middle" transform="rotate(-90 22 272)">median first_query_us, query phase (log)</text>
+<circle cx="269.7" cy="86.4" r="9.9" fill="#1f77b4" fill-opacity="0.75" stroke="#222" stroke-width="0.6"/>
+<circle cx="662" cy="60.0" r="5" fill="#1f77b4" stroke="#222" stroke-width="0.6"/>
+<text x="672" y="64.0" font-size="11">2d  (x=451.6, y=230.1)</text>
+<circle cx="104.6" cy="83.6" r="6.3" fill="#ff7f0e" fill-opacity="0.75" stroke="#222" stroke-width="0.6"/>
+<circle cx="662" cy="79.0" r="5" fill="#ff7f0e" stroke="#222" stroke-width="0.6"/>
+<text x="672" y="83.0" font-size="11">layers_5  (x=36.29, y=235)</text>
+<circle cx="275.1" cy="88.6" r="10.0" fill="#2ca02c" fill-opacity="0.75" stroke="#222" stroke-width="0.6"/>
+<circle cx="662" cy="98.0" r="5" fill="#2ca02c" stroke="#222" stroke-width="0.6"/>
+<text x="672" y="102.0" font-size="11">2e_K10  (x=490.2, y=226.4)</text>
+<circle cx="625.4" cy="460.4" r="17.3" fill="#d62728" fill-opacity="0.75" stroke="#222" stroke-width="0.6"/>
+<circle cx="662" cy="117.0" r="5" fill="#d62728" stroke="#222" stroke-width="0.6"/>
+<text x="672" y="121.0" font-size="11">2f_slru  (x=1.032e+05, y=13.78)</text>
+<circle cx="382.8" cy="214.6" r="12.3" fill="#9467bd" fill-opacity="0.75" stroke="#222" stroke-width="0.6"/>
+<circle cx="662" cy="136.0" r="5" fill="#9467bd" stroke="#222" stroke-width="0.6"/>
+<text x="672" y="140.0" font-size="11">2e_K500  (x=2539, y=87.71)</text>
+<circle cx="135.8" cy="145.6" r="7.1" fill="#8c564b" fill-opacity="0.75" stroke="#222" stroke-width="0.6"/>
+<circle cx="662" cy="155.0" r="5" fill="#8c564b" stroke="#222" stroke-width="0.6"/>
+<text x="672" y="159.0" font-size="11">leaf_freq_K10  (x=58.44, y=147.4)</text>
+<circle cx="135.7" cy="143.7" r="7.1" fill="#e377c2" fill-opacity="0.75" stroke="#222" stroke-width="0.6"/>
+<circle cx="662" cy="174.0" r="5" fill="#e377c2" stroke="#222" stroke-width="0.6"/>
+<text x="672" y="178.0" font-size="11">leaf_rand_K10  (x=58.38, y=149.5)</text>
+<circle cx="272.2" cy="214.8" r="10.0" fill="#17becf" fill-opacity="0.75" stroke="#222" stroke-width="0.6"/>
+<circle cx="662" cy="193.0" r="5" fill="#17becf" stroke="#222" stroke-width="0.6"/>
+<text x="672" y="197.0" font-size="11">2f_top102  (x=469, y=87.51)</text>
+<circle cx="267.7" cy="216.5" r="10.0" fill="#bcbd22" fill-opacity="0.75" stroke="#222" stroke-width="0.6"/>
+<circle cx="662" cy="212.0" r="5" fill="#bcbd22" stroke="#222" stroke-width="0.6"/>
+<text x="672" y="216.0" font-size="11">learned_markov_102  (x=437.7, y=86.42)</text>
+</svg>

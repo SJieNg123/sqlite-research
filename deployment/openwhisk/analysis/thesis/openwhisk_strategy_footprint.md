@@ -1,0 +1,17 @@
+# OpenWhisk thesis table 1 -- deployment / strategy footprint
+
+Selected-page footprint of the nine target strategies as executed inside the OpenWhisk action. Footprint is a frozen plan property and is handle-mode-independent. `2f_slru` is a per-seed resident working set and is reported as a range. **No ranking is implied.**
+
+| strategy | family | selected_pages | selected_bytes | interior_pages | leaf_pages | plan_generation | deployment_role |
+|---|---|---|---|---|---|---|---|
+| 2d | structural_interior_skeleton | 92 | 376832 | 92 | 0 | offline_frozen_static | structural interior-skeleton reference |
+| layers_5 | structural_interior_prefix | 5 | 20480 | 5 | 0 | offline_frozen_static | shallow structural-prefix reference |
+| 2e_K10 | skeleton_plus_hot_leaves | 102 | 417792 | 92 | 10 | offline_frozen_per_seed | skeleton + hot-leaf headline (N_YC=102 budget anchor) |
+| 2f_slru | resident_working_set_slru | 26323-26331 | 107819008-107851776 | 92 | 26231-26239 | offline_frozen_per_seed | full resident-set upper-footprint foil |
+| 2e_K500 | skeleton_plus_hot_leaves | 592 | 2424832 | 92 | 500 | offline_frozen_per_seed | skeleton + deep hot-leaf budget point |
+| leaf_freq_K10 | leaf_only_control | 10 | 40960 | 0 | 10 | offline_frozen_per_seed | leaf-only control (frequency arm) |
+| leaf_rand_K10 | leaf_only_control | 10 | 40960 | 0 | 10 | offline_frozen_per_seed | leaf-only control (random arm) |
+| 2f_top102 | frequency_ranked_total_budget | 102 | 417792 | 51 | 51 | offline_frozen_per_seed | budget-matched frequency-ranked (emergent split) |
+| learned_markov_102 | learned_total_budget | 102 | 417792 | 51 | 51 | offline_frozen_per_seed_LOSO | budget-matched learned LOSO (emergent split) |
+
+Source: `openwhisk_strategy_footprint.csv` (derived from the SHA-verified descriptive `cost_vectors.csv` + `strategy_metadata.csv`).

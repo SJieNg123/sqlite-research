@@ -1,0 +1,42 @@
+{
+  "N_YC": 102,
+  "N_YC_note": "frozen matched total-page budget for the secondary comparison; taken from the 2e_K10 artifact (92 interior + 10 leaf).",
+  "groups": {
+    "A_matched_total_budget_102": {
+      "matched_on": "selected_page_count == 102",
+      "members": [
+        "2f_top102",
+        "learned_markov_102"
+      ],
+      "semantics": "total-page budget-matched competitors; interior/leaf split emergent (not page-type-imposed)"
+    },
+    "B_leaf_only_controls_10": {
+      "matched_on": "selected_page_count == 10 and selected_interior_count == 0",
+      "members": [
+        "leaf_freq_K10",
+        "leaf_rand_K10"
+      ],
+      "semantics": "leaf-only frequency-vs-random ablation"
+    },
+    "C_skeleton_hot_leaf_budget_progression": {
+      "matched_on": "selected_interior_count == 92 skeleton; hot-leaf budget K=10 vs K=500",
+      "members": [
+        "2e_K10",
+        "2e_K500"
+      ],
+      "semantics": "hot-leaf budget progression on a fixed interior skeleton"
+    },
+    "D_structural_references": {
+      "matched_on": "interior-only structural selection",
+      "members": [
+        "2d",
+        "layers_5"
+      ],
+      "semantics": "structural reference points (full 92 skeleton vs shallow 5-page prefix)"
+    }
+  },
+  "layer_note": "semantic comparison scaffolding only -- no winner, score, ranking, or Pareto frontier is computed at this descriptive layer.",
+  "ungrouped": {
+    "2f_slru": "per-seed resident working-set foil; footprint not total-budget-matched to any group"
+  }
+}

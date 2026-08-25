@@ -1,0 +1,32 @@
+# OpenWhisk descriptive analysis -- validation report
+
+overall: PASS
+
+source normalized_invocations.csv sha256: caf94e0ee6503b6e840b8d7fb464615926690c59138f859c6fcbd1151dea9cd1
+source normalized_pairs.csv sha256: a438b5d56fb6c819235cc3e51fc2bad8d2e3a9648a7dee34ff9ee7c48aa14c42
+source normalization_manifest.json sha256: eb56e26f389753bc6fdf284f5da7694b47d5a186456e768798029d1cb8b1689b
+invocations: 3600 (expected 3600)
+pairs: 1800 (expected 1800)
+
+## table row counts
+strategy_descriptives.csv: 18 rows
+cost_vectors.csv: 18 rows
+baseline_context.csv: 18 rows
+order_audit.csv: 18 rows
+order_position_descriptives.csv: 72 rows
+first_arm_diagnostic.csv: 36 rows
+standalone_decomposition.csv: 9 rows
+warm_decomposition.csv: 18 rows
+strategy_metadata.csv: 9 rows
+
+## methodological warnings
+no_naive_warm_paired_headline = true
+order_effect_present = true
+exact_order_effect_source_resolved = false
+first_arm_view_is_diagnostic_only = true
+openwhisk_not_primary_native_performance_evidence = true
+warm_pairwise_relative_latency_note = "warm pair-level relative latency estimates are unsuitable as headline strategy-performance estimates because of the documented systematic short-lived execution/storage-state or order effect; exact source is outside scope and is NOT random noise."
+
+## fail-closed problems (0)
+(none)
+

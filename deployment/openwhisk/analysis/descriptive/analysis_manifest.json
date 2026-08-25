@@ -1,0 +1,150 @@
+{
+  "analysis_script_git_sha": "a99e655791e1ce55d48fadb340c3287eef89a0ed",
+  "comparison_groups": {
+    "N_YC": 102,
+    "N_YC_note": "frozen matched total-page budget for the secondary comparison; taken from the 2e_K10 artifact (92 interior + 10 leaf).",
+    "groups": {
+      "A_matched_total_budget_102": {
+        "matched_on": "selected_page_count == 102",
+        "members": [
+          "2f_top102",
+          "learned_markov_102"
+        ],
+        "semantics": "total-page budget-matched competitors; interior/leaf split emergent (not page-type-imposed)"
+      },
+      "B_leaf_only_controls_10": {
+        "matched_on": "selected_page_count == 10 and selected_interior_count == 0",
+        "members": [
+          "leaf_freq_K10",
+          "leaf_rand_K10"
+        ],
+        "semantics": "leaf-only frequency-vs-random ablation"
+      },
+      "C_skeleton_hot_leaf_budget_progression": {
+        "matched_on": "selected_interior_count == 92 skeleton; hot-leaf budget K=10 vs K=500",
+        "members": [
+          "2e_K10",
+          "2e_K500"
+        ],
+        "semantics": "hot-leaf budget progression on a fixed interior skeleton"
+      },
+      "D_structural_references": {
+        "matched_on": "interior-only structural selection",
+        "members": [
+          "2d",
+          "layers_5"
+        ],
+        "semantics": "structural reference points (full 92 skeleton vs shallow 5-page prefix)"
+      }
+    },
+    "layer_note": "semantic comparison scaffolding only -- no winner, score, ranking, or Pareto frontier is computed at this descriptive layer.",
+    "ungrouped": {
+      "2f_slru": "per-seed resident working-set foil; footprint not total-budget-matched to any group"
+    }
+  },
+  "cost_vector_dimensions": [
+    "selected_page_count",
+    "selected_bytes",
+    "selected_interior_count",
+    "selected_leaf_count",
+    "median_select_us",
+    "median_deliver_us",
+    "median_first_query_us",
+    "median_open_us",
+    "median_handler_total_us"
+  ],
+  "cost_vector_note": "no single universal score is defined; strategies are NOT ranked. Offline plan/model generation is NOT charged per invocation (plan_generation=offline_frozen*); only online select_us/deliver_us/etc. are per-invocation costs.",
+  "expected_constant_selected_page_count": {
+    "2d": 92,
+    "2e_K10": 102,
+    "2e_K500": 592,
+    "2f_top102": 102,
+    "layers_5": 5,
+    "leaf_freq_K10": 10,
+    "leaf_rand_K10": 10,
+    "learned_markov_102": 102
+  },
+  "generated_utc": "2026-08-25T09:54:22Z",
+  "group_counts": {
+    "baseline_context.csv": 18,
+    "cost_vectors.csv": 18,
+    "first_arm_diagnostic.csv": 36,
+    "order_audit.csv": 18,
+    "order_position_descriptives.csv": 72,
+    "standalone_decomposition.csv": 9,
+    "strategy_descriptives.csv": 18,
+    "strategy_metadata.csv": 9,
+    "warm_decomposition.csv": 18
+  },
+  "methodological_warnings": {
+    "exact_order_effect_source_resolved": false,
+    "first_arm_view_is_diagnostic_only": true,
+    "no_naive_warm_paired_headline": true,
+    "openwhisk_not_primary_native_performance_evidence": true,
+    "order_effect_present": true,
+    "warm_pairwise_relative_latency_note": "warm pair-level relative latency estimates are unsuitable as headline strategy-performance estimates because of the documented systematic short-lived execution/storage-state or order effect; exact source is outside scope and is NOT random noise."
+  },
+  "ok": true,
+  "outputs": {
+    "analysis_validation.txt": {
+      "sha256": "f0749abf360a106d829840102e695a82a39d34815b06a1c7887a16bf86336546"
+    },
+    "baseline_context.csv": {
+      "sha256": "97e15fab4e7c9de195a6e651ee3cb375fc2c425e2b3d783cd90306f4f0bbe548"
+    },
+    "comparison_groups.json": {
+      "sha256": "91cabccca5b9e71df1b1d4a5e27a4ece2d7907e4b44acc6af928f896c2141d9c"
+    },
+    "cost_vectors.csv": {
+      "sha256": "929c5d1110a4559703ab437c40913de82883c3436864df865221b30472054954"
+    },
+    "first_arm_diagnostic.csv": {
+      "sha256": "e820953bb9163e1c03900c9ccdc5dce34aa2094b20bba6150a057596f56c04c0"
+    },
+    "order_audit.csv": {
+      "sha256": "0d23b180e663817f45697b97bbd36865cb599be03a843b0af8debb9d0f493c9b"
+    },
+    "order_position_descriptives.csv": {
+      "sha256": "57cc12b797e762a7590f923b6c7a318e3242b260ae8d9b248e9392bd06774cdb"
+    },
+    "standalone_decomposition.csv": {
+      "sha256": "aae08e6368e89f8271d6bf0e44b64ceb05ba3745048f6ee88a6e48657def6608"
+    },
+    "strategy_descriptives.csv": {
+      "sha256": "c80dc5bcb6157643b2fbc5eb76224701484a750385a6b72cafb0a4b69184749b"
+    },
+    "strategy_metadata.csv": {
+      "sha256": "85bdc6829d34cd1bf387a6b28ef5ce55c9b21fef1889a346599c2afa6d925d22"
+    },
+    "warm_decomposition.csv": {
+      "sha256": "207a927344e4a30877c0ef1703520a4bc16e7309216eb89595dd84d74ea1d986"
+    }
+  },
+  "purpose": "descriptive / cost / order-aware analysis layer over the OpenWhisk normalization; NOT primary performance evidence and NOT a source of speedups, winners, rankings, or significance.",
+  "schema_version": 1,
+  "source": {
+    "campaign_run_config": {
+      "primary": "022fbeb01a8d9d45686e56823eca1e1ef30712f2a13c4a878cb5f7ef0097b5b7",
+      "secondary": "441609e611a38cb10e1f0a4cfc058991d3b8850d71b83e7092610ee469a58299"
+    },
+    "invocation_rows": 3600,
+    "normalization_manifest_sha256": "eb56e26f389753bc6fdf284f5da7694b47d5a186456e768798029d1cb8b1689b",
+    "normalized_invocations_sha256": "caf94e0ee6503b6e840b8d7fb464615926690c59138f859c6fcbd1151dea9cd1",
+    "normalized_pairs_sha256": "a438b5d56fb6c819235cc3e51fc2bad8d2e3a9648a7dee34ff9ee7c48aa14c42",
+    "pair_rows": 1800
+  },
+  "strategy_coverage": [
+    "2d",
+    "layers_5",
+    "2e_K10",
+    "2f_slru",
+    "2e_K500",
+    "leaf_freq_K10",
+    "leaf_rand_K10",
+    "2f_top102",
+    "learned_markov_102"
+  ],
+  "variable_footprint_strategies": [
+    "2f_slru"
+  ]
+}

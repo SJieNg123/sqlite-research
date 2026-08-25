@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="560" viewBox="0 0 900 560" font-family="Helvetica,Arial,sans-serif">
+<rect width="900" height="560" fill="#ffffff"/>
+<text x="90" y="24" font-size="17" font-weight="bold">Figure A -- footprint vs deployment delivery cost</text>
+<text x="90" y="43" font-size="12" fill="#555">deployment-side; delivery work rises with prefetch footprint; no winner framing</text>
+<rect x="90" y="54" width="550" height="436" fill="none" stroke="#333" stroke-width="1"/>
+<line x1="145.9" y1="54" x2="145.9" y2="490" stroke="#e0e0e0"/>
+<text x="145.9" y="508" font-size="11" text-anchor="middle">10</text>
+<line x1="286.4" y1="54" x2="286.4" y2="490" stroke="#e0e0e0"/>
+<text x="286.4" y="508" font-size="11" text-anchor="middle">100</text>
+<line x1="426.9" y1="54" x2="426.9" y2="490" stroke="#e0e0e0"/>
+<text x="426.9" y="508" font-size="11" text-anchor="middle">1000</text>
+<line x1="567.3" y1="54" x2="567.3" y2="490" stroke="#e0e0e0"/>
+<text x="567.3" y="508" font-size="11" text-anchor="middle">10000</text>
+<line x1="90" y1="425.8" x2="640" y2="425.8" stroke="#e0e0e0"/>
+<text x="82" y="429.8" font-size="11" text-anchor="end">100</text>
+<line x1="90" y1="306.3" x2="640" y2="306.3" stroke="#e0e0e0"/>
+<text x="82" y="310.3" font-size="11" text-anchor="end">1000</text>
+<line x1="90" y1="186.8" x2="640" y2="186.8" stroke="#e0e0e0"/>
+<text x="82" y="190.8" font-size="11" text-anchor="end">10000</text>
+<line x1="90" y1="67.2" x2="640" y2="67.2" stroke="#e0e0e0"/>
+<text x="82" y="71.2" font-size="11" text-anchor="end">100000</text>
+<text x="365" y="536" font-size="13" text-anchor="middle">selected pages (log)</text>
+<text x="22" y="272" font-size="13" text-anchor="middle" transform="rotate(-90 22 272)">median deliver_us (log)</text>
+<circle cx="281.3" cy="347.5" r="6.0" fill="#1f77b4" fill-opacity="0.75" stroke="#222" stroke-width="0.6"/>
+<circle cx="662" cy="60.0" r="5" fill="#1f77b4" stroke="#222" stroke-width="0.6"/>
+<text x="672" y="64.0" font-size="11">2d  (x=92, y=451.6)</text>
+<circle cx="103.6" cy="478.4" r="6.0" fill="#ff7f0e" fill-opacity="0.75" stroke="#222" stroke-width="0.6"/>
+<circle cx="662" cy="79.0" r="5" fill="#ff7f0e" stroke="#222" stroke-width="0.6"/>
+<text x="672" y="83.0" font-size="11">layers_5  (x=5, y=36.29)</text>
+<circle cx="287.6" cy="343.3" r="6.0" fill="#2ca02c" fill-opacity="0.75" stroke="#222" stroke-width="0.6"/>
+<circle cx="662" cy="98.0" r="5" fill="#2ca02c" stroke="#222" stroke-width="0.6"/>
+<text x="672" y="102.0" font-size="11">2e_K10  (x=102, y=490.2)</text>
+<circle cx="626.4" cy="65.6" r="6.0" fill="#d62728" fill-opacity="0.75" stroke="#222" stroke-width="0.6"/>
+<circle cx="662" cy="117.0" r="5" fill="#d62728" stroke="#222" stroke-width="0.6"/>
+<text x="672" y="121.0" font-size="11">2f_slru  (x=2.633e+04, y=1.032e+05)</text>
+<circle cx="394.9" cy="257.9" r="6.0" fill="#9467bd" fill-opacity="0.75" stroke="#222" stroke-width="0.6"/>
+<circle cx="662" cy="136.0" r="5" fill="#9467bd" stroke="#222" stroke-width="0.6"/>
+<text x="672" y="140.0" font-size="11">2e_K500  (x=592, y=2539)</text>
+<circle cx="145.9" cy="453.7" r="6.0" fill="#8c564b" fill-opacity="0.75" stroke="#222" stroke-width="0.6"/>
+<circle cx="662" cy="155.0" r="5" fill="#8c564b" stroke="#222" stroke-width="0.6"/>
+<text x="672" y="159.0" font-size="11">leaf_freq_K10  (x=10, y=58.44)</text>
+<circle cx="145.9" cy="453.7" r="6.0" fill="#e377c2" fill-opacity="0.75" stroke="#222" stroke-width="0.6"/>
+<circle cx="662" cy="174.0" r="5" fill="#e377c2" stroke="#222" stroke-width="0.6"/>
+<text x="672" y="178.0" font-size="11">leaf_rand_K10  (x=10, y=58.38)</text>
+<circle cx="287.6" cy="345.6" r="6.0" fill="#17becf" fill-opacity="0.75" stroke="#222" stroke-width="0.6"/>
+<circle cx="662" cy="193.0" r="5" fill="#17becf" stroke="#222" stroke-width="0.6"/>
+<text x="672" y="197.0" font-size="11">2f_top102  (x=102, y=469)</text>
+<circle cx="287.6" cy="349.2" r="6.0" fill="#bcbd22" fill-opacity="0.75" stroke="#222" stroke-width="0.6"/>
+<circle cx="662" cy="212.0" r="5" fill="#bcbd22" stroke="#222" stroke-width="0.6"/>
+<text x="672" y="216.0" font-size="11">learned_markov_102  (x=102, y=437.7)</text>
+</svg>

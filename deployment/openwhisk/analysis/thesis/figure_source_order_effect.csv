@@ -1,0 +1,17 @@
+strategy,handle_mode,role,position_within_pair,n,first_query_us_median
+2d,warm,baseline,1,48,3346.2715
+2d,warm,baseline,2,52,394.8970
+2d,warm,target,1,52,2269.4505
+2d,warm,target,2,48,318.1025
+layers_5,warm,baseline,1,44,3334.2495
+layers_5,warm,baseline,2,56,314.1215
+layers_5,warm,target,1,56,2631.8975
+layers_5,warm,target,2,44,273.2935
+2e_K10,warm,baseline,1,49,3331.6710
+2e_K10,warm,baseline,2,51,394.5960
+2e_K10,warm,target,1,51,2229.3180
+2e_K10,warm,target,2,49,312.4720
+2f_slru,warm,baseline,1,46,3319.8340
+2f_slru,warm,baseline,2,54,404.6155
+2f_slru,warm,target,1,54,37.3490
+2f_slru,warm,target,2,46,37.3200

@@ -1,0 +1,37 @@
+# OpenWhisk thesis synthesis -- validation report
+
+overall: PASS
+
+## source integrity (SHA-verified, fail-closed)
+descriptive analysis_manifest git sha: a99e655791e1ce55d48fadb340c3287eef89a0ed
+normalized_invocations.csv sha256: caf94e0ee6503b6e840b8d7fb464615926690c59138f859c6fcbd1151dea9cd1
+normalized_pairs.csv sha256: a438b5d56fb6c819235cc3e51fc2bad8d2e3a9648a7dee34ff9ee7c48aa14c42
+descriptive cost_vectors.csv sha256: 929c5d1110a4559703ab437c40913de82883c3436864df865221b30472054954
+descriptive strategy_metadata.csv sha256: 85bdc6829d34cd1bf387a6b28ef5ce55c9b21fef1889a346599c2afa6d925d22
+descriptive order_position_descriptives.csv sha256: 57cc12b797e762a7590f923b6c7a318e3242b260ae8d9b248e9392bd06774cdb
+
+## generated table row counts
+openwhisk_strategy_footprint.csv: 9
+openwhisk_cost_vectors.csv: 18
+matched_budget_descriptives.csv: 16
+figure_source_footprint_vs_delivery.csv: 9
+figure_source_query_vs_delivery.csv: 9
+figure_source_order_effect.csv: 16
+
+## machine-readable claim restrictions
+exact_order_effect_source_unresolved = true
+first_query_us_is_query_phase_not_total_cold_start = true
+native_is_primary_performance_evidence = true
+no_first_arm_causal_estimate = true
+no_naive_warm_pair_speedup = true
+no_strategy_winner_claim = true
+openwhisk_role = "deployment_complement"
+order_effect_is_not_random_hardware_noise = true
+
+## figure formats
+svg + figure-source csv emitted (deterministic, dependency-free).
+matplotlib PNG/PDF NOT produced here: matplotlib/numpy unavailable in this analysis host; SVG is vector and publication-usable.
+
+## fail-closed problems (0)
+(none)
+

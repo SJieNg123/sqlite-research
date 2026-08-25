@@ -1,0 +1,77 @@
+# OpenWhisk thesis claim map
+
+Every proposed OpenWhisk-facing statement is classified **SAFE**, **QUALIFIED**,
+or **DO_NOT_CLAIM**. OpenWhisk is a deployment complement, not the primary
+controlled performance evidence; the systematic short-lived execution/storage-state
+or order effect (exact source outside scope) is why warm paired latency is never a
+headline. This map is machine-checked by `test_synthesis.py`.
+
+
+## A_deployment_feasibility
+
+| classification | claim | support | qualification | reason |
+|---|---|---|---|---|
+| **SAFE** | All nine page-prefetch strategy families were represented and executed inside the OpenWhisk/serverless action across 3600 formal invocations. | normalized/normalization_manifest.json; strategy_metadata.csv | -- | Direct execution record; feasibility is demonstrated by the runs themselves, independent of any latency interpretation. |
+
+## B_validity_correctness
+
+| classification | claim | support | qualification | reason |
+|---|---|---|---|---|
+| **SAFE** | The 3600 invocations passed the frozen validity gates under two byte-frozen run-config identities (primary 022fbeb0..., secondary 441609e6...), with 1800 baseline-target pairs. | normalized/normalization_manifest.json | -- | Recorded gate pass and identity binding; provenance fact, not a performance claim. |
+
+## C_footprint_differences
+
+| classification | claim | support | qualification | reason |
+|---|---|---|---|---|
+| **SAFE** | Strategy families produce materially different selected-page footprints (5 to ~26k pages) and selected bytes. | openwhisk_strategy_footprint.csv | -- | Footprint is a frozen plan property (deployment-side), unaffected by the order/state effect. |
+
+## D_delivery_cost_differences
+
+| classification | claim | support | qualification | reason |
+|---|---|---|---|---|
+| **SAFE** | Strategies with larger selected-page footprints incur larger deployment page-delivery work (median deliver_us) in this implementation. | openwhisk_cost_vectors.csv; figure_footprint_vs_delivery | Descriptive of this implementation's page-delivery mechanism; deliver_us is a delivery-work count, not a strategy speedup. | deliver_us is handle-mode-independent and monotone in footprint here; it is a deployment cost, not a query-latency effect. |
+
+## E_first_query_descriptive
+
+| classification | claim | support | qualification | reason |
+|---|---|---|---|---|
+| **QUALIFIED** | Selected plans are associated with different median instrumented SQLite first_query_us values; selected plans can lower the instrumented first_query_us phase. | openwhisk_cost_vectors.csv; standalone_decomposition.csv | OpenWhisk absolute/paired first_query latency is NOT the primary controlled estimate because of the documented systematic short-lived execution/storage-state or order effect; these are descriptive medians, not causal speedups. first_query_us is the query phase only, NOT total cold-start latency. | The order/state effect confounds absolute and paired warm latency; native/WK1 remains the controlled estimate. |
+
+## F_end_to_end_interpretation
+
+| classification | claim | support | qualification | reason |
+|---|---|---|---|---|
+| **QUALIFIED** | The deployment results are consistent with the project's cost-accounting view that reducing first-query latency does not automatically reduce end-to-end handler cost (e.g. 2f_slru has the lowest first_query_us but the largest delivery and handler_total). | openwhisk_cost_vectors.csv | An ADDITIONAL deployment-side illustration only. The causal/mechanism claim is established primarily by the native/WK1 experiments and PREDATES OpenWhisk (REPORT.md title). OpenWhisk did not discover this relation. | Section 11 constraint: do not rewrite thesis history. |
+| **DO_NOT_CLAIM** | The OpenWhisk experiment revealed/discovered that faster first query does not imply faster end-to-end performance. | -- | -- | The relation was a core research question / thesis before OpenWhisk (REPORT.md title); attributing discovery to OpenWhisk would rewrite thesis history. |
+
+## G_matched_budget_selection
+
+| classification | claim | support | qualification | reason |
+|---|---|---|---|---|
+| **SAFE** | Among the N_YC=102 budget-matched strategies, the frequency-ranked (2f_top102) and learned-LOSO (learned_markov_102) plans exhibit an EMERGENT (not page-type-imposed) ~51/51 interior/leaf split. | strategy_metadata.csv | -- | Recorded provenance fact about the frozen plans (page composition), not a latency comparison. |
+| **DO_NOT_CLAIM** | The learned strategy is definitively better/worse than the frequency strategy based on these OpenWhisk latencies. | -- | -- | A winner claim over confounded warm latency / non-primary evidence; matched-budget table reports composition + descriptive medians only, no winner. |
+
+## H_leaf_only_controls
+
+| classification | claim | support | qualification | reason |
+|---|---|---|---|---|
+| **SAFE** | leaf_freq_K10 and leaf_rand_K10 each select 10 leaf pages with zero interior pages (leaf-only frequency-vs-random ablation). | openwhisk_strategy_footprint.csv; matched_budget_descriptives.csv | -- | Frozen plan property (page composition). |
+| **DO_NOT_CLAIM** | Frequency leaf selection beats random leaf selection (or vice versa) in cold-start latency, per these OpenWhisk numbers. | -- | -- | Winner claim over confounded warm latency; native/WK1 is the controlled arm for the frequency-vs-random lever. |
+
+## I_warm_paired_latency
+
+| classification | claim | support | qualification | reason |
+|---|---|---|---|---|
+| **DO_NOT_CLAIM** | The warm baseline->target adjacent-pair latency ratio is the causal speedup of the target strategy. | order_position_descriptives.csv (shows the position effect) | -- | A systematic short-lived execution/storage-state or order effect makes position, not strategy, dominate adjacent warm pairs. |
+
+## J_standalone_timing
+
+| classification | claim | support | qualification | reason |
+|---|---|---|---|---|
+| **QUALIFIED** | The standalone decomposition reports median open/select/deliver/first_query/handler_total per strategy. | standalone_decomposition.csv | Descriptive medians only, not a causal effect; open_us is a separately instrumented phase and is NOT folded into first_query_us. | Reporting the phase decomposition is safe; interpreting a phase as a strategy speedup is not. |
+
+## K_first_arm_diagnostic
+
+| classification | claim | support | qualification | reason |
+|---|---|---|---|---|
+| **DO_NOT_CLAIM** | The first-arm (position-1) medians are a corrected / true-cold treatment effect. | first_arm_diagnostic.csv | -- | AB/BA are not exactly 50/50 and second-position observations are retained; the first-arm view is a diagnostic, not a deconfounded estimator -- medians must not be subtracted. |

@@ -1,0 +1,17 @@
+group,strategy,handle_mode,selected_pages,selected_interior,selected_leaf,interior_leaf_split_origin,median_deliver_us,median_first_query_us
+A_matched_total_budget_102,2f_top102,warm,102,51,51,emergent,473.1905,631
+A_matched_total_budget_102,2f_top102,standalone,102,51,51,emergent,469.0280,87.5130
+A_matched_total_budget_102,learned_markov_102,warm,102,51,51,emergent,436.6075,1384.3745
+A_matched_total_budget_102,learned_markov_102,standalone,102,51,51,emergent,437.7400,86.4210
+B_leaf_only_controls_10,leaf_freq_K10,warm,10,0,10,imposed,58.4290,517.9290
+B_leaf_only_controls_10,leaf_freq_K10,standalone,10,0,10,imposed,58.4385,147.4445
+B_leaf_only_controls_10,leaf_rand_K10,warm,10,0,10,imposed,58.3540,2324.3390
+B_leaf_only_controls_10,leaf_rand_K10,standalone,10,0,10,imposed,58.3790,149.5185
+C_skeleton_hot_leaf_budget_progression,2e_K10,warm,102,92,10,imposed,502.3170,326.2870
+C_skeleton_hot_leaf_budget_progression,2e_K10,standalone,102,92,10,imposed,490.1580,226.3920
+C_skeleton_hot_leaf_budget_progression,2e_K500,warm,592,92,500,imposed,2547.6585,328.7425
+C_skeleton_hot_leaf_budget_progression,2e_K500,standalone,592,92,500,imposed,2539.3330,87.7085
+D_structural_references,2d,warm,92,92,0,imposed,412.8650,613.9250
+D_structural_references,2d,standalone,92,92,0,imposed,451.6070,230.1135
+D_structural_references,layers_5,warm,5,5,0,imposed,36.2080,2436.3135
+D_structural_references,layers_5,standalone,5,5,0,imposed,36.2925,235.0275

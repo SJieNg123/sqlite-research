@@ -1,0 +1,108 @@
+{
+  "N_YC": 102,
+  "claim_map_counts": {
+    "DO_NOT_CLAIM": 5,
+    "QUALIFIED": 3,
+    "SAFE": 6
+  },
+  "claim_restrictions": {
+    "exact_order_effect_source_unresolved": true,
+    "first_query_us_is_query_phase_not_total_cold_start": true,
+    "native_is_primary_performance_evidence": true,
+    "no_first_arm_causal_estimate": true,
+    "no_naive_warm_pair_speedup": true,
+    "no_strategy_winner_claim": true,
+    "openwhisk_role": "deployment_complement",
+    "order_effect_is_not_random_hardware_noise": true
+  },
+  "cost_vector_legend": {
+    "deliver_us": "page-delivery phase (fetching the selected pages)",
+    "first_query_us": "instrumented SQLite first-query phase ONLY -- NOT total cold-start latency",
+    "handler_total_us": "total action handler wall time",
+    "open_us": "separately instrumented open/prepare phase (standalone handle)",
+    "select_us": "online plan-selection phase (per invocation); offline plan/model generation is NOT charged here"
+  },
+  "figure_formats": [
+    "svg",
+    "csv"
+  ],
+  "figures": {
+    "figure_footprint_vs_delivery.svg": "figure_source_footprint_vs_delivery.csv",
+    "figure_order_effect_diagnostic.svg": "figure_source_order_effect.csv",
+    "figure_query_vs_delivery.svg": "figure_source_query_vs_delivery.csv"
+  },
+  "generated_utc": "2026-08-25T12:44:52Z",
+  "ok": true,
+  "openwhisk_role": "deployment complement to the primary native/WK1 controlled performance and mechanism evidence.",
+  "outputs": {
+    "claim_map.md": {
+      "sha256": "54f74d05f85a252df51db05a517a5a3ba3cb98911dfdee084f3a01fadce10238"
+    },
+    "figure_footprint_vs_delivery.svg": {
+      "sha256": "ae4537b1d6706238173b98cfd4ad1cdc353554b5c34e3e7660d4c3dc08c34669"
+    },
+    "figure_order_effect_diagnostic.svg": {
+      "sha256": "61f4e7d9796c5e534ffb7587fdffa594bdf673a2bbf45808ddbed49385c689f0"
+    },
+    "figure_query_vs_delivery.svg": {
+      "sha256": "c8fc969985f6c7d0666391f0de359d3779a3bae3eb674f7c3469e7e6e420ce28"
+    },
+    "figure_source_footprint_vs_delivery.csv": {
+      "sha256": "fafde7eb0723b4eede4a116d86d5036d2c40f11bbb4284caad95ce7d1fbe3d4c"
+    },
+    "figure_source_order_effect.csv": {
+      "sha256": "7ca066ed0c72ce3927a7625e2923c577d7b214274cd8fdafcf2d346890c2e8bd"
+    },
+    "figure_source_query_vs_delivery.csv": {
+      "sha256": "65dc3b1effe4ac84f3b923ab58f883f9e4315f6d52a5855ca7645ab687efecab"
+    },
+    "matched_budget_descriptives.csv": {
+      "sha256": "5ee8959487df42780a9bdbb767ea46e4da62f5f6f5638e054db8d2726ab04469"
+    },
+    "openwhisk_cost_vectors.csv": {
+      "sha256": "e64cdc792ca4839df6c4efe13bede4abdb4e571ab110dd57ba202bf227e44813"
+    },
+    "openwhisk_strategy_footprint.csv": {
+      "sha256": "5b5f65bdef64a42e16931aaf5f1ec5e6a11812b941631a7b15c5c7f3250afcee"
+    },
+    "openwhisk_strategy_footprint.md": {
+      "sha256": "cd156c6bc40579129fc32d86009c280127232b53983005039c7d01c9820dd7ce"
+    },
+    "openwhisk_thesis_notes.md": {
+      "sha256": "1684f11211bb1affd8b513a7f8cfd4689a81ff633fafded5904ff4fc3206f7c8"
+    },
+    "synthesis_validation.txt": {
+      "sha256": "57d71fe2b99ec82d6a55c139a5f5ed5206cb0b012d044c667cb2701043a71d8a"
+    },
+    "threats_to_validity.md": {
+      "sha256": "1e9a64219917753efcc619d3b8c0314e073bb18b01d1f73cb384b74d0a8400fe"
+    }
+  },
+  "png_pdf_not_produced_reason": "matplotlib/numpy unavailable in analysis host; SVG is vector, publication-usable, and byte-deterministic.",
+  "purpose": "thesis-facing OpenWhisk synthesis (deployment complement): footprint / cost-vector / matched-budget tables + deployment-side figures + claim map. No speedup, winner, ranking, Pareto, percentage, or significance.",
+  "schema_version": 1,
+  "source": {
+    "descriptive_analysis_manifest_sha256": "03c9ec8d58dbc2431973d794b0a6d819cf7bfa451e8d14be2dd4dfa978e54438",
+    "descriptive_analysis_script_git_sha": "a99e655791e1ce55d48fadb340c3287eef89a0ed",
+    "descriptive_inputs": {
+      "cost_vectors.csv": "929c5d1110a4559703ab437c40913de82883c3436864df865221b30472054954",
+      "order_position_descriptives.csv": "57cc12b797e762a7590f923b6c7a318e3242b260ae8d9b248e9392bd06774cdb",
+      "strategy_metadata.csv": "85bdc6829d34cd1bf387a6b28ef5ce55c9b21fef1889a346599c2afa6d925d22"
+    },
+    "normalization_manifest_sha256": "eb56e26f389753bc6fdf284f5da7694b47d5a186456e768798029d1cb8b1689b",
+    "normalized_invocations_sha256": "caf94e0ee6503b6e840b8d7fb464615926690c59138f859c6fcbd1151dea9cd1",
+    "normalized_pairs_sha256": "a438b5d56fb6c819235cc3e51fc2bad8d2e3a9648a7dee34ff9ee7c48aa14c42"
+  },
+  "strategy_coverage": [
+    "2d",
+    "layers_5",
+    "2e_K10",
+    "2f_slru",
+    "2e_K500",
+    "leaf_freq_K10",
+    "leaf_rand_K10",
+    "2f_top102",
+    "learned_markov_102"
+  ],
+  "synthesis_script_git_sha": "a99e655791e1ce55d48fadb340c3287eef89a0ed"
+}
