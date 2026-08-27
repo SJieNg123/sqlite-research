@@ -27,7 +27,7 @@ except ImportError:  # pragma: no cover - OpenWhisk flat layout
 
 SUPPORTED_STRATEGIES = ("baseline", "2d", "layers_5", "2e_K10", "2f_slru",
                         "2e_K500", "leaf_freq_K10", "leaf_rand_K10", "2f_top102",
-                        "learned_markov_102")
+                        "learned_markov_102", "2f_top28", "learned_markov_28")
 HANDLE_MODES = ("warm", "standalone")
 REQUIRED_REQUEST_FIELDS = ("request_id", "workload", "strategy", "seed",
                            "first_operation_id", "diagnostic_mode", "cold_reset",
@@ -55,7 +55,8 @@ DELIVERY_INVARIANTS = {
 # metadata (2f_top102/learned_markov_102 carry an EMERGENT split, not the 92
 # skeleton), so no DELIVERY_INVARIANTS entry and no per-strategy runtime code.
 KEYED_STRATEGIES = ("2e_K10", "2f_slru", "2e_K500", "leaf_freq_K10",
-                    "leaf_rand_K10", "2f_top102", "learned_markov_102")
+                    "leaf_rand_K10", "2f_top102", "learned_markov_102",
+                    "2f_top28", "learned_markov_28")
 _SESSION = None
 
 # The image bakes the artifacts under a FIXED absolute root. OpenWhisk extracts

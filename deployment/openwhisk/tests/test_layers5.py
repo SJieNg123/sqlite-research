@@ -54,7 +54,7 @@ class TestLayersFivePureInvariants(unittest.TestCase):
         self.assertEqual(main.SUPPORTED_STRATEGIES,
                          ("baseline", "2d", "layers_5", "2e_K10", "2f_slru",
                           "2e_K500", "leaf_freq_K10", "leaf_rand_K10", "2f_top102",
-                          "learned_markov_102"))
+                          "learned_markov_102", "2f_top28", "learned_markov_28"))
 
     def test_delivery_invariant_is_five_five_zero_five(self):
         self.assertEqual(main.DELIVERY_INVARIANTS["layers_5"],

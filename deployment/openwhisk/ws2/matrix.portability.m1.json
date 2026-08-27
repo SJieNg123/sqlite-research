@@ -1,0 +1,11 @@
+{
+  "_comment": "PORTABILITY matrix M1 (of 4) for 05_full_matrix.sh -- the primary-mechanism triad {2e_K10 skeleton-union-hot-leaves, 2f_slru whole resident set} against baseline on the three single-strategy-family portability workloads (native_ycsb_c_read_uniform, native_ycsb_c_hot_hashed_01, read_tail_hit_20k), seeds 1..3, warm+standalone, 3 reps. baseline is the paired A-arm anchor (not a target): 2 targets x 3 workloads x 3 seeds x 2 handle_modes x 3 reps = 108 pairs = 216 invocations. Runs under schedule_seed=20260826 and run_config_key=portability_run_config_sha256 (independent identity 64f44c3e...), distinct from the frozen primary (022fbeb0...) and secondary (441609e6...) YC campaigns. Deployment/feasibility + footprint evidence only; warm paired first-query latency is NOT a strategy-performance estimate. Every field is validated against the frozen runtime artifact pin before anything runs; real invocation still requires WS2_MATRIX_IMPL_READY=1. Run all four M1..M4 for the full 234-pair / 468-invocation portability matrix.",
+  "schedule_seed": 20260826,
+  "run_config_key": "portability_run_config_sha256",
+  "workloads": ["native_ycsb_c_read_uniform", "native_ycsb_c_hot_hashed_01", "read_tail_hit_20k"],
+  "strategies": ["baseline", "2e_K10", "2f_slru"],
+  "seeds": [1, 2, 3],
+  "handle_modes": ["warm", "standalone"],
+  "first_operation_ids": [0],
+  "repetitions_per_cell": 3
+}

@@ -1,0 +1,11 @@
+{
+  "_comment": "PORTABILITY matrix M4 (of 4) for 05_full_matrix.sh -- the workload-independent static skeleton 2d (92 interior pages) against baseline, on the three write-family-distinct portability workloads (native_ycsb_c_read_uniform, native_ycsb_c_hot_hashed_01, read_tail_mixed_20k), seed 1 only (2d is workload/seed-independent -- one seed suffices as the cross-workload deployment probe), warm+standalone, 3 reps. baseline is the paired A-arm anchor (not a target): 1 target x 3 workloads x 1 seed x 2 handle_modes x 3 reps = 18 pairs = 36 invocations. schedule_seed=20260826, run_config_key=portability_run_config_sha256 (identity 64f44c3e...). Deployment/feasibility + footprint evidence only; warm paired first-query latency is NOT a strategy-performance estimate. Validated against the frozen pin; real invocation requires WS2_MATRIX_IMPL_READY=1.",
+  "schedule_seed": 20260826,
+  "run_config_key": "portability_run_config_sha256",
+  "workloads": ["native_ycsb_c_read_uniform", "native_ycsb_c_hot_hashed_01", "read_tail_mixed_20k"],
+  "strategies": ["baseline", "2d"],
+  "seeds": [1],
+  "handle_modes": ["warm", "standalone"],
+  "first_operation_ids": [0],
+  "repetitions_per_cell": 3
+}

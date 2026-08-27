@@ -951,3 +951,62 @@ orig 欄取自已 commit 的 [`results/stats/uncertainty.csv`](results/stats/unc
 - **Cadence**(Phase H,YC):重暖頻率直接決定命中率,判準 `cadence ≤ gap`——命中 ~14µs / 未命中 ~623µs,43× 二元、無過渡,支持 warm-process 部署主張。
 
 > 全部原始 CSV 落盤 `results/ycsb_full/data/`(phaseA 468 cells、phaseB 27、phaseC RAM、phaseD 10×7、phaseE 9、phaseF 3×33、phaseG 462、phaseH 32);圖 `results/ycsb_full/figs/`。詳見 speculation branch `results/ycsb_full/REPORT_YCSB_FULL.md`。
+
+---
+
+## OpenWhisk / Serverless 部署對照 (deployment complement)
+
+> ⚠️ **本節與上方所有節的角色區別**:上方全部是 **workstation**(裸機 Ryzen 9950X + NVMe,受控 native/WK1)的量測,是本研究**主要**的效能與機制證據。本節是把同一批策略部署進真正的 **Apache OpenWhisk** FaaS action 後的**部署側對照**(deployment complement)——用途是**部署可行性 + footprint/delivery 成本結構**的重現,**不是**另一份效能證據,也**不**推翻或取代 workstation 的結論。整合敘事見 `REPORT.md` §5.6 / Appendix A.5;合成產物在 `deployment/openwhisk/analysis/thesis/`。
+
+**覆蓋範圍(先讀,避免誤讀成全矩陣)。** OpenWhisk **只跑了 YC 這一個 workload**(`native_ycsb_c_read_zipf`,zipfian read),10 seeds、warm(keep-alive process)+ standalone(fresh process)、共 **3600 formal invocation / 1800 pair**,全數過 validity gate,且釘在與 workstation native-YC **同一顆 `test.db`(26331 indexed,orig layout)**。因此:
+
+- **可對照的只有 YC 這一格**——workstation 的合成 Scattered-Zipf / Uniform-100K / Tail-Mixed、以及其餘 11 個 YCSB read config,**在 OpenWhisk 沒有對應點**,不在本對照範圍。
+- **budget-102 兩臂**(`2f_top102` / `learned_markov_102`)只在 OpenWhisk 以 N=102 跑;workstation head-to-head 跑的是 N=14/28(§「原生 head-to-head」),**預算不同、不直接逐格對**。
+
+**比什麼、不比什麼(claim discipline)。** 依「資料可比性」規則(§先讀)與 §5.6 的量測限制:
+
+- ✅ **選頁 footprint** — 兩環境用**同一份凍結 plan**,選頁數/interior/leaf **完全相同**(reproduction / validity check,非效能比較)。
+- ✅ **delivery 成本結構** — `deliver_us` 隨 footprint 單調上升的**排序與型態**兩環境一致(handle-mode-independent、不受 order effect 影響)。
+- ⚠️ **絕對 µs 不跨環境逐格對** — 不同機器狀態 + 不同 delivery 機制(OpenWhisk 的 deliver 量級系統性較大),只比**相對結構**,不比絕對值(同 §資料可比性)。
+- 🚫 **OpenWhisk 的 warm paired latency ratio 不作策略效能估計** — 存在一個 systematic short-lived execution/storage-state or order effect(position-1 一律偏高、與策略無關;page-cache carryover 已否證、**非** random hardware),故本節**不**給 OpenWhisk 一個對應 workstation `−22%` 那樣的「Δ% vs baseline」欄;受控效能估計仍以 workstation `2d −36.2%[−46.5,−25.9]` 等為準。
+
+### 選頁 footprint 對照(YC;兩環境同一份凍結 plan)
+
+| strategy | selected pages | interior | leaf | 兩環境是否同 |
+|---|--:|--:|--:|---|
+| layers_5 | 5 | 5 | 0 | ✅ 同 |
+| 2d | 92 | 92 | 0 | ✅ 同 |
+| 2e_K10 | 102 | 92 | 10 | ✅ 同 |
+| 2f_top102 | 102 | 51(emergent) | 51(emergent) | OW-only(WS 跑 N=14/28) |
+| learned_markov_102 | 102 | 51(emergent) | 51(emergent) | OW-only(WS 跑 N=14/28) |
+| leaf_freq_K10 | 10 | 0 | 10 | ✅ 同 |
+| leaf_rand_K10 | 10 | 0 | 10 | ✅ 同 |
+| 2e_K500 | 592 | 92 | 500 | ✅ 同 |
+| 2f_slru | 26323–26331 | 92 | 26231–26239(per-seed) | ✅ 同 |
+
+footprint 逐頁一致 ⇒ 策略在 FaaS runtime 內被**如實部署**(feasibility)。`2f_slru` 兩環境都是 per-seed resident working set(範圍非常數);`2f_top102`/`learned_markov_102` 的 ~51/51 interior/leaf 為 emergent。
+
+### 成本結構對照(YC / orig;5 個兩環境都跑的策略)
+
+> workstation 取旗艦 Fig 14(YC/orig,warm-process,`results/ycsb_full`);OpenWhisk 取 standalone median(`deployment/openwhisk/analysis/thesis/openwhisk_cost_vectors.csv`)。**WS `Δ%` 是受控 e2e_warm 相對量(主要證據);OW `first-q` 僅為 descriptive median、OW `deliver` 只比結構/排序**——絕對 µs 兩欄不可跨環境逐格相減。
+
+| strategy | pages | WS deliver µs | OW deliver µs | WS first-q µs | OW first-q µs(standalone,描述) | WS e2e_warm Δ% |
+|---|--:|--:|--:|--:|--:|--:|
+| baseline | 0 | 0 | — | 855 | — | — |
+| layers_5 | 5 | 18 | 36 | 832 | 235 | −0.5% |
+| 2d | 92 | 152 | 452 | 510 | 230 | **−22%** |
+| 2e_K10 | 102 | 168 | 490 | 513 | 226 | −20% |
+| 2e_K500 | 592 | 996 | 2 539 | 188 | 88 | +39% ⚠ |
+| 2f_slru | ~26k | 41 460 | 103 248 | 107 | 14 | +4760% ⚠ |
+
+**三個結構結論在 OpenWhisk 重現(定性、非逐格數值):**
+1. **`deliver_us` 隨 footprint 單調上升、排序一致** — 兩環境都是 `layers_5 < 2d ≲ 2e_K10 < 2e_K500 ≪ 2f_slru`;`2f_slru` 的 delivery 都比 targeted 大 **兩個數量級**(WS ~41 ms、OW ~103 ms)。**「2f_slru delivery trap」是 deployment-invariant 的。**
+2. **`2f_slru` first-query 最低、但 deliver / handler_total 最大** — 兩環境同型(WS first-q 107µs 最低但 e2e +4760%;OW first-q 14µs 最低但 deliver 最大、handler_total ~110 ms 最大)。正是「first-query 改善 ≠ e2e 加速」在部署側的重現。
+3. **`2e_K500` 過度配置回歸** — 加大 hot-leaf 預算 → deliver 暴增(WS 996µs、OW 2539µs),兩環境都把 K10→K500 從膝點推離。
+
+**不重現 / 不比較的部分(誠實界定):**
+- OpenWhisk 的 **warm** first-query 受 order effect 汙染(如 `layers_5` warm 2436µs、`leaf_rand_K10` warm 2324µs 純屬 position-1 效應,非策略),故上表只列 standalone median 作描述,且**不**由此導出策略排名或 speedup;warm 全表與診斷見 `REPORT.md` Appendix A.5。
+- **絕對 µs 兩環境系統性不同**(OW deliver 量級較大、baseline 幾何/機器狀態不同),依 §資料可比性規則**不逐格對**,只認相對結構。
+- workstation 已驗證的效能估計(`2d` YC −22% e2e_warm / first-q −36.2% CI 排除 0、跨三種 access pattern 穩定等)是本研究主張的來源,**OpenWhisk 不新增也不修改**這些數字。
+
+> provenance:OpenWhisk formal 證據 = 兩個 immutable、archived 的 matrix(primary/secondary run-config identity,bundle hash 在各自 manifest);normalized / descriptive / thesis 合成在 `deployment/openwhisk/analysis/{normalized,descriptive,thesis}/`、原始 evidence 在 `deployment/openwhisk/evidence/`。此對照的 per-phase 數值源 `openwhisk_cost_vectors.csv`,workstation 側源 `results/ycsb_full` 旗艦 Fig 14。

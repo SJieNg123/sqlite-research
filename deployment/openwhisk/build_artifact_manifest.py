@@ -50,6 +50,8 @@ import platform  # noqa: E402
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "action"))
 import oracle  # noqa: E402
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "tools"))
+import portability_manifest as PM  # noqa: E402
 try:
     import sqlite_bridge  # noqa: E402
     _BRIDGE_SQLITE_VERSION = sqlite_bridge.libversion()
@@ -556,6 +558,30 @@ def crosscheck_pin(db_sha, plan_sha, classifier_sha, trace_shas,
                  "keyed_%s_seed_%d_leaf" % (strat, s))
 
 
+def crosscheck_portability(port_meta, port_traces, port_plan, port_run_config_sha256):
+    """Fail closed unless the frozen pin carries every portability entry, marker,
+    trace, and the portability invocation-plan identity the live build produced.
+    The pin was written from the SAME freeze report (tools/write_portability_pin.py
+    via tools/portability_manifest.py), so this proves generation<->pin agreement."""
+    pin_path = os.path.join(ROOT, PIN_REL)
+    with open(pin_path) as f:
+        pin = json.load(f)
+    problems = PM.crosscheck(pin, port_meta, ROOT)
+    # per-workload trace provenance must match the pin byte-for-byte
+    pin_pt = pin.get("portability_workload_traces", {})
+    for wl, block in port_traces.items():
+        for seed_str, e in block["seeds"].items():
+            pe = pin_pt.get(wl, {}).get("seeds", {}).get(seed_str)
+            if pe is None:
+                problems.append("pin missing portability trace %s/%s" % (wl, seed_str))
+            elif pe.get("sha256") != e["sha256"]:
+                problems.append("pin portability trace %s/%s sha mismatch" % (wl, seed_str))
+    if pin.get("portability_run_config_sha256") != port_run_config_sha256:
+        problems.append("pin portability_run_config_sha256 != generated")
+    if problems:
+        sys.exit("portability pin mismatch:\n  " + "\n  ".join(problems))
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", required=True)
@@ -645,10 +671,47 @@ def main():
                 str(s): keyed_meta[strat][s]["leaf"] for s in SEEDS}
         keyed_markers[strat] = marker
 
+    # ---- PORTABILITY layer (additive; workstation->OpenWhisk deployment
+    # complement). Driven entirely by the verified freeze report via
+    # tools/portability_manifest.py. Merges four NEW workloads (+ the two N=28
+    # strategies on YC) into keyed plans / traces / oracle without disturbing the
+    # canonical YC blocks. The primary/secondary run-config identities are
+    # untouched (they live only in the pin's invocation plans). -------------- #
+    port_live, _port_pin, port_meta = PM.build_portability_entries(
+        ROOT, set(offsets), page_size, page_count)
+    port_markers = PM.build_new_markers(port_meta)
+    port_traces, port_oracle = PM.build_traces_and_oracle(
+        ROOT, db, first_op_key, oracle, sha256_file)
+    port_plan = PM.portability_invocation_plan(port_meta)
+    port_run_config_sha256 = PM.portability_run_config_sha256(port_plan)
+
+    for wl, seeds in port_live.items():
+        wdst = keyed_block.setdefault(wl, {})
+        for seed_str, strats in seeds.items():
+            sdst = wdst.setdefault(seed_str, {})
+            for strat, entry in strats.items():
+                if strat in sdst:
+                    sys.exit("portability keyed collision %s/%s/%s" % (strat, wl, seed_str))
+                sdst[strat] = entry
+    for strat, marker in port_markers.items():
+        if strat in keyed_markers:
+            sys.exit("portability marker collision %s" % strat)
+        keyed_markers[strat] = marker
+    for wl, block in port_traces.items():
+        if wl in traces:
+            sys.exit("portability trace collision %s" % wl)
+        traces[wl] = block
+    oracle_block = build_oracle(db)
+    for wl, block in port_oracle.items():
+        if wl in oracle_block:
+            sys.exit("portability oracle collision %s" % wl)
+        oracle_block[wl] = block
+
     # Byte-tie the live manifest to the frozen replay pin (fail closed).
     crosscheck_pin(db_sha, plan_sha, classifier_sha,
                    {s: seedmap[s]["sha256"] for s in seedmap},
                    layers5_sha, layers5_offsets, keyed_meta)
+    crosscheck_portability(port_meta, port_traces, port_plan, port_run_config_sha256)
 
     st = os.stat(db)
     manifest = {
@@ -726,7 +789,10 @@ def main():
         "keyed_strategy_plans": keyed_block,
         "workload_traces": traces,
         "supported_first_operation_ids": SUPPORTED_FIRST_OPS,
-        "first_query_oracle": build_oracle(db),
+        "first_query_oracle": oracle_block,
+        "workload_set": list(PM.WORKLOAD_SET),
+        "portability_invocation_plan": port_plan,
+        "portability_run_config_sha256": port_run_config_sha256,
         "notes": ("Interior skeleton (2d) plan derived from the canonical page "
                   "classifier; invariants validated at generation. Paths are "
                   "repository-relative, resolved at runtime against "

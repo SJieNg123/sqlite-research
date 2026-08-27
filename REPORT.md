@@ -954,6 +954,78 @@ preprocessing 拆成 **open(db)** 與 **deliver** 兩個 term(warmer 分別自�
 
 ---
 
+### 5.6 OpenWhisk / Serverless 部署評估（deployment complement）
+
+§5.5 的成本核算是在 §3.4 的量測 harness 上、以同一台 commodity 主機 model warm-process
+cold-data pattern 得到的。為驗證這套 prefetch 策略**確實能被表達並執行在真正的
+serverless / FaaS runtime 內**（§7 future work 之一），我們把九個 target 策略以**凍結的
+delivery plan** 部署進一個 **Apache OpenWhisk** action，在 canonical YC workload
+（`native_ycsb_c_read_zipf`）、10 seeds、warm(keep-alive process) 與 standalone(fresh
+process) 兩個 handle mode 下執行。共 **3600 筆 formal invocation / 1800 個 baseline-target
+pair**，綁在兩個 byte-frozen 的 run-config identity 上，全數通過凍結的 validity gate。
+這是對 §5 native/WK1（本研究**主要**的受控效能與機制證據）的**部署側補充**：它證實策略空間可
+部署、並在 serverless 情境重現同一套成本結構，**而非**取代 native 的效能證據，也非 OpenWhisk 才
+發現「first-query 改善 ≠ e2e 加速」這個核心關係（該關係先於 OpenWhisk，即本文標題與 §1.1）。
+
+**部署可行性與 footprint。** 九個策略族——structural skeleton、skeleton+hot-leaf union、
+leaf-only control、full resident working set、與兩個 budget-matched 的 ranked/learned
+plan——皆被表達為凍結 plan 並在 action 內執行（feasibility 由 run 本身證實，與任何 latency
+解讀無關）。其 selected-page footprint 橫跨三個數量級：
+
+| strategy | family | selected_pages | selected_bytes | interior | leaf | deployment_role |
+|---|---|---:|---:|---:|---:|---|
+| 2d | structural_interior_skeleton | 92 | 376,832 | 92 | 0 | structural interior-skeleton reference |
+| layers_5 | structural_interior_prefix | 5 | 20,480 | 5 | 0 | shallow structural-prefix reference |
+| 2e_K10 | skeleton_plus_hot_leaves | 102 | 417,792 | 92 | 10 | skeleton + hot-leaf headline (N_YC=102 budget anchor) |
+| 2f_slru | resident_working_set_slru | 26323–26331 | 107,819,008–107,851,776 | 92 | 26231–26239 | full resident-set upper-footprint foil |
+| 2e_K500 | skeleton_plus_hot_leaves | 592 | 2,424,832 | 92 | 500 | skeleton + deep hot-leaf budget point |
+| leaf_freq_K10 | leaf_only_control | 10 | 40,960 | 0 | 10 | leaf-only control (frequency arm) |
+| leaf_rand_K10 | leaf_only_control | 10 | 40,960 | 0 | 10 | leaf-only control (random arm) |
+| 2f_top102 | frequency_ranked_total_budget | 102 | 417,792 | 51 | 51 | budget-matched frequency-ranked (emergent split) |
+| learned_markov_102 | learned_total_budget | 102 | 417,792 | 51 | 51 | budget-matched learned LOSO (emergent split) |
+
+> 註：`2f_slru` 是 per-seed 的 resident working set，故以**範圍**呈現（不同 seed
+> 26323–26331 頁）、非固定常數。`2f_top102` / `learned_markov_102` 的 interior/leaf
+> ~51/51 split 是 **emergent**（由 frequency / transition rank 自然產生，非以 page-type
+> 知識強加）。footprint 是凍結 plan 的性質、與 handle mode 無關；此表**不隱含任何排序**。
+
+**footprint → delivery work。** 在此實作中，selected footprint 愈大、page-delivery 工作
+（`deliver_us`）愈多——從 layers_5 的 ~36 µs 到 2f_slru 的 ~103 ms：
+
+![OpenWhisk：selected pages vs median deliver_us](deployment/openwhisk/analysis/thesis/figure_footprint_vs_delivery.svg)
+
+*圖 19：selected pages（log x）對 median deliver_us（log y，standalone handle mode）。這是**部署側
+的 delivery 成本**、隨 footprint 單調上升；deliver_us 是 delivery 工作量、**不是**策略 speedup，
+此圖亦**非**排序圖。*
+
+**delivery 與 first-query 是兩個獨立維度。** 把同一批策略的 delivery work 與 instrumented
+`first_query_us`（= §3.4 定義的 SQLite **first-query 階段**、**非** total cold-start
+latency）並陳，可見兩者大致獨立變動——`2f_slru` 的 `first_query_us` 最小、但 `deliver_us`
+與 `handler_total_us` 卻最大：
+
+![OpenWhisk：median deliver_us vs median first_query_us](deployment/openwhisk/analysis/thesis/figure_query_vs_delivery.svg)
+
+*圖 20：median deliver_us（log x）對 median first_query_us（log y，standalone）。兩軸是**不同維度**、
+非因果 frontier、非 winner plot、更**非** Pareto frontier；此圖只說明「query latency 單看是不完整
+的部署 metric」，與 §5.5 的向量式成本核算同一觀點。*
+
+**回接 native 的成本核算。** 這批部署量測**保留了** §5.5 對 query 階段行為與 page-delivery 成本
+的同一種拆分（online 的 `select_us`/`deliver_us`/`first_query_us`/`open_us` 逐 phase 呈現，
+而 offline 的 plan/model 生成**不**計入 per-invocation 成本）。它們**不**被塌縮成單一 scalar
+分數；`2f_slru` first-query 最低卻 deliver/handler_total 最大，正是 §5.5「first-query 改善
+≠ e2e 加速」在 serverless 部署側的又一個 illustration。
+
+**量測限制（latency 解讀）。** 儘管每次 measured invocation 前的 page-cache cold reset 都通過
+validity gate（reset 後 resident DB 頁數 = 0；page-cache carryover 假說經專門調查後**被否證**），
+OpenWhisk 仍呈現一個 **systematic short-lived execution/storage-state or order effect**：在一個
+warm baseline-target pair 內，**先執行的那個 arm（position 1）的 `first_query_us` 明顯大於後者**，
+與哪個策略佔哪個 position 無關。其底層確切來源超出本研究範圍、**未**歸因於任何特定硬體成因。因此
+**相鄰 warm pair 的 latency ratio 不作為策略效能的主要估計**；受控效能估計仍以 §5 native/WK1 為準。
+此限制**不**動搖 execution correctness、plan identity、footprint、delivery count/work 或部署可行性，
+只限制對受影響 warm paired first-query latency 的因果解讀。診斷圖與細表見 Appendix A.5。
+
+---
+
 ## 6. Discussion
 
 ### 6.1 Key findings recap
@@ -1202,12 +1274,19 @@ Tail-Mixed（mixed）整體 = 其 hit(regime 1) 與 miss(regime 3) first-op 的�
 - **未測「真正 cold reboot」cold start**：受限於 sudo 權限與機器shared，沒做「每筆量都 reboot」的嚴格 cold start。harness `--sqlite-open-timing=after-cold`
   可以模擬部分（重 open SQLite handle）。
 - **Platform scope = commodity x86 + NVMe（edge/serverless 硬體級；未進 FaaS runtime、mobile 未量測）**：所有實驗在同一台 Ryzen 9950X + NVMe、單一 kernel(6.17) 上跑。此為 **edge / serverless 部署所用的同一類 commodity 硬體**，故實證結論 scope 於此類平台；但有兩個未涵蓋的方向：(1) 本研究**未在特定 FaaS / microVM runtime（Lambda、Firecracker、gVisor、容器）內量測**——真實 runtime 的 cgroup 限制、I/O 隔離與 neighbor 干擾可能改變絕對 µs（在 FaaS-like cgroup / 容器環境重跑關鍵 cell 是 future work，§7）；(2) 行動裝置/IoT 是 SQLite 普及與本問題的 motivation 背景,但 mobile 的 storage stack 在多個維度與本平台不同——UFS/eMMC 的 I/O latency 與 queue 行為、不同的 `read_ahead_kb` 預設、ARM page size、以及更受限的 RAM——這些都可能改變 selection–delivery 的 trade-off 點。本研究**未在 ARM/UFS/eMMC 上量測**,故絕對 µs 與策略間相對排序均不應外推至 mobile;一台 ARM/UFS SBC 上重跑 Scattered-Zipf/Tail-Mixed × {baseline, 2e_K10} 的關鍵 cell 是直接的後續驗證(future work)。
+- **OpenWhisk 部署量測的 order/state effect（§5.6）**：serverless 部署補充中，雖然每次 measured invocation 前的 page-cache
+  cold reset 都通過 validity gate（reset 後 resident DB 頁 = 0，page-cache carryover 假說經專門調查後**被否證**），OpenWhisk
+  仍呈現一個 **systematic short-lived execution/storage-state or order effect**：warm pair 內先執行的 arm(position 1) 的
+  `first_query_us` 一律高於後者、與策略無關。其確切底層來源超出本研究範圍、**未**歸因於任何特定硬體成因（非 random hardware
+  fluctuation）。故 OpenWhisk 的**相鄰 warm pair latency ratio 不作為策略效能的主要估計**，first-arm 僅為診斷（非校正後的
+  treatment effect）；受控效能證據仍以 §5 native/WK1 為準。此限制**不**動搖 execution correctness、plan identity、footprint、
+  delivery work 或部署可行性（diagnostic 見 Appendix A.5）。
 
 ---
 
 ## 7. Future Work
 
-- **In-runtime serverless / edge validation**：本研究在 edge / serverless 的**同一類硬體**（x86 + NVMe）上 model warm-process cold-data pattern，但未進真實 runtime。直接的後續驗證是把 Scattered-Zipf/Tail-Mixed × {baseline, 2e_K10} 關鍵 cell 放進 **FaaS-like 環境**重跑——本機無 kvm/root 故 Firecracker microVM 走不了，但**容器 + cgroup 記憶體上限**（對應 FaaS memory cap，§6.2.2 已用同機制施壓）可行，能給 serverless 宣稱一個真正落在受限 runtime 內的 datapoint；有 kvm 的機器上再補 Firecracker / gVisor 與 Lambda 端到端量測，並在 Turso embedded replica / LiteFS 之上驗證同一 cold-data 現象。
+- **In-runtime serverless / edge validation**：本研究在 edge / serverless 的**同一類硬體**（x86 + NVMe）上 model warm-process cold-data pattern。此方向已**部分實現**：§5.6 的 OpenWhisk 部署補充已證實九個策略族能在真正的 FaaS action runtime 內被表達、部署並執行（3600 formal invocation、全數通過 validity gate），提供部署可行性與 footprint/delivery-cost 的實證；但受一個 order/state effect 所限（§5.6、§6.4），該部署的 warm paired latency **不**作為受控效能估計，故**受控**的 in-runtime 效能量測仍為 future work。直接的後續驗證是把 Scattered-Zipf/Tail-Mixed × {baseline, 2e_K10} 關鍵 cell 放進 **FaaS-like 環境**、在解決或規避 order/state effect 後量受控 e2e——本機無 kvm/root 故 Firecracker microVM 走不了，但**容器 + cgroup 記憶體上限**（對應 FaaS memory cap，§6.2.2 已用同機制施壓）可行，能給 serverless 宣稱一個真正落在受限 runtime 內的 datapoint；有 kvm 的機器上再補 Firecracker / gVisor 與 Lambda 端到端量測，並在 Turso embedded replica / LiteFS 之上驗證同一 cold-data 現象。
 - **Type-aware Physical Segregation (Level 2)**：把 type-aware layout 從
   filesystem 層下放到 NVMe SSD 層（用 NVMe Stream Directives 把 interior /
   leaf 分到不同 SSD line/namespace），讓 SSD GC / wear leveling 不會打亂
@@ -1263,6 +1342,13 @@ warm-process 不含」這兩層 trade-off，在既有 prefetch literature 中很
 | 每個strategy的原理與狀態 | [overall_strategies.md](https://github.com/wongzinc/sqlite-research-project-sharing/blob/main/overall_strategies.md) |
 | 四種 workload 的定義 | [overall_workloads.md](https://github.com/wongzinc/sqlite-research-project-sharing/blob/main/overall_workloads.md) |
 | Figures | [figures/out/](https://github.com/wongzinc/sqlite-research-project-sharing/blob/main/figures/out/) |
+| OpenWhisk 部署補充（§5.6）：evidence / normalized / descriptive / thesis 合成產物 | [deployment/openwhisk/](https://github.com/wongzinc/sqlite-research-project-sharing/blob/main/deployment/openwhisk/) 下 `evidence/`、`analysis/normalized/`、`analysis/descriptive/`、`analysis/thesis/` |
+
+> **OpenWhisk provenance（reproducibility note）**：§5.6 的 formal 證據為**兩個 immutable、archived 的 matrix**
+> （primary 與 secondary run-config identity），其 bundle hash 與 execution identity 記於各自 manifest；正規化、
+> descriptive、thesis 合成產物在 `deployment/openwhisk/analysis/{normalized,descriptive,thesis}/`、原始 evidence
+> 在 `deployment/openwhisk/evidence/`（完整 SHA256 與 run-config identity 見該處 manifest，不列入本文正文）。已知一個
+> secondary bundle-manifest 的 run_config 摘要 mislabel 僅為 provenance-note 層級問題、不影響上述 identity 或任何 §5.6 量值。
 
 ### 9.2 External References
 
@@ -1334,6 +1420,80 @@ Concentrated-Zipf 略淺、個別 N 差最多 ~10–12pp）——「hotspot 落�
 （churn DB, Scattered-Zipf/Uniform-100K/Tail-Mixed）。Sparse 6-pt 跟 dense 93-pt slice的對照、9/12 cell 結論
 不變但 3 個 sweet spot 被漏掉的分析，見 [overall_strategies.md](https://github.com/wongzinc/sqlite-research-project-sharing/blob/main/overall_strategies.md) 2c bullet 跟
 [overall_workloads.md](https://github.com/wongzinc/sqlite-research-project-sharing/blob/main/overall_workloads.md) 「已完成的覆蓋」表。
+
+### A.5 OpenWhisk 部署補充：order-effect 診斷、matched-budget 與 cost-vector 細表
+
+§5.6 的部署補充所依據的細表與診斷圖放在此（主文只保留 footprint 表 + footprint-vs-delivery /
+query-vs-delivery 兩圖）。
+
+**Order-effect 診斷（為何不用相鄰 warm pair 當 headline）。** 下圖顯示四個 primary 策略在 warm
+mode、依 pair 內 position 拆的 median first_query_us：position 1 一律遠高於 position 2
+（baseline / target 兩種 role 皆然），唯一例外是 `2f_slru` 的 target arm 在兩個 position 都
+~37 µs。這是 **position 主導、非策略主導**的證據——故相鄰 warm paired ratio 不作 headline。
+
+![OpenWhisk order/state effect：pair 內 position 1 vs 2 的 first_query_us](deployment/openwhisk/analysis/thesis/figure_order_effect_diagnostic.svg)
+
+*圖 21：warm mode、pair 內 position 1 vs 2 的 median first_query_us（四個 primary 策略 ×
+baseline/target role）。position-1 一律偏高；此為 order/state effect 的 descriptive 診斷，
+**非** corrected / true-cold treatment effect（AB/BA 非嚴格 50/50、position-2 觀測仍保留，
+medians **不可**相減當效果量）。*
+
+**Matched-budget descriptive（僅描述、不宣稱勝負）。** 下表為四組 budget-matched 對照的
+selected-page 組成與 descriptive median（deliver / first_query，µs）。此處**不**宣稱 learned 勝
+frequency、frequency 勝 random、或任何 X% faster / statistically significant——那些 lever 的
+受控證據在 §5.4.1 / §6.2.8 的 native 實驗；此表只記錄組成與描述量。`2f_top102` /
+`learned_markov_102` 的 interior/leaf split 為 **emergent**（非以 page-type 知識強加）。
+
+| group | strategy | mode | pages | interior | leaf | split_origin | deliver_us | first_query_us |
+|---|---|---|---:|---:|---:|---|---:|---:|
+| A_matched_total_budget_102 | 2f_top102 | warm | 102 | 51 | 51 | emergent | 473.19 | 631.00 |
+| A_matched_total_budget_102 | 2f_top102 | standalone | 102 | 51 | 51 | emergent | 469.03 | 87.51 |
+| A_matched_total_budget_102 | learned_markov_102 | warm | 102 | 51 | 51 | emergent | 436.61 | 1384.37 |
+| A_matched_total_budget_102 | learned_markov_102 | standalone | 102 | 51 | 51 | emergent | 437.74 | 86.42 |
+| B_leaf_only_controls_10 | leaf_freq_K10 | warm | 10 | 0 | 10 | imposed | 58.43 | 517.93 |
+| B_leaf_only_controls_10 | leaf_freq_K10 | standalone | 10 | 0 | 10 | imposed | 58.44 | 147.44 |
+| B_leaf_only_controls_10 | leaf_rand_K10 | warm | 10 | 0 | 10 | imposed | 58.35 | 2324.34 |
+| B_leaf_only_controls_10 | leaf_rand_K10 | standalone | 10 | 0 | 10 | imposed | 58.38 | 149.52 |
+| C_skeleton_hot_leaf_budget_progression | 2e_K10 | warm | 102 | 92 | 10 | imposed | 502.32 | 326.29 |
+| C_skeleton_hot_leaf_budget_progression | 2e_K10 | standalone | 102 | 92 | 10 | imposed | 490.16 | 226.39 |
+| C_skeleton_hot_leaf_budget_progression | 2e_K500 | warm | 592 | 92 | 500 | imposed | 2547.66 | 328.74 |
+| C_skeleton_hot_leaf_budget_progression | 2e_K500 | standalone | 592 | 92 | 500 | imposed | 2539.33 | 87.71 |
+| D_structural_references | 2d | warm | 92 | 92 | 0 | imposed | 412.87 | 613.93 |
+| D_structural_references | 2d | standalone | 92 | 92 | 0 | imposed | 451.61 | 230.11 |
+| D_structural_references | layers_5 | warm | 5 | 5 | 0 | imposed | 36.21 | 2436.31 |
+| D_structural_references | layers_5 | standalone | 5 | 5 | 0 | imposed | 36.29 | 235.03 |
+
+（B 組 A_matched 的 2f_top102 vs learned_markov_102 為 N_YC=102 總頁預算相等；B 組 leaf_freq vs
+leaf_rand 為 10-leaf 相等；C 組 2e_K10 vs 2e_K500 同 skeleton、更大的 hot-leaf 預算；D 組為
+structural 參照。warm first_query 欄受上述 order/state effect 影響，僅供 descriptive 對照。）
+
+**Cost-vector 細表（per phase、per handle mode）。** 下表為九個策略 × {warm, standalone} 的逐
+phase median（µs）。warm mode 的 `open_us` = 0（handle 已開），open 只在 standalone 出現——與
+§5.5「`open_us` 是兩個部署模型間的唯一差」一致。
+
+| strategy | mode | pages | select_us | deliver_us | first_query_us | open_us | handler_total_us |
+|---|---|---:|---:|---:|---:|---:|---:|
+| 2d | warm | 92 | 9.51 | 412.87 | 613.93 | 0 | 6620.44 |
+| 2d | standalone | 92 | 9.30 | 451.61 | 230.11 | 413.25 | 6456.09 |
+| layers_5 | warm | 5 | 4.18 | 36.21 | 2436.31 | 0 | 7235.97 |
+| layers_5 | standalone | 5 | 4.14 | 36.29 | 235.03 | 400.70 | 5643.27 |
+| 2e_K10 | warm | 102 | 12.14 | 502.32 | 326.29 | 0 | 6064.10 |
+| 2e_K10 | standalone | 102 | 12.18 | 490.16 | 226.39 | 527.29 | 6390.53 |
+| 2f_slru | warm | 26323–26331 | 663.70 | 103343.85 | 37.33 | 0 | 110099.34 |
+| 2f_slru | standalone | 26323–26331 | 665.59 | 103247.88 | 13.78 | 179.38 | 110074.82 |
+| 2e_K500 | warm | 592 | 26.16 | 2547.66 | 328.74 | 0 | 7995.74 |
+| 2e_K500 | standalone | 592 | 26.14 | 2539.33 | 87.71 | 403.09 | 8131.92 |
+| leaf_freq_K10 | warm | 10 | 6.42 | 58.43 | 517.93 | 0 | 5591.88 |
+| leaf_freq_K10 | standalone | 10 | 6.42 | 58.44 | 147.44 | 384.07 | 5656.91 |
+| leaf_rand_K10 | warm | 10 | 6.38 | 58.35 | 2324.34 | 0 | 7133.03 |
+| leaf_rand_K10 | standalone | 10 | 6.33 | 58.38 | 149.52 | 2368.79 | 7355.74 |
+| 2f_top102 | warm | 102 | 11.84 | 473.19 | 631.00 | 0 | 6042.07 |
+| 2f_top102 | standalone | 102 | 11.82 | 469.03 | 87.51 | 531.84 | 6392.51 |
+| learned_markov_102 | warm | 102 | 11.87 | 436.61 | 1384.37 | 0 | 6798.31 |
+| learned_markov_102 | standalone | 102 | 11.88 | 437.74 | 86.42 | 2115.04 | 7406.32 |
+
+（source：`deployment/openwhisk/analysis/thesis/openwhisk_cost_vectors.csv`、
+`matched_budget_descriptives.csv`；圖 19–21 之 figure-source CSV 同目錄。provenance 見 §9.1。）
 
 ## Table: Positioning of This Work Against Prior Art
 

@@ -1,0 +1,11 @@
+{
+  "_comment": "PORTABILITY matrix M2 (of 4) for 05_full_matrix.sh -- the leaf-ablation fan on read_tail_mixed_20k: {2e_K10, 2f_slru, leaf_freq_K10, leaf_rand_K10} against baseline, seeds 1..3, warm+standalone, 3 reps. baseline is the paired A-arm anchor (not a target): 4 targets x 1 workload x 3 seeds x 2 handle_modes x 3 reps = 72 pairs = 144 invocations. schedule_seed=20260826, run_config_key=portability_run_config_sha256 (identity 64f44c3e...). Deployment/feasibility + footprint evidence only; warm paired first-query latency is NOT a strategy-performance estimate. Validated against the frozen pin; real invocation requires WS2_MATRIX_IMPL_READY=1.",
+  "schedule_seed": 20260826,
+  "run_config_key": "portability_run_config_sha256",
+  "workloads": ["read_tail_mixed_20k"],
+  "strategies": ["baseline", "2e_K10", "2f_slru", "leaf_freq_K10", "leaf_rand_K10"],
+  "seeds": [1, 2, 3],
+  "handle_modes": ["warm", "standalone"],
+  "first_operation_ids": [0],
+  "repetitions_per_cell": 3
+}

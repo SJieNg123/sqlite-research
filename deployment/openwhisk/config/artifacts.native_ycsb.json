@@ -330,6 +330,56 @@
       "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
       "keyed_plans_ref": "keyed_strategy_plans",
       "note": "learned_markov_102 = the top-102 pages by first-order Markov expected-visit score from a HELD-OUT (LOSO) transition model trained on the other 9 seeds (budget-matched to 102). Ranks by transition score with no page-type knowledge, so the interior/leaf split is EMERGENT (observed 51/51 across seeds), recorded per seed but NOT enforced. Per-seed frozen plans in keyed_strategy_plans[native_ycsb_c_read_zipf][<seed>][learned_markov_102]."
+    },
+    "2f_top28": {
+      "path": null,
+      "sha256": null,
+      "kind": "freqdump_keyed_per_seed",
+      "keyed": true,
+      "per_seed": true,
+      "workload_dependent": true,
+      "seed_dependent": true,
+      "per_seed_expected_interior_pages": {
+        "1": 26,
+        "2": 26,
+        "3": 26
+      },
+      "expected_pages": 28,
+      "expected_leaf_pages": null,
+      "workload": "native_ycsb_c_read_zipf",
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+      "keyed_plans_ref": "keyed_strategy_plans",
+      "note": "2f_top28 = the top-28 resident pages by root->leaf traversal frequency (total budget-matched to the learned model). Ranks with NO page-type knowledge, so the interior/leaf split is EMERGENT (observed 26/2 across seeds 1-3), recorded per seed but NOT enforced. Portability layer only (workstation->OpenWhisk deployment complement); per-seed frozen plans in keyed_strategy_plans[native_ycsb_c_read_zipf][<seed>][2f_top28]."
+    },
+    "learned_markov_28": {
+      "path": null,
+      "sha256": null,
+      "kind": "learned_markov_keyed_per_seed",
+      "keyed": true,
+      "per_seed": true,
+      "workload_dependent": true,
+      "seed_dependent": true,
+      "per_seed_expected_interior_pages": {
+        "1": 26,
+        "2": 26,
+        "3": 26
+      },
+      "expected_pages": 28,
+      "expected_leaf_pages": null,
+      "workload": "native_ycsb_c_read_zipf",
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+      "keyed_plans_ref": "keyed_strategy_plans",
+      "note": "learned_markov_28 = the top-28 pages of a first-order Markov transition model trained leave-one-seed-out (train on the other 9 seeds, test on the held-out seed; the test seed is never in the training set). Emergent 26/2 interior/leaf split recorded per seed, NOT enforced. Portability layer only; per-seed frozen plans in keyed_strategy_plans[native_ycsb_c_read_zipf][<seed>][learned_markov_28]."
     }
   },
   "expected_page_count": 26331,
@@ -596,6 +646,52 @@
             "path": "deployment/openwhisk/config/plans/keyed/native_source/learned_markov_YC_orig_N102_test1.csv",
             "sha256": "d851c1286ffd8bac9eb770d321751685b69b289f6187ef14b198ad2f293df44e"
           }
+        },
+        "2f_top28": {
+          "path": "deployment/openwhisk/config/plans/keyed/2f_top28_native_ycsb_c_read_zipf_seed1.csv",
+          "sha256": "d0d97bab7d88c3c20db76423b93b39224f884b30d3afd817f3f61e516ac40802",
+          "kind": "freqdump_ranked_partial",
+          "expected_pages": 28,
+          "expected_interior_pages": 26,
+          "expected_leaf_pages": 2,
+          "workload": "native_ycsb_c_read_zipf",
+          "seed": 1,
+          "strategy": "2f_top28",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/freqdump_YC_orig_N28_seed1.csv",
+            "sha256": "27fd679e163898ef46a84a8b53bb88e14624cdea54b6dd40ae40e7273509769f"
+          }
+        },
+        "learned_markov_28": {
+          "path": "deployment/openwhisk/config/plans/keyed/learned_markov_28_native_ycsb_c_read_zipf_seed1.csv",
+          "sha256": "52c9fb45e22336c0fd5d9195cfd04ce0873106c4687617883751451dca5c7e0a",
+          "kind": "learned_markov_partial",
+          "expected_pages": 28,
+          "expected_interior_pages": 26,
+          "expected_leaf_pages": 2,
+          "workload": "native_ycsb_c_read_zipf",
+          "seed": 1,
+          "strategy": "learned_markov_28",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/learned_markov_YC_orig_N28_test1.csv",
+            "sha256": "48ab4c003499e2be0bb6b0fb1098adfea6db8a2015b0fece22337b943b5bcb7b"
+          },
+          "loso": {
+            "test_seed": 1,
+            "train_seeds": [
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10
+            ]
+          }
         }
       },
       "2": {
@@ -710,6 +806,52 @@
             "path": "deployment/openwhisk/config/plans/keyed/native_source/learned_markov_YC_orig_N102_test2.csv",
             "sha256": "d851c1286ffd8bac9eb770d321751685b69b289f6187ef14b198ad2f293df44e"
           }
+        },
+        "2f_top28": {
+          "path": "deployment/openwhisk/config/plans/keyed/2f_top28_native_ycsb_c_read_zipf_seed2.csv",
+          "sha256": "51074ba3f1fcb84fbbfa191d9f407f67b1c1900da765f4686e348c345212e345",
+          "kind": "freqdump_ranked_partial",
+          "expected_pages": 28,
+          "expected_interior_pages": 26,
+          "expected_leaf_pages": 2,
+          "workload": "native_ycsb_c_read_zipf",
+          "seed": 2,
+          "strategy": "2f_top28",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/freqdump_YC_orig_N28_seed2.csv",
+            "sha256": "053d7b202665464e03419babcfb2fcf158da8ed30eb714a115c6cf47d69e3b31"
+          }
+        },
+        "learned_markov_28": {
+          "path": "deployment/openwhisk/config/plans/keyed/learned_markov_28_native_ycsb_c_read_zipf_seed2.csv",
+          "sha256": "52c9fb45e22336c0fd5d9195cfd04ce0873106c4687617883751451dca5c7e0a",
+          "kind": "learned_markov_partial",
+          "expected_pages": 28,
+          "expected_interior_pages": 26,
+          "expected_leaf_pages": 2,
+          "workload": "native_ycsb_c_read_zipf",
+          "seed": 2,
+          "strategy": "learned_markov_28",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/learned_markov_YC_orig_N28_test2.csv",
+            "sha256": "48ab4c003499e2be0bb6b0fb1098adfea6db8a2015b0fece22337b943b5bcb7b"
+          },
+          "loso": {
+            "test_seed": 2,
+            "train_seeds": [
+              1,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10
+            ]
+          }
         }
       },
       "3": {
@@ -823,6 +965,52 @@
           "native_source": {
             "path": "deployment/openwhisk/config/plans/keyed/native_source/learned_markov_YC_orig_N102_test3.csv",
             "sha256": "d851c1286ffd8bac9eb770d321751685b69b289f6187ef14b198ad2f293df44e"
+          }
+        },
+        "2f_top28": {
+          "path": "deployment/openwhisk/config/plans/keyed/2f_top28_native_ycsb_c_read_zipf_seed3.csv",
+          "sha256": "52c9fb45e22336c0fd5d9195cfd04ce0873106c4687617883751451dca5c7e0a",
+          "kind": "freqdump_ranked_partial",
+          "expected_pages": 28,
+          "expected_interior_pages": 26,
+          "expected_leaf_pages": 2,
+          "workload": "native_ycsb_c_read_zipf",
+          "seed": 3,
+          "strategy": "2f_top28",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/freqdump_YC_orig_N28_seed3.csv",
+            "sha256": "acca21e3320b38aa3766b40464f19e7ec60b96e0378c3444c7b02fcecac6abc4"
+          }
+        },
+        "learned_markov_28": {
+          "path": "deployment/openwhisk/config/plans/keyed/learned_markov_28_native_ycsb_c_read_zipf_seed3.csv",
+          "sha256": "02aca214bff2fbfc523345e0a8bc016484766a108921c872a91c5a3722084ce8",
+          "kind": "learned_markov_partial",
+          "expected_pages": 28,
+          "expected_interior_pages": 26,
+          "expected_leaf_pages": 2,
+          "workload": "native_ycsb_c_read_zipf",
+          "seed": 3,
+          "strategy": "learned_markov_28",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/learned_markov_YC_orig_N28_test3.csv",
+            "sha256": "db3f7a7329607bb130d89819de3d268dc33747d3dcc89ae9567809abcd0fe85d"
+          },
+          "loso": {
+            "test_seed": 3,
+            "train_seeds": [
+              1,
+              2,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10
+            ]
           }
         }
       },
@@ -1624,6 +1812,518 @@
           }
         }
       }
+    },
+    "native_ycsb_c_read_uniform": {
+      "1": {
+        "2e_K10": {
+          "path": "deployment/openwhisk/config/plans/keyed/2e_K10_native_ycsb_c_read_uniform_seed1.csv",
+          "sha256": "404ae4be28153c6ebbc5d0926b1de0ec8e894ceda8ca219470c895a8cced6667",
+          "kind": "hot2e_interior_union_leaf",
+          "expected_pages": 102,
+          "expected_interior_pages": 92,
+          "expected_leaf_pages": 10,
+          "workload": "native_ycsb_c_read_uniform",
+          "seed": 1,
+          "strategy": "2e_K10",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "/home/u03/sqlite-research-fork/strategies/access/runs/hot2e_YCu_orig_K10_seed1.csv",
+            "sha256": "87ca6f4bc95e5564cbb5fe384d3021a530a52d9f6453d6bf7578bb5106f821cf"
+          }
+        },
+        "2f_slru": {
+          "path": "deployment/openwhisk/config/plans/keyed/2f_slru_native_ycsb_c_read_uniform_seed1.csv",
+          "sha256": "8aaa3bc3f97058cd9c894931bfc2a5e92728ceb94184aa063b8f425294662894",
+          "kind": "slru_resident_working_set",
+          "expected_pages": 26327,
+          "expected_interior_pages": 92,
+          "expected_leaf_pages": 26235,
+          "workload": "native_ycsb_c_read_uniform",
+          "seed": 1,
+          "strategy": "2f_slru",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "/home/u03/sqlite-research-fork/strategies/slru/runs/hotpages_ycu_seed1.csv",
+            "sha256": "2a2eb5bb1b3023628c6917d45c378d2dad4e2fbcca252b2f787f0c34f861310e"
+          }
+        }
+      },
+      "2": {
+        "2e_K10": {
+          "path": "deployment/openwhisk/config/plans/keyed/2e_K10_native_ycsb_c_read_uniform_seed2.csv",
+          "sha256": "3f1c5e699526997438139649d10f0d3638b74ef370d57927bb1f9ec68f3577ec",
+          "kind": "hot2e_interior_union_leaf",
+          "expected_pages": 102,
+          "expected_interior_pages": 92,
+          "expected_leaf_pages": 10,
+          "workload": "native_ycsb_c_read_uniform",
+          "seed": 2,
+          "strategy": "2e_K10",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "/home/u03/sqlite-research-fork/strategies/access/runs/hot2e_YCu_orig_K10_seed2.csv",
+            "sha256": "f97b3a9eb8561ef3c7903a4c4ef512f1b6ce48f2e28ff40afb76c68697eeeacc"
+          }
+        },
+        "2f_slru": {
+          "path": "deployment/openwhisk/config/plans/keyed/2f_slru_native_ycsb_c_read_uniform_seed2.csv",
+          "sha256": "73b7924022ce87ba33e35ea2d79b9521b1452bbc62e19af9604b15477d659886",
+          "kind": "slru_resident_working_set",
+          "expected_pages": 26328,
+          "expected_interior_pages": 92,
+          "expected_leaf_pages": 26236,
+          "workload": "native_ycsb_c_read_uniform",
+          "seed": 2,
+          "strategy": "2f_slru",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "/home/u03/sqlite-research-fork/strategies/slru/runs/hotpages_ycu_seed2.csv",
+            "sha256": "5d29be373d1d54aced621c188e92ee040f71a84e67e0e2a05caa2b012421d5ab"
+          }
+        }
+      },
+      "3": {
+        "2e_K10": {
+          "path": "deployment/openwhisk/config/plans/keyed/2e_K10_native_ycsb_c_read_uniform_seed3.csv",
+          "sha256": "213412f2b34c381d8d81008c84d9e6c4e32673983575b7951d6ef504bafde934",
+          "kind": "hot2e_interior_union_leaf",
+          "expected_pages": 102,
+          "expected_interior_pages": 92,
+          "expected_leaf_pages": 10,
+          "workload": "native_ycsb_c_read_uniform",
+          "seed": 3,
+          "strategy": "2e_K10",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "/home/u03/sqlite-research-fork/strategies/access/runs/hot2e_YCu_orig_K10_seed3.csv",
+            "sha256": "992e2839c8fbd49cb1273b359aa1e813f91cafef7d8d70ed1dfc4f7d424c438b"
+          }
+        },
+        "2f_slru": {
+          "path": "deployment/openwhisk/config/plans/keyed/2f_slru_native_ycsb_c_read_uniform_seed3.csv",
+          "sha256": "6630a23aaefce4f008d6ff50428f435a9d8c5a2ba87ccdf35c97ff86200c5e82",
+          "kind": "slru_resident_working_set",
+          "expected_pages": 26327,
+          "expected_interior_pages": 92,
+          "expected_leaf_pages": 26235,
+          "workload": "native_ycsb_c_read_uniform",
+          "seed": 3,
+          "strategy": "2f_slru",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "/home/u03/sqlite-research-fork/strategies/slru/runs/hotpages_ycu_seed3.csv",
+            "sha256": "518964a3720934c6346ae832ae6e306db20d6cb00effafee3390ec9f3c7cdb33"
+          }
+        }
+      }
+    },
+    "native_ycsb_c_hot_hashed_01": {
+      "1": {
+        "2e_K10": {
+          "path": "deployment/openwhisk/config/plans/keyed/2e_K10_native_ycsb_c_hot_hashed_01_seed1.csv",
+          "sha256": "29f4974fe79dd1c2814e8b8b6d8c54a3a7473c77f45024b657b62c2401e32b76",
+          "kind": "hot2e_interior_union_leaf",
+          "expected_pages": 102,
+          "expected_interior_pages": 92,
+          "expected_leaf_pages": 10,
+          "workload": "native_ycsb_c_hot_hashed_01",
+          "seed": 1,
+          "strategy": "2e_K10",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "/home/u03/sqlite-research-fork/strategies/access/runs/hot2e_YCh01_orig_K10_seed1.csv",
+            "sha256": "bf08853f76890718bbdc6160ff36b91b9d80b79768bbf6d44259414fbd0a169d"
+          }
+        },
+        "2f_slru": {
+          "path": "deployment/openwhisk/config/plans/keyed/2f_slru_native_ycsb_c_hot_hashed_01_seed1.csv",
+          "sha256": "c252f3fe8308863c9468ff6a3327fcff3f00f6529f2ef45da70621413dc27d05",
+          "kind": "slru_resident_working_set",
+          "expected_pages": 26296,
+          "expected_interior_pages": 92,
+          "expected_leaf_pages": 26204,
+          "workload": "native_ycsb_c_hot_hashed_01",
+          "seed": 1,
+          "strategy": "2f_slru",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "/home/u03/sqlite-research-fork/strategies/slru/runs/hotpages_ych01_seed1.csv",
+            "sha256": "84714e44ea5a1748469c39bc6b17fec5b42a5907319a876b97f61c99e93decd3"
+          }
+        }
+      },
+      "2": {
+        "2e_K10": {
+          "path": "deployment/openwhisk/config/plans/keyed/2e_K10_native_ycsb_c_hot_hashed_01_seed2.csv",
+          "sha256": "f46c7604aa83b633ffe29213f952e99a69a6d5094daba31a4cddda1308d928dc",
+          "kind": "hot2e_interior_union_leaf",
+          "expected_pages": 102,
+          "expected_interior_pages": 92,
+          "expected_leaf_pages": 10,
+          "workload": "native_ycsb_c_hot_hashed_01",
+          "seed": 2,
+          "strategy": "2e_K10",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "/home/u03/sqlite-research-fork/strategies/access/runs/hot2e_YCh01_orig_K10_seed2.csv",
+            "sha256": "d3dbe56afee3f0fbf24e6e69557ef40b3f47d0bb4c46c82cf84e28e83fcccdf7"
+          }
+        },
+        "2f_slru": {
+          "path": "deployment/openwhisk/config/plans/keyed/2f_slru_native_ycsb_c_hot_hashed_01_seed2.csv",
+          "sha256": "f21ddd4fb8b50a920826e6f45f676bb73cd2bfeb1dfbc1f17fddd9a3db1605bd",
+          "kind": "slru_resident_working_set",
+          "expected_pages": 26306,
+          "expected_interior_pages": 92,
+          "expected_leaf_pages": 26214,
+          "workload": "native_ycsb_c_hot_hashed_01",
+          "seed": 2,
+          "strategy": "2f_slru",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "/home/u03/sqlite-research-fork/strategies/slru/runs/hotpages_ych01_seed2.csv",
+            "sha256": "40f7da7f5715725de553f39ea7bf19aacc5fdfc026f2833ca2cb5e87181e4d9f"
+          }
+        }
+      },
+      "3": {
+        "2e_K10": {
+          "path": "deployment/openwhisk/config/plans/keyed/2e_K10_native_ycsb_c_hot_hashed_01_seed3.csv",
+          "sha256": "763b32f9e7d6954c2d7d4b71a0726b9466bc48a472ea3e6da05b9a67cce31450",
+          "kind": "hot2e_interior_union_leaf",
+          "expected_pages": 102,
+          "expected_interior_pages": 92,
+          "expected_leaf_pages": 10,
+          "workload": "native_ycsb_c_hot_hashed_01",
+          "seed": 3,
+          "strategy": "2e_K10",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "/home/u03/sqlite-research-fork/strategies/access/runs/hot2e_YCh01_orig_K10_seed3.csv",
+            "sha256": "b9451edfb984aa9338df9ab5b4c9a7f08f3e3815d3c7e634de0733184defff9e"
+          }
+        },
+        "2f_slru": {
+          "path": "deployment/openwhisk/config/plans/keyed/2f_slru_native_ycsb_c_hot_hashed_01_seed3.csv",
+          "sha256": "0324f190b9d79ffae096165031545b200c2b895c9f9839cc67641c734268c916",
+          "kind": "slru_resident_working_set",
+          "expected_pages": 26318,
+          "expected_interior_pages": 92,
+          "expected_leaf_pages": 26226,
+          "workload": "native_ycsb_c_hot_hashed_01",
+          "seed": 3,
+          "strategy": "2f_slru",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "/home/u03/sqlite-research-fork/strategies/slru/runs/hotpages_ych01_seed3.csv",
+            "sha256": "5766c4bfc70f174505c35c65575b74e37bd24558b677426e057ed9aa4a894c12"
+          }
+        }
+      }
+    },
+    "read_tail_mixed_20k": {
+      "1": {
+        "2e_K10": {
+          "path": "deployment/openwhisk/config/plans/keyed/2e_K10_read_tail_mixed_20k_seed1.csv",
+          "sha256": "585fa6be597571ebbddcb87f73e9594ee4e82a607814b200681c592e86f4c020",
+          "kind": "hot2e_interior_union_leaf",
+          "expected_pages": 102,
+          "expected_interior_pages": 92,
+          "expected_leaf_pages": 10,
+          "workload": "read_tail_mixed_20k",
+          "seed": 1,
+          "strategy": "2e_K10",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/hot2e_C_orig_K10_seed1.csv",
+            "sha256": "29f19a9080c12711d765c5562379a613e01bf2553e792fa2b3da0bd643a67f56"
+          }
+        },
+        "2f_slru": {
+          "path": "deployment/openwhisk/config/plans/keyed/2f_slru_read_tail_mixed_20k_seed1.csv",
+          "sha256": "6d28b6e49c5f4fd4bb45a73ac8d208ca72fdc3bf663bf3646f26cef9326cf23d",
+          "kind": "slru_resident_working_set",
+          "expected_pages": 483,
+          "expected_interior_pages": 4,
+          "expected_leaf_pages": 479,
+          "workload": "read_tail_mixed_20k",
+          "seed": 1,
+          "strategy": "2f_slru",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/slru/runs/hotpages_c_seed1.csv",
+            "sha256": "6b147ad51068aa62807ba1de9d7b42f147b478687ae2f55bbf5a0d4f466441fe"
+          }
+        },
+        "leaf_freq_K10": {
+          "path": "deployment/openwhisk/config/plans/keyed/leaf_freq_K10_read_tail_mixed_20k_seed1.csv",
+          "sha256": "4b2683b4fa36728935422038cd27d72394ad3c1a2b2ca028803b9ebf60c92dde",
+          "kind": "leaf_only_frequency",
+          "expected_pages": 10,
+          "expected_interior_pages": 0,
+          "expected_leaf_pages": 10,
+          "workload": "read_tail_mixed_20k",
+          "seed": 1,
+          "strategy": "leaf_freq_K10",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/hot2e_C_orig_K10_seed1.csv",
+            "sha256": "29f19a9080c12711d765c5562379a613e01bf2553e792fa2b3da0bd643a67f56"
+          }
+        },
+        "leaf_rand_K10": {
+          "path": "deployment/openwhisk/config/plans/keyed/leaf_rand_K10_read_tail_mixed_20k_seed1.csv",
+          "sha256": "d228717f5452ab60241d4cc382a55a7f5ef421ac3fc25d5490aac76f35f06714",
+          "kind": "leaf_only_random",
+          "expected_pages": 10,
+          "expected_interior_pages": 0,
+          "expected_leaf_pages": 10,
+          "workload": "read_tail_mixed_20k",
+          "seed": 1,
+          "strategy": "leaf_rand_K10",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/hot2e_C_orig_K10_seed1.csv",
+            "sha256": "29f19a9080c12711d765c5562379a613e01bf2553e792fa2b3da0bd643a67f56"
+          }
+        }
+      },
+      "2": {
+        "2e_K10": {
+          "path": "deployment/openwhisk/config/plans/keyed/2e_K10_read_tail_mixed_20k_seed2.csv",
+          "sha256": "585fa6be597571ebbddcb87f73e9594ee4e82a607814b200681c592e86f4c020",
+          "kind": "hot2e_interior_union_leaf",
+          "expected_pages": 102,
+          "expected_interior_pages": 92,
+          "expected_leaf_pages": 10,
+          "workload": "read_tail_mixed_20k",
+          "seed": 2,
+          "strategy": "2e_K10",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/hot2e_C_orig_K10_seed2.csv",
+            "sha256": "29f19a9080c12711d765c5562379a613e01bf2553e792fa2b3da0bd643a67f56"
+          }
+        },
+        "2f_slru": {
+          "path": "deployment/openwhisk/config/plans/keyed/2f_slru_read_tail_mixed_20k_seed2.csv",
+          "sha256": "0ab363cfb2baf8b951a39f5af53a7c4bba348e7da146301d4404ef5bb03162ea",
+          "kind": "slru_resident_working_set",
+          "expected_pages": 467,
+          "expected_interior_pages": 4,
+          "expected_leaf_pages": 463,
+          "workload": "read_tail_mixed_20k",
+          "seed": 2,
+          "strategy": "2f_slru",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/slru/runs/hotpages_c_seed2.csv",
+            "sha256": "6aa82798a1df692b861ff3fba254e7b2a5f4a0fb8740b474690ef64d84a7b178"
+          }
+        },
+        "leaf_freq_K10": {
+          "path": "deployment/openwhisk/config/plans/keyed/leaf_freq_K10_read_tail_mixed_20k_seed2.csv",
+          "sha256": "4b2683b4fa36728935422038cd27d72394ad3c1a2b2ca028803b9ebf60c92dde",
+          "kind": "leaf_only_frequency",
+          "expected_pages": 10,
+          "expected_interior_pages": 0,
+          "expected_leaf_pages": 10,
+          "workload": "read_tail_mixed_20k",
+          "seed": 2,
+          "strategy": "leaf_freq_K10",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/hot2e_C_orig_K10_seed2.csv",
+            "sha256": "29f19a9080c12711d765c5562379a613e01bf2553e792fa2b3da0bd643a67f56"
+          }
+        },
+        "leaf_rand_K10": {
+          "path": "deployment/openwhisk/config/plans/keyed/leaf_rand_K10_read_tail_mixed_20k_seed2.csv",
+          "sha256": "5099b7bca0ccade8ba9c652c67452344d191b8060d4c6d04287a3711d2c4244e",
+          "kind": "leaf_only_random",
+          "expected_pages": 10,
+          "expected_interior_pages": 0,
+          "expected_leaf_pages": 10,
+          "workload": "read_tail_mixed_20k",
+          "seed": 2,
+          "strategy": "leaf_rand_K10",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/hot2e_C_orig_K10_seed2.csv",
+            "sha256": "29f19a9080c12711d765c5562379a613e01bf2553e792fa2b3da0bd643a67f56"
+          }
+        }
+      },
+      "3": {
+        "2e_K10": {
+          "path": "deployment/openwhisk/config/plans/keyed/2e_K10_read_tail_mixed_20k_seed3.csv",
+          "sha256": "585fa6be597571ebbddcb87f73e9594ee4e82a607814b200681c592e86f4c020",
+          "kind": "hot2e_interior_union_leaf",
+          "expected_pages": 102,
+          "expected_interior_pages": 92,
+          "expected_leaf_pages": 10,
+          "workload": "read_tail_mixed_20k",
+          "seed": 3,
+          "strategy": "2e_K10",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/hot2e_C_orig_K10_seed3.csv",
+            "sha256": "29f19a9080c12711d765c5562379a613e01bf2553e792fa2b3da0bd643a67f56"
+          }
+        },
+        "2f_slru": {
+          "path": "deployment/openwhisk/config/plans/keyed/2f_slru_read_tail_mixed_20k_seed3.csv",
+          "sha256": "70c3686eb5b3820964f795061b65e5393328abae9d03f063ab978f7305d30151",
+          "kind": "slru_resident_working_set",
+          "expected_pages": 473,
+          "expected_interior_pages": 4,
+          "expected_leaf_pages": 469,
+          "workload": "read_tail_mixed_20k",
+          "seed": 3,
+          "strategy": "2f_slru",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/slru/runs/hotpages_c_seed3.csv",
+            "sha256": "cb20ffd9af72cea645406aba1e08cceb958e01e7a9e412def8bad5818e67c78c"
+          }
+        },
+        "leaf_freq_K10": {
+          "path": "deployment/openwhisk/config/plans/keyed/leaf_freq_K10_read_tail_mixed_20k_seed3.csv",
+          "sha256": "4b2683b4fa36728935422038cd27d72394ad3c1a2b2ca028803b9ebf60c92dde",
+          "kind": "leaf_only_frequency",
+          "expected_pages": 10,
+          "expected_interior_pages": 0,
+          "expected_leaf_pages": 10,
+          "workload": "read_tail_mixed_20k",
+          "seed": 3,
+          "strategy": "leaf_freq_K10",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/hot2e_C_orig_K10_seed3.csv",
+            "sha256": "29f19a9080c12711d765c5562379a613e01bf2553e792fa2b3da0bd643a67f56"
+          }
+        },
+        "leaf_rand_K10": {
+          "path": "deployment/openwhisk/config/plans/keyed/leaf_rand_K10_read_tail_mixed_20k_seed3.csv",
+          "sha256": "1db1a90891ba12f9e1ea1a8d4740c31fefd8b9b07adca6ca6adc0c2a348ba18f",
+          "kind": "leaf_only_random",
+          "expected_pages": 10,
+          "expected_interior_pages": 0,
+          "expected_leaf_pages": 10,
+          "workload": "read_tail_mixed_20k",
+          "seed": 3,
+          "strategy": "leaf_rand_K10",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/hot2e_C_orig_K10_seed3.csv",
+            "sha256": "29f19a9080c12711d765c5562379a613e01bf2553e792fa2b3da0bd643a67f56"
+          }
+        }
+      }
+    },
+    "read_tail_hit_20k": {
+      "1": {
+        "2e_K10": {
+          "path": "deployment/openwhisk/config/plans/keyed/2e_K10_read_tail_hit_20k_seed1.csv",
+          "sha256": "8c697476f820cb83156afbc4005820602d5039936b4ee0176a048ead15a4fe03",
+          "kind": "hot2e_interior_union_leaf",
+          "expected_pages": 102,
+          "expected_interior_pages": 92,
+          "expected_leaf_pages": 10,
+          "workload": "read_tail_hit_20k",
+          "seed": 1,
+          "strategy": "2e_K10",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/hot2e_C_hit_orig_K10_seed1.csv",
+            "sha256": "6fa5577beb8cfaf972b8e3dbd7afd75a6cfb091b3b1e345a6de3f4960f3ce619"
+          }
+        },
+        "2f_slru": {
+          "path": "deployment/openwhisk/config/plans/keyed/2f_slru_read_tail_hit_20k_seed1.csv",
+          "sha256": "09c10c05351f6e4013cc7d0695b701efb7bd027856b1607ec55e91f97c966eba",
+          "kind": "slru_resident_working_set",
+          "expected_pages": 916,
+          "expected_interior_pages": 5,
+          "expected_leaf_pages": 911,
+          "workload": "read_tail_hit_20k",
+          "seed": 1,
+          "strategy": "2f_slru",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/slru/runs/hotpages_c_hit_seed1.csv",
+            "sha256": "63e7f7a9383056457cbcaa57fb1be5978c4bfbcdc8385f59e6ce10feece56f76"
+          }
+        }
+      },
+      "2": {
+        "2e_K10": {
+          "path": "deployment/openwhisk/config/plans/keyed/2e_K10_read_tail_hit_20k_seed2.csv",
+          "sha256": "8c697476f820cb83156afbc4005820602d5039936b4ee0176a048ead15a4fe03",
+          "kind": "hot2e_interior_union_leaf",
+          "expected_pages": 102,
+          "expected_interior_pages": 92,
+          "expected_leaf_pages": 10,
+          "workload": "read_tail_hit_20k",
+          "seed": 2,
+          "strategy": "2e_K10",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/hot2e_C_hit_orig_K10_seed2.csv",
+            "sha256": "6fa5577beb8cfaf972b8e3dbd7afd75a6cfb091b3b1e345a6de3f4960f3ce619"
+          }
+        },
+        "2f_slru": {
+          "path": "deployment/openwhisk/config/plans/keyed/2f_slru_read_tail_hit_20k_seed2.csv",
+          "sha256": "af5e80fdd8bd93d9cec9567979ec0d4401427abf91593f86eaa187977669f765",
+          "kind": "slru_resident_working_set",
+          "expected_pages": 921,
+          "expected_interior_pages": 5,
+          "expected_leaf_pages": 916,
+          "workload": "read_tail_hit_20k",
+          "seed": 2,
+          "strategy": "2f_slru",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/slru/runs/hotpages_c_hit_seed2.csv",
+            "sha256": "92d57dd11d714ffa8899d978df46ff5406818b54424a122e7ca1c8ebae628bc3"
+          }
+        }
+      },
+      "3": {
+        "2e_K10": {
+          "path": "deployment/openwhisk/config/plans/keyed/2e_K10_read_tail_hit_20k_seed3.csv",
+          "sha256": "8c697476f820cb83156afbc4005820602d5039936b4ee0176a048ead15a4fe03",
+          "kind": "hot2e_interior_union_leaf",
+          "expected_pages": 102,
+          "expected_interior_pages": 92,
+          "expected_leaf_pages": 10,
+          "workload": "read_tail_hit_20k",
+          "seed": 3,
+          "strategy": "2e_K10",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/hot2e_C_hit_orig_K10_seed3.csv",
+            "sha256": "6fa5577beb8cfaf972b8e3dbd7afd75a6cfb091b3b1e345a6de3f4960f3ce619"
+          }
+        },
+        "2f_slru": {
+          "path": "deployment/openwhisk/config/plans/keyed/2f_slru_read_tail_hit_20k_seed3.csv",
+          "sha256": "985e2f5d19a639e51ab210d6ac6eac62d83f95e236711e4418f3455a23472385",
+          "kind": "slru_resident_working_set",
+          "expected_pages": 918,
+          "expected_interior_pages": 5,
+          "expected_leaf_pages": 913,
+          "workload": "read_tail_hit_20k",
+          "seed": 3,
+          "strategy": "2f_slru",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/slru/runs/hotpages_c_hit_seed3.csv",
+            "sha256": "9eabdc7e602fccf4bbc59c2c1b197bc64f76b6179c85bdb094f2954054484888"
+          }
+        }
+      }
     }
   },
   "keyed_strategy_plans_note": "Generic keyed per-(workload,seed) strategy plans. 2e_K10 is the first consumer. Seeds 1-5,7-10 share one native selection (byte-identical to the in-repo master strategies/access/runs/hot2e_YC_orig_K10.csv); seed 6 diverges (hot leaf 24837 -> 18314), native source committed under config/plans/keyed/native_source/. Runtime replays these exact frozen bytes; the fork is never read at runtime. See config/plans/keyed/native_source/PROVENANCE.md. 2f_slru is the second consumer: the whole resident working set per seed (footprint varies by seed, interior half always the 92-page skeleton; all 10 per-seed native sources committed under config/plans/keyed/native_source/hotpages_yc_seed{N}.csv).",
@@ -1657,5 +2357,192 @@
     ]
   },
   "secondary_run_config_sha256": "441609e611a38cb10e1f0a4cfc058991d3b8850d71b83e7092610ee469a58299",
-  "secondary_run_config_sha256_note": "Deterministic sha256 over the canonical secondary_invocation_plan (sorted-key compact JSON), mirroring run_config_sha256. Distinct from the primary because the target strategy set differs (baseline anchor + 2e_K500, leaf_freq_K10, leaf_rand_K10, 2f_top102, learned_markov_102). The secondary matrix runs under a NEW schedule_seed=20260825 (distinct from the primary 20260804); the primary invocation_plan/run_config_sha256 are byte-frozen and unchanged."
+  "secondary_run_config_sha256_note": "Deterministic sha256 over the canonical secondary_invocation_plan (sorted-key compact JSON), mirroring run_config_sha256. Distinct from the primary because the target strategy set differs (baseline anchor + 2e_K500, leaf_freq_K10, leaf_rand_K10, 2f_top102, learned_markov_102). The secondary matrix runs under a NEW schedule_seed=20260825 (distinct from the primary 20260804); the primary invocation_plan/run_config_sha256 are byte-frozen and unchanged.",
+  "workload_set": [
+    "native_ycsb_c_hot_hashed_01",
+    "native_ycsb_c_read_uniform",
+    "native_ycsb_c_read_zipf",
+    "read_tail_hit_20k",
+    "read_tail_mixed_20k"
+  ],
+  "workload_set_note": "Authoritative set of workload IDs the portability matrix (deployment complement) may address. ws2 05 unions this with the canonical id for its workload gate; session.py refuses any keyed plan for a workload outside this set. Additive to the primary/secondary YC campaigns, which are unaffected.",
+  "portability_workload_traces": {
+    "native_ycsb_c_hot_hashed_01": {
+      "seeds": {
+        "1": {
+          "path": "workloads_refined/traces/seeds/workload_YCh01_1.txt",
+          "sha256": "27c2f869cba85f68f63ac627219291d275c13ab9c7b67bd82699817676384216"
+        },
+        "2": {
+          "path": "workloads_refined/traces/seeds/workload_YCh01_2.txt",
+          "sha256": "57c87dd2f07de41c1868250313cc37c2c354c8318f4c4c62da840810ca4a0437"
+        },
+        "3": {
+          "path": "workloads_refined/traces/seeds/workload_YCh01_3.txt",
+          "sha256": "88063d340517625ac2b3a538d53e79bfa3f720abc46a04b226abb10068404fea"
+        }
+      }
+    },
+    "native_ycsb_c_read_uniform": {
+      "seeds": {
+        "1": {
+          "path": "workloads_refined/traces/seeds/workload_YCu_1.txt",
+          "sha256": "d90409af77c280168d1059e87cb8134e845e01d73395134add1958660ae463fb"
+        },
+        "2": {
+          "path": "workloads_refined/traces/seeds/workload_YCu_2.txt",
+          "sha256": "aeb9d3c808126f4e4adffe32118a6fba581a5648aee7c3da89fe5c6bb0c3a39a"
+        },
+        "3": {
+          "path": "workloads_refined/traces/seeds/workload_YCu_3.txt",
+          "sha256": "ec8dc2cdd6a988ca69c975c6472d5e5d8efeacc4904049722d5d7b7c8a73f370"
+        }
+      }
+    },
+    "read_tail_hit_20k": {
+      "seeds": {
+        "1": {
+          "path": "workloads/workload_c_hit_1.txt",
+          "sha256": "6eddc18f711d0523b13ab0ef55735acee724ee05368affd9200b5b5ab0dcf84f"
+        },
+        "2": {
+          "path": "workloads/workload_c_hit_2.txt",
+          "sha256": "5ac5aaae567c5cf921e8b01ea5b7a193e80b689b0189481edc825be46639decd"
+        },
+        "3": {
+          "path": "workloads/workload_c_hit_3.txt",
+          "sha256": "97e0424adbcac85b058e8d7a4c95b05c8fdae86790a5e3f52b9e0bbe3d938dfd"
+        }
+      }
+    },
+    "read_tail_mixed_20k": {
+      "seeds": {
+        "1": {
+          "path": "workloads/workload_c_1.txt",
+          "sha256": "ddf83aee756f0a93a94d83683bda5b74214f6a93f6c00c81da245edc65e3afc6"
+        },
+        "2": {
+          "path": "workloads/workload_c_2.txt",
+          "sha256": "674e64c9c260a595ced0b5c0de73f75c728ec5bab2191d311fec547724679d4d"
+        },
+        "3": {
+          "path": "workloads/workload_c_3.txt",
+          "sha256": "d874e9bb35287b94e37761e920af136de3de8f7fdb9c2b4c62b336810bba7d68"
+        }
+      }
+    }
+  },
+  "portability_invocation_plan": {
+    "kind": "portability_matrix",
+    "workload_set": [
+      "native_ycsb_c_hot_hashed_01",
+      "native_ycsb_c_read_uniform",
+      "native_ycsb_c_read_zipf",
+      "read_tail_hit_20k",
+      "read_tail_mixed_20k"
+    ],
+    "strategies": [
+      "2d",
+      "2e_K10",
+      "2f_slru",
+      "2f_top28",
+      "baseline",
+      "leaf_freq_K10",
+      "leaf_rand_K10",
+      "learned_markov_28"
+    ],
+    "seeds": [
+      1,
+      2,
+      3
+    ],
+    "handle_modes": [
+      "warm",
+      "standalone"
+    ],
+    "first_operation_ids": [
+      0
+    ],
+    "repetitions": 3,
+    "schedule_seed": 20260826,
+    "concurrency": 1,
+    "sequential": true,
+    "matrices": [
+      {
+        "name": "M1",
+        "workloads": [
+          "native_ycsb_c_read_uniform",
+          "native_ycsb_c_hot_hashed_01",
+          "read_tail_hit_20k"
+        ],
+        "strategies": [
+          "baseline",
+          "2e_K10",
+          "2f_slru"
+        ],
+        "seeds": [
+          1,
+          2,
+          3
+        ],
+        "pairs": 108
+      },
+      {
+        "name": "M2",
+        "workloads": [
+          "read_tail_mixed_20k"
+        ],
+        "strategies": [
+          "baseline",
+          "2e_K10",
+          "2f_slru",
+          "leaf_freq_K10",
+          "leaf_rand_K10"
+        ],
+        "seeds": [
+          1,
+          2,
+          3
+        ],
+        "pairs": 72
+      },
+      {
+        "name": "M3",
+        "workloads": [
+          "native_ycsb_c_read_zipf"
+        ],
+        "strategies": [
+          "baseline",
+          "2f_top28",
+          "learned_markov_28"
+        ],
+        "seeds": [
+          1,
+          2,
+          3
+        ],
+        "pairs": 36
+      },
+      {
+        "name": "M4",
+        "workloads": [
+          "native_ycsb_c_read_uniform",
+          "native_ycsb_c_hot_hashed_01",
+          "read_tail_mixed_20k"
+        ],
+        "strategies": [
+          "baseline",
+          "2d"
+        ],
+        "seeds": [
+          1
+        ],
+        "pairs": 18
+      }
+    ],
+    "total_pairs": 234,
+    "total_invocations": 468
+  },
+  "portability_run_config_sha256": "64f44c3e06be421a026aa523ded93010d3a7d3ab8e2cf773e033ec30c0657947",
+  "portability_run_config_sha256_note": "Deterministic sha256 over the canonical portability_invocation_plan (sorted-key compact JSON). Independent identity for the workstation->OpenWhisk portability matrix (234 pairs / 468 invocations across 4 rectangular sub-matrices, schedule_seed=20260826). Distinct from the primary (022fbeb0...) and secondary (441609e6...) YC run configs, which are byte-frozen and untouched. Deployment/feasibility + footprint evidence only; warm paired first-query latency is NOT a strategy-performance estimate (see analysis/thesis/threats_to_validity.md)."
 }

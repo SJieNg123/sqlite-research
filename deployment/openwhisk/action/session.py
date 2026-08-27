@@ -98,6 +98,14 @@ class Session:
                         "expected_interior_pages": plan.get("expected_interior_pages"),
                         "expected_leaf_pages": plan.get("expected_leaf_pages"),
                     }
+        # Authoritative set of workload IDs any keyed plan / trace may address.
+        # When the manifest declares "workload_set", it is the closed universe of
+        # addressable workloads (the YC campaigns' canonical id plus the
+        # portability matrix ids). An empty/absent set means "legacy single
+        # workload" -- no gate. Captured at init; enforced fail-closed in
+        # validate_artifacts (a keyed plan or trace for an out-of-set workload is
+        # a hard validation failure -- no implicit fallback).
+        self.workload_set = set(self.manifest.get("workload_set", []))
         # runtime + image identity, captured once
         try:
             self.sqlite_library_version = sqlite_bridge.libversion()
@@ -192,6 +200,21 @@ class Session:
 
         # keyed per-(workload,seed) strategy plans (e.g. 2e_K10) validate fail-closed
         r += self._validate_keyed_plans(page_size, page_count)
+
+        # authoritative workload_set gate + cross-map coverage preflight. When the
+        # manifest declares a closed workload universe, EVERY keyed plan and EVERY
+        # workload trace must name a workload inside it -- no implicit fallback to
+        # the canonical YC id. Fail closed on any out-of-set reference.
+        if self.workload_set:
+            for (_strat, wl, _seed) in self.keyed_plans:
+                if wl not in self.workload_set:
+                    r.append("keyed plan workload %s not in workload_set" % wl)
+            for wl in m.get("workload_traces", {}):
+                if wl not in self.workload_set:
+                    r.append("trace workload %s not in workload_set" % wl)
+            for wl in m.get("first_query_oracle", {}):
+                if wl not in self.workload_set:
+                    r.append("oracle workload %s not in workload_set" % wl)
 
         # every supported workload trace must match its manifest hash
         for wl, wentry in m.get("workload_traces", {}).items():

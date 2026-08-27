@@ -94,8 +94,11 @@ if missing:
     print("FAIL missing manifest keys:", missing); sys.exit(1)
 
 # Allowed sets come straight from the frozen runtime artifact pin.
+# The canonical YC id anchors the primary/secondary campaigns; the portability
+# matrix adds the authoritative workload_set (fail-closed, no implicit fallback).
 allowed_workloads = {pin["representative_workload"]["canonical_workload_id"]}
-allowed_strategies = set(pin["strategy_plans"].keys())          # {baseline, 2d}
+allowed_workloads |= set(pin.get("workload_set", []))
+allowed_strategies = set(pin["strategy_plans"].keys())          # {baseline, 2d, ...}
 allowed_seeds = {e["seed"] for e in pin["representative_workload"]["seed_family"]}
 allowed_handles = set(pin["invocation_plan"]["handle_modes"])   # {warm, standalone}
 
@@ -266,14 +269,16 @@ PY
 # --- IMPLEMENTATION GATE --------------------------------------------------- #
 # The action implements baseline + 2d + layers_5 + 2e_K10 + 2f_slru (Batch 2) plus
 # the YC secondary set 2e_K500 + leaf_freq_K10 + leaf_rand_K10 + 2f_top102 +
-# learned_markov_102 (Batch 3). Any strategy outside this set blocks real
-# invocation. Validation + scheduling above have already run. Keep this set in sync
-# with action/main.py SUPPORTED_STRATEGIES.
+# learned_markov_102 (Batch 3) plus the portability set 2f_top28 + learned_markov_28
+# (Batch 4, multi-workload). Any strategy outside this set blocks real invocation.
+# Validation + scheduling above have already run. Keep this set in sync with
+# action/main.py SUPPORTED_STRATEGIES.
 UNSUPPORTED="$(python3 - "$MATRIX" <<'PY'
 import json, sys
 m = json.load(open(sys.argv[1]))
 impl = {"baseline", "2d", "layers_5", "2e_K10", "2f_slru",
-        "2e_K500", "leaf_freq_K10", "leaf_rand_K10", "2f_top102", "learned_markov_102"}
+        "2e_K500", "leaf_freq_K10", "leaf_rand_K10", "2f_top102", "learned_markov_102",
+        "2f_top28", "learned_markov_28"}
 bad = [s for s in m["strategies"] if s not in impl]
 print(",".join(bad))
 PY
@@ -282,7 +287,7 @@ if [ "${WS2_MATRIX_IMPL_READY:-0}" != 1 ] || [ -n "$UNSUPPORTED" ]; then
   {
     echo "IMPLEMENTATION GATE: real matrix invocation is blocked."
     echo "  WS2_MATRIX_IMPL_READY=${WS2_MATRIX_IMPL_READY:-0} (must be 1 to execute)"
-    [ -n "$UNSUPPORTED" ] && echo "  unsupported strategies requested: $UNSUPPORTED (action implements baseline,2d,layers_5,2e_K10,2f_slru,2e_K500,leaf_freq_K10,leaf_rand_K10,2f_top102,learned_markov_102)"
+    [ -n "$UNSUPPORTED" ] && echo "  unsupported strategies requested: $UNSUPPORTED (action implements baseline,2d,layers_5,2e_K10,2f_slru,2e_K500,leaf_freq_K10,leaf_rand_K10,2f_top102,learned_markov_102,2f_top28,learned_markov_28)"
     echo "  Validated matrix + deterministic schedule are ready at: $SCHED"
     echo "  No invocation performed."
   } | ws2_atomic_write "$WS2_STAGEDIR/gate.txt"

@@ -134,10 +134,14 @@ else
   ws2_die "live-manifest invariant tests FAILED; refusing to build (see $LIVE_INV_LOG)."
 fi
 
-# --- image artifact staging list (DB + classifier + 10 YC traces) --------- #
+# --- image artifact staging list (DB + classifier + 10 YC traces + the 12 --- #
+# portability workload traces) ---------------------------------------------- #
 # Each is staged into _image_stage/<repo-rel> so the Dockerfile's
 # `COPY _image_stage/ /action/artifacts/` lands it at its manifest path. Paths +
-# pinned sha256 come straight from the pin (single source of truth).
+# pinned sha256 come straight from the pin (single source of truth). The four
+# portability workloads' traces (4 workloads x seeds 1..3) live OUTSIDE config/,
+# so -- like the YC traces -- they must be staged here or the Dockerfile
+# build-time self-check (which walks manifest.workload_traces) fails closed.
 STAGE_ROOT="$WS2_OW_DIR/_image_stage"
 STAGE_LIST="$(python3 - "$WS2_PIN_JSON" "$WS2_DB_REL" "$WS2_EXPECTED_DB_SHA" <<'PY'
 import json, sys
@@ -146,6 +150,10 @@ print("%s\t%s" % (sys.argv[2], sys.argv[3]))  # test.db
 print("%s\t%s" % (pin["classifier"]["path"], pin["classifier"]["sha256"]))
 for e in pin["representative_workload"]["seed_family"]:
     print("%s\t%s" % (e["trace"], e["trace_sha256"]))
+# Portability workload traces (the four NEW workloads; YC is already above).
+for wl, wentry in pin.get("portability_workload_traces", {}).items():
+    for seed, tentry in wentry.get("seeds", {}).items():
+        print("%s\t%s" % (tentry["path"], tentry["sha256"]))
 PY
 )"
 
