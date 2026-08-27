@@ -52,6 +52,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "action"))
 import oracle  # noqa: E402
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "tools"))
 import portability_manifest as PM  # noqa: E402
+import portability_ext_manifest as XE  # noqa: E402
 try:
     import sqlite_bridge  # noqa: E402
     _BRIDGE_SQLITE_VERSION = sqlite_bridge.libversion()
@@ -582,6 +583,25 @@ def crosscheck_portability(port_meta, port_traces, port_plan, port_run_config_sh
         sys.exit("portability pin mismatch:\n  " + "\n  ".join(problems))
 
 
+def crosscheck_portability_ext(ext_meta, ext_plan, ext_run_config_sha256):
+    """Fail closed unless the frozen pin carries every ext keyed entry, the three
+    new markers, and the ext invocation-plan identity the live build produced. The
+    pin was written from the SAME ext freeze report (tools/write_portability_ext_pin.py
+    via tools/portability_ext_manifest.py), so this proves generation<->pin agreement
+    for the portability-ext layer."""
+    pin_path = os.path.join(ROOT, PIN_REL)
+    with open(pin_path) as f:
+        pin = json.load(f)
+    problems = XE.crosscheck_ext(pin, ext_meta, ROOT)
+    if pin.get("portability_ext_run_config_sha256") != ext_run_config_sha256:
+        problems.append("pin portability_ext_run_config_sha256 != generated")
+    if json.dumps(pin.get("portability_ext_invocation_plan"), sort_keys=True) != \
+            json.dumps(ext_plan, sort_keys=True):
+        problems.append("pin portability_ext_invocation_plan != generated")
+    if problems:
+        sys.exit("portability-ext pin mismatch:\n  " + "\n  ".join(problems))
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", required=True)
@@ -707,11 +727,44 @@ def main():
             sys.exit("portability oracle collision %s" % wl)
         oracle_block[wl] = block
 
+    # ---- PORTABILITY-EXT layer (additive; the 29 workstation cells the primary/
+    # secondary/portability OpenWhisk campaigns did not cover). Driven entirely by
+    # the verified ext freeze report (63 keyed plans) via
+    # tools/portability_ext_manifest.py. Its keyed triples are DISJOINT from every
+    # prior keyed entry (YCu/YCh01 2f_top28/learned_markov_28 were never frozen by
+    # portability), so the merges below are pure additions. No new traces/oracle:
+    # all five ext workloads x seeds 1-3 already resolve (YC via the canonical
+    # blocks, the four new workloads via the portability layer). --------------- #
+    ext_live, _ext_pin, ext_meta = XE.build_portability_ext_entries(
+        ROOT, set(offsets), page_size, page_count)
+    ext_markers = XE.build_ext_markers(ext_meta, sorted(offsets), plan_sha)
+    ext_plan = XE.portability_ext_invocation_plan()
+    ext_run_config_sha256 = XE.portability_ext_run_config_sha256(ext_plan)
+
+    for wl, seeds in ext_live.items():
+        wdst = keyed_block.setdefault(wl, {})
+        for seed_str, strats in seeds.items():
+            sdst = wdst.setdefault(seed_str, {})
+            for strat, entry in strats.items():
+                if strat in sdst:
+                    sys.exit("portability-ext keyed collision %s/%s/%s"
+                             % (strat, wl, seed_str))
+                sdst[strat] = entry
+    # ext markers: 2f_top14 / learned_markov_14 are keyed (no inline offsets);
+    # layers_92 is static (inline offsets == the 92-interior skeleton). All three
+    # land in strategy_plans via the keyed_markers.update() below; layers_92 keeps
+    # its offsets so session.py treats it as a static plan (like layers_5).
+    for strat, marker in ext_markers.items():
+        if strat in keyed_markers:
+            sys.exit("portability-ext marker collision %s" % strat)
+        keyed_markers[strat] = marker
+
     # Byte-tie the live manifest to the frozen replay pin (fail closed).
     crosscheck_pin(db_sha, plan_sha, classifier_sha,
                    {s: seedmap[s]["sha256"] for s in seedmap},
                    layers5_sha, layers5_offsets, keyed_meta)
     crosscheck_portability(port_meta, port_traces, port_plan, port_run_config_sha256)
+    crosscheck_portability_ext(ext_meta, ext_plan, ext_run_config_sha256)
 
     st = os.stat(db)
     manifest = {
@@ -793,6 +846,8 @@ def main():
         "workload_set": list(PM.WORKLOAD_SET),
         "portability_invocation_plan": port_plan,
         "portability_run_config_sha256": port_run_config_sha256,
+        "portability_ext_invocation_plan": ext_plan,
+        "portability_ext_run_config_sha256": ext_run_config_sha256,
         "notes": ("Interior skeleton (2d) plan derived from the canonical page "
                   "classifier; invariants validated at generation. Paths are "
                   "repository-relative, resolved at runtime against "

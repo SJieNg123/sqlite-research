@@ -25,9 +25,10 @@ except ImportError:  # pragma: no cover - OpenWhisk flat layout
     import sqlite_bridge
     from session import Session, validate_request_semantics
 
-SUPPORTED_STRATEGIES = ("baseline", "2d", "layers_5", "2e_K10", "2f_slru",
-                        "2e_K500", "leaf_freq_K10", "leaf_rand_K10", "2f_top102",
-                        "learned_markov_102", "2f_top28", "learned_markov_28")
+SUPPORTED_STRATEGIES = ("baseline", "2d", "layers_5", "layers_92", "2e_K10",
+                        "2f_slru", "2e_K500", "leaf_freq_K10", "leaf_rand_K10",
+                        "2f_top102", "learned_markov_102", "2f_top28",
+                        "learned_markov_28", "2f_top14", "learned_markov_14")
 HANDLE_MODES = ("warm", "standalone")
 REQUIRED_REQUEST_FIELDS = ("request_id", "workload", "strategy", "seed",
                            "first_operation_id", "diagnostic_mode", "cold_reset",
@@ -48,6 +49,8 @@ DELIVERY_INVARIANTS = {
            "selected_leaf_count": 0, "delivered_page_count": 92},
     "layers_5": {"selected_page_count": 5, "selected_interior_count": 5,
                  "selected_leaf_count": 0, "delivered_page_count": 5},
+    "layers_92": {"selected_page_count": 92, "selected_interior_count": 92,
+                  "selected_leaf_count": 0, "delivered_page_count": 92},
 }
 # strategies whose plan varies by (workload, seed); expected counts come from the
 # frozen keyed plan, never a global constant. The secondary strategies are all
@@ -56,7 +59,8 @@ DELIVERY_INVARIANTS = {
 # skeleton), so no DELIVERY_INVARIANTS entry and no per-strategy runtime code.
 KEYED_STRATEGIES = ("2e_K10", "2f_slru", "2e_K500", "leaf_freq_K10",
                     "leaf_rand_K10", "2f_top102", "learned_markov_102",
-                    "2f_top28", "learned_markov_28")
+                    "2f_top28", "learned_markov_28", "2f_top14",
+                    "learned_markov_14")
 _SESSION = None
 
 # The image bakes the artifacts under a FIXED absolute root. OpenWhisk extracts
@@ -141,6 +145,15 @@ def select_offsets(strategy, session, workload=None, seed=None):
                              % (None if offs is None else len(offs)))
         if any(o not in session.interior_offset_set for o in offs):
             raise ValueError("layers_5 plan contains a non-interior offset")
+        return list(offs)
+    if strategy == "layers_92":
+        offs = session.static_plan_offsets.get("layers_92")
+        expected = session.manifest["strategy_plans"]["layers_92"]["expected_pages"]
+        if offs is None or len(offs) != expected or expected != 92:
+            raise ValueError("layers_92 plan has %s offsets, expected 92"
+                             % (None if offs is None else len(offs)))
+        if any(o not in session.interior_offset_set for o in offs):
+            raise ValueError("layers_92 plan contains a non-interior offset")
         return list(offs)
     if strategy in KEYED_STRATEGIES:
         plan = session.strategy_plan(strategy, workload, seed)

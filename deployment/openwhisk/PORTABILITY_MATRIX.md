@@ -123,11 +123,71 @@ requested strategy — the UNION across all blocks — is absent from
 `portability_invocation_plan.strategies`, so a portability strategy can never be
 recorded under the frozen primary/secondary identity.
 
+## Portability-EXTENSION campaign (the 29 remaining workstation cells)
+
+A **separate, additive** campaign covers the 29 `(workload, strategy)` cells the
+workstation ran but the primary/secondary/portability OpenWhisk campaigns did **not** —
+completing the workstation-coverage matrix so the effectiveness comparison can extend to
+the full set. It is a fourth independent identity; the portability campaign above is
+**byte-untouched**.
+
+| identity | value | invocation plan |
+|---|---|---|
+| **portability_ext** | `bf504a28…` | `portability_ext_invocation_plan` |
+
+`portability_ext_run_config_sha256` recomputes deterministically over its canonical
+`portability_ext_invocation_plan` (sorted-key compact JSON), and is asserted distinct
+from primary `022fbeb0…`, secondary `441609e6…`, and portability `64f44c3e…` — all three
+of which the ext pin writer re-asserts **byte-unchanged** (guarded by
+`test_portability_ext.py`).
+
+Formal execution is **one** matrix, `ws2/matrix.portability_ext.json`: a block-union of
+seven heterogeneous blocks (B5–B11), one `schedule_seed = 20260828`, one campaign
+fingerprint over the ordered **852-invocation** schedule.
+
+| block | workloads | targets (non-baseline) | seeds | pairs | invocations |
+|---|---|---|---|---:|---:|
+| block5  | YC | `2f_top14`, `learned_markov_14` | 1,2,3 | 36 | 72 |
+| block6  | YCu, YCh01 | `2e_K500`, `2f_top28`, `2f_top14`, `learned_markov_28`, `learned_markov_14` | 1,2,3 | 180 | 360 |
+| block7  | C_hit | `2e_K500`, `2f_top28`, `learned_markov_28`, `2f_top14`, `learned_markov_14` | 1,2,3 | 90 | 180 |
+| block8  | C (mixed_20k) | `2f_top14`, `2f_top28`, `2e_K500`, `learned_markov_28` | 1,2,3 | 72 | 144 |
+| block9  | YC, YCu, YCh01, C_hit | `layers_92` | 1 (structural) | 24 | 48 |
+| block10 | YCu, YCh01, C | `layers_5` | 1 (structural) | 18 | 36 |
+| block11 | C_hit | `2d` | 1 (structural) | 6 | 12 |
+| **union (one campaign)** | | | | **426** | **852** |
+
+21 keyed cells × 3 seeds = **63 frozen delivery plans** (`portability_ext_freeze_report.json`,
+provenance in `config/plans/keyed/native_source/portability_ext/PROVENANCE.md`); 8 static
+cells (seed 1, inline). C has no N=14 learned cell (block8 carries `learned_markov_28`
+only). `layers_92` is the only genuinely new action strategy — the full 92-interior
+skeleton (same page content as `2d`, distinct name); `layers_5`/`2d` were already wired.
+Blocks 9–11 are structural cross-workload deployment checks: their seed axis stays `[1]`.
+
+**New image identity:** adding the 63 ext plans to the live `artifacts.json` changes its
+bytes, so this campaign runs under a **new image identity**; the archived portability
+image identity is unaffected (already built + archived).
+
+Run stage 05 **exactly once** on the ext matrix (WK2 only — same Terminal-B flow through
+stage 04, same gate `WS2_MATRIX_IMPL_READY=1`):
+
+```bash
+cd deployment/openwhisk/ws2
+# Validate + schedule (no invocation): 426 pairs / 852 invocations across 7 blocks,
+# single fingerprint distinct from the portability campaign.
+bash 05_full_matrix.sh --matrix ./matrix.portability_ext.json
+# Execute the ONE ext campaign (requires cooled 03 + gate open + the ext image's manifest sha).
+export WS2_MATRIX_IMPL_READY=1
+export OW_ARTIFACT_MANIFEST_SHA256='<sha256 of the ext image-baked artifacts.json>'
+bash 05_full_matrix.sh --matrix ./matrix.portability_ext.json
+```
+
 ## What is committed vs machine-local
 
 Committed (shipped from WK1): the single-batch `matrix.portability.json` (the formal
 execution unit) plus the four `matrix.portability.m*.json` readable fragments, the 36
 frozen delivery-plan CSVs + `portability_freeze_report.json`, the extended pin
 `config/artifacts.native_ycsb.json`, the runtime/builder/WS2 changes, and this
-doc. Machine-local (git-ignored, regenerated on WK2): `config/artifacts.json`,
-`ws2/_image_stage/`, `ws2/_runs/**`.
+doc; **and the portability-EXTENSION artifacts**: `matrix.portability_ext.json`, the 63
+ext delivery-plan CSVs + native-source copies + `portability_ext_freeze_report.json` +
+its `PROVENANCE.md`, and `test_portability_ext.py`. Machine-local (git-ignored,
+regenerated on WK2): `config/artifacts.json`, `ws2/_image_stage/`, `ws2/_runs/**`.

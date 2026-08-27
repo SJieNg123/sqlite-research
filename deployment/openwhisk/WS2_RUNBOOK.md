@@ -132,6 +132,11 @@ bash 05_full_matrix.sh --matrix ./matrix.example.json     # copy+edit for the re
 #    independent identity), run stage 05 EXACTLY ONCE on the single-batch matrix
 #    ./matrix.portability.json (a block-union of four logical blocks, one campaign
 #    fingerprint) — NOT once per fragment — see PORTABILITY_MATRIX.md.
+#    For the portability-EXTENSION campaign (426 pairs / 852 invocations, schedule_seed
+#    20260828, fourth independent identity portability_ext bf504a28…), run stage 05
+#    EXACTLY ONCE on ./matrix.portability_ext.json (a block-union of seven blocks B5–B11).
+#    It bakes 63 extra keyed CSVs, so it runs under a NEW image identity — the archived
+#    portability image is untouched. See PORTABILITY_MATRIX.md § Portability-EXTENSION.
 
 # 6. Package everything for transfer back to WS1.
 bash 06_collect.sh --openwhisk-sha "$(git -C /path/to/openwhisk rev-parse HEAD)"

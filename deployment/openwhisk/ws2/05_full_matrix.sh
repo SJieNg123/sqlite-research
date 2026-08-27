@@ -325,15 +325,16 @@ PY
 # The action implements baseline + 2d + layers_5 + 2e_K10 + 2f_slru (Batch 2) plus
 # the YC secondary set 2e_K500 + leaf_freq_K10 + leaf_rand_K10 + 2f_top102 +
 # learned_markov_102 (Batch 3) plus the portability set 2f_top28 + learned_markov_28
-# (Batch 4, multi-workload). Any strategy outside this set blocks real invocation.
-# Validation + scheduling above have already run. Keep this set in sync with
-# action/main.py SUPPORTED_STRATEGIES.
+# (Batch 4, multi-workload) plus the portability-EXT set layers_92 + 2f_top14 +
+# learned_markov_14 (Batch 5, the 29 uncovered workstation cells). Any strategy
+# outside this set blocks real invocation. Validation + scheduling above have
+# already run. Keep this set in sync with action/main.py SUPPORTED_STRATEGIES.
 UNSUPPORTED="$(python3 - "$MATRIX" <<'PY'
 import json, sys
 m = json.load(open(sys.argv[1]))
-impl = {"baseline", "2d", "layers_5", "2e_K10", "2f_slru",
+impl = {"baseline", "2d", "layers_5", "layers_92", "2e_K10", "2f_slru",
         "2e_K500", "leaf_freq_K10", "leaf_rand_K10", "2f_top102", "learned_markov_102",
-        "2f_top28", "learned_markov_28"}
+        "2f_top28", "learned_markov_28", "2f_top14", "learned_markov_14"}
 # The campaign's requested strategies are the union across all blocks; a flat
 # matrix carries a single top-level strategies list.
 if "blocks" in m:
@@ -348,7 +349,7 @@ if [ "${WS2_MATRIX_IMPL_READY:-0}" != 1 ] || [ -n "$UNSUPPORTED" ]; then
   {
     echo "IMPLEMENTATION GATE: real matrix invocation is blocked."
     echo "  WS2_MATRIX_IMPL_READY=${WS2_MATRIX_IMPL_READY:-0} (must be 1 to execute)"
-    [ -n "$UNSUPPORTED" ] && echo "  unsupported strategies requested: $UNSUPPORTED (action implements baseline,2d,layers_5,2e_K10,2f_slru,2e_K500,leaf_freq_K10,leaf_rand_K10,2f_top102,learned_markov_102,2f_top28,learned_markov_28)"
+    [ -n "$UNSUPPORTED" ] && echo "  unsupported strategies requested: $UNSUPPORTED (action implements baseline,2d,layers_5,layers_92,2e_K10,2f_slru,2e_K500,leaf_freq_K10,leaf_rand_K10,2f_top102,learned_markov_102,2f_top28,learned_markov_28,2f_top14,learned_markov_14)"
     echo "  Validated matrix + deterministic schedule are ready at: $SCHED"
     echo "  No invocation performed."
   } | ws2_atomic_write "$WS2_STAGEDIR/gate.txt"

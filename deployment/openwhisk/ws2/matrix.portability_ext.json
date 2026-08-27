@@ -1,0 +1,79 @@
+{
+  "_comment": "SINGLE-BATCH PORTABILITY-EXTENSION campaign for 05_full_matrix.sh. ONE formal execution matrix: the UNION of seven heterogeneous rectangular blocks (B5-B11) covering the 29 (workload,strategy) cells the workstation ran but the primary/secondary/portability OpenWhisk campaigns did NOT. Like matrix.portability.json this is expressed as explicit blocks -- NOT a global Cartesian product -- because different workloads carry different target-strategy sets and seed semantics. The union recomputes to EXACTLY 426 baseline-target pairs / 852 formal invocations under ONE portability_ext_run_config_sha256 (bf504a28..., independent of the byte-frozen primary 022fbeb0..., secondary 441609e6..., and portability 64f44c3e... campaigns), ONE schedule_seed (20260828), and ONE campaign fingerprint over the complete ordered 852-invocation schedule. baseline is the paired A-arm anchor in every block (not a target). Deployment/feasibility + relative-effectiveness evidence only; warm paired first-query latency is NOT a strategy-performance estimate (page-cache carryover falsified; positional/order effect). Every block field is validated against the frozen runtime artifact pin (63 ext keyed plans + the 2f_top14/learned_markov_14/layers_92 markers) before anything runs; real invocation still requires WS2_MATRIX_IMPL_READY=1 and happens on WK2, never WK1. Run this ONE matrix once: 05_full_matrix.sh --matrix ./matrix.portability_ext.json. Adding the 63 ext plans to the live manifest changes its bytes, so this campaign runs under a NEW image identity; the archived portability image identity is unaffected.",
+  "schema_version": 3,
+  "campaign": "portability_ext",
+  "run_config_key": "portability_ext_run_config_sha256",
+  "schedule_seed": 20260828,
+  "blocks": [
+    {
+      "id": "block5",
+      "_note": "canonical YC (native_ycsb_c_read_zipf): the budget-sibling half-budget competitors 2f_top14 + learned_markov_14 (LOSO, N=14) vs baseline -- the N=14 siblings of block3's N=28 pair; 2 targets x 1 workload x 3 seeds x 2 handle_modes x 3 reps = 36 pairs.",
+      "workloads": ["native_ycsb_c_read_zipf"],
+      "strategies": ["baseline", "2f_top14", "learned_markov_14"],
+      "seeds": [1, 2, 3],
+      "handle_modes": ["warm", "standalone"],
+      "first_operation_ids": [0],
+      "repetitions_per_cell": 3
+    },
+    {
+      "id": "block6",
+      "_note": "native_ycsb_c_read_uniform + native_ycsb_c_hot_hashed_01: the deep-leaf-union 2e_K500 plus both budget-matched ranked competitors (2f_top28/2f_top14) and both LOSO learned competitors (learned_markov_28/learned_markov_14) vs baseline; 5 targets x 2 workloads x 3 seeds x 2 handle_modes x 3 reps = 180 pairs.",
+      "workloads": ["native_ycsb_c_read_uniform", "native_ycsb_c_hot_hashed_01"],
+      "strategies": ["baseline", "2e_K500", "2f_top28", "2f_top14", "learned_markov_28", "learned_markov_14"],
+      "seeds": [1, 2, 3],
+      "handle_modes": ["warm", "standalone"],
+      "first_operation_ids": [0],
+      "repetitions_per_cell": 3
+    },
+    {
+      "id": "block7",
+      "_note": "read_tail_hit_20k (pure-hit tail): 2e_K500 + both ranked (2f_top28/2f_top14) + both LOSO learned (learned_markov_28/learned_markov_14) vs baseline; 5 targets x 1 workload x 3 seeds x 2 handle_modes x 3 reps = 90 pairs.",
+      "workloads": ["read_tail_hit_20k"],
+      "strategies": ["baseline", "2e_K500", "2f_top28", "learned_markov_28", "2f_top14", "learned_markov_14"],
+      "seeds": [1, 2, 3],
+      "handle_modes": ["warm", "standalone"],
+      "first_operation_ids": [0],
+      "repetitions_per_cell": 3
+    },
+    {
+      "id": "block8",
+      "_note": "read_tail_mixed_20k (C) cross-batch fill: both ranked competitors (2f_top14/2f_top28), the deep-leaf-union 2e_K500, and learned_markov_28 vs baseline (C has learned_markov_28 only, no N=14 learned cell on the workstation); 4 targets x 1 workload x 3 seeds x 2 handle_modes x 3 reps = 72 pairs.",
+      "workloads": ["read_tail_mixed_20k"],
+      "strategies": ["baseline", "2f_top14", "2f_top28", "2e_K500", "learned_markov_28"],
+      "seeds": [1, 2, 3],
+      "handle_modes": ["warm", "standalone"],
+      "first_operation_ids": [0],
+      "repetitions_per_cell": 3
+    },
+    {
+      "id": "block9",
+      "_note": "the static layers_92 full-interior skeleton (workload/seed-independent; same 92 pages as 2d, distinct strategy name) as the cross-workload deployment check on ONE structural seed identity across the four workloads that ran it; 1 target x 4 workloads x 1 seed x 2 handle_modes x 3 reps = 24 pairs. Structural: seeds MUST stay [1] and never expand to 1,2,3.",
+      "workloads": ["native_ycsb_c_read_zipf", "native_ycsb_c_read_uniform", "native_ycsb_c_hot_hashed_01", "read_tail_hit_20k"],
+      "strategies": ["baseline", "layers_92"],
+      "seeds": [1],
+      "handle_modes": ["warm", "standalone"],
+      "first_operation_ids": [0],
+      "repetitions_per_cell": 3
+    },
+    {
+      "id": "block10",
+      "_note": "the static layers_5 5-interior prefix (workload/seed-independent) as the cross-workload deployment check on the three workloads that ran it but were not in the existing portability layers set; 1 target x 3 workloads x 1 seed x 2 handle_modes x 3 reps = 18 pairs. Structural: seeds MUST stay [1].",
+      "workloads": ["native_ycsb_c_read_uniform", "native_ycsb_c_hot_hashed_01", "read_tail_mixed_20k"],
+      "strategies": ["baseline", "layers_5"],
+      "seeds": [1],
+      "handle_modes": ["warm", "standalone"],
+      "first_operation_ids": [0],
+      "repetitions_per_cell": 3
+    },
+    {
+      "id": "block11",
+      "_note": "the static 2d interior skeleton on read_tail_hit_20k (the one C_hit static cell the workstation ran that the existing portability block4 did not cover); 1 target x 1 workload x 1 seed x 2 handle_modes x 3 reps = 6 pairs. Structural: seeds MUST stay [1].",
+      "workloads": ["read_tail_hit_20k"],
+      "strategies": ["baseline", "2d"],
+      "seeds": [1],
+      "handle_modes": ["warm", "standalone"],
+      "first_operation_ids": [0],
+      "repetitions_per_cell": 3
+    }
+  ]
+}

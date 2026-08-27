@@ -380,6 +380,209 @@
       "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
       "keyed_plans_ref": "keyed_strategy_plans",
       "note": "learned_markov_28 = the top-28 pages of a first-order Markov transition model trained leave-one-seed-out (train on the other 9 seeds, test on the held-out seed; the test seed is never in the training set). Emergent 26/2 interior/leaf split recorded per seed, NOT enforced. Portability layer only; per-seed frozen plans in keyed_strategy_plans[native_ycsb_c_read_zipf][<seed>][learned_markov_28]."
+    },
+    "2f_top14": {
+      "path": null,
+      "sha256": null,
+      "kind": "freqdump_keyed_per_seed",
+      "keyed": true,
+      "per_seed": true,
+      "workload_dependent": true,
+      "seed_dependent": true,
+      "expected_pages": 14,
+      "expected_leaf_pages": null,
+      "per_workload_seed_expected_interior_pages": {
+        "native_ycsb_c_hot_hashed_01": {
+          "1": 14,
+          "2": 14,
+          "3": 14
+        },
+        "native_ycsb_c_read_uniform": {
+          "1": 14,
+          "2": 14,
+          "3": 14
+        },
+        "native_ycsb_c_read_zipf": {
+          "1": 13,
+          "2": 13,
+          "3": 13
+        },
+        "read_tail_hit_20k": {
+          "1": 3,
+          "2": 3,
+          "3": 3
+        },
+        "read_tail_mixed_20k": {
+          "1": 2,
+          "2": 2,
+          "3": 2
+        }
+      },
+      "workloads": [
+        "native_ycsb_c_hot_hashed_01",
+        "native_ycsb_c_read_uniform",
+        "native_ycsb_c_read_zipf",
+        "read_tail_hit_20k",
+        "read_tail_mixed_20k"
+      ],
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+      "keyed_plans_ref": "keyed_strategy_plans",
+      "note": "2f_top14 = the top-14 resident pages by root->leaf traversal frequency (budget sibling of 2f_top28; half the page budget). Ranks with NO page-type knowledge, so the interior/leaf split is EMERGENT, recorded per (workload,seed) but NOT enforced. Portability-ext layer; per-seed frozen plans in keyed_strategy_plans[<workload>][<seed>][2f_top14]."
+    },
+    "learned_markov_14": {
+      "path": null,
+      "sha256": null,
+      "kind": "learned_markov_keyed_per_seed",
+      "keyed": true,
+      "per_seed": true,
+      "workload_dependent": true,
+      "seed_dependent": true,
+      "expected_pages": 14,
+      "expected_leaf_pages": null,
+      "per_workload_seed_expected_interior_pages": {
+        "native_ycsb_c_hot_hashed_01": {
+          "1": 14,
+          "2": 14,
+          "3": 14
+        },
+        "native_ycsb_c_read_uniform": {
+          "1": 14,
+          "2": 14,
+          "3": 14
+        },
+        "native_ycsb_c_read_zipf": {
+          "1": 13,
+          "2": 13,
+          "3": 13
+        },
+        "read_tail_hit_20k": {
+          "1": 3,
+          "2": 3,
+          "3": 3
+        }
+      },
+      "workloads": [
+        "native_ycsb_c_hot_hashed_01",
+        "native_ycsb_c_read_uniform",
+        "native_ycsb_c_read_zipf",
+        "read_tail_hit_20k"
+      ],
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+      "keyed_plans_ref": "keyed_strategy_plans",
+      "note": "learned_markov_14 = the top-14 pages of a first-order Markov transition model trained leave-one-seed-out (train on the other 9 seeds, test on the held-out seed; the test seed is never in the training set). Budget sibling of learned_markov_28. Emergent interior/leaf split recorded per (workload,seed), NOT enforced. Portability-ext layer; per-seed frozen plans in keyed_strategy_plans[<workload>][<seed>][learned_markov_14]."
+    },
+    "layers_92": {
+      "path": "deployment/openwhisk/config/plans/interior_pages.csv",
+      "sha256": "37ed5e4682d1771c735edc93133bb8ecb77d772a992721b180a9cabaae28745e",
+      "kind": "interior_full",
+      "expected_pages": 92,
+      "expected_interior_pages": 92,
+      "expected_leaf_pages": 0,
+      "offsets": [
+        4096,
+        8192,
+        12288,
+        2756608,
+        2760704,
+        5185536,
+        6500352,
+        6504448,
+        6713344,
+        6717440,
+        7639040,
+        9785344,
+        11911168,
+        12574720,
+        13033472,
+        14057472,
+        16232448,
+        18341888,
+        18640896,
+        19243008,
+        20467712,
+        22654976,
+        22925312,
+        24014848,
+        24788992,
+        26906624,
+        27557888,
+        29044736,
+        29302784,
+        31215616,
+        32595968,
+        33378304,
+        34693120,
+        35520512,
+        37588992,
+        39772160,
+        39956480,
+        41885696,
+        43520000,
+        44060672,
+        45264896,
+        46215168,
+        48361472,
+        49864704,
+        50143232,
+        50610176,
+        50724864,
+        52723712,
+        54849536,
+        56004608,
+        57032704,
+        58871808,
+        59383808,
+        61681664,
+        61714432,
+        63877120,
+        64241664,
+        66011136,
+        67018752,
+        67805184,
+        68009984,
+        69967872,
+        71888896,
+        71942144,
+        74014720,
+        76177408,
+        77217792,
+        77668352,
+        78401536,
+        80433152,
+        82440192,
+        82554880,
+        83333120,
+        84697088,
+        86839296,
+        87740416,
+        88977408,
+        91181056,
+        93126656,
+        93327360,
+        93769728,
+        94375936,
+        95035392,
+        95571968,
+        97816576,
+        98676736,
+        99971072,
+        100560896,
+        102232064,
+        104083456,
+        104366080,
+        106520576
+      ],
+      "note": "all 92 interior pages -- the full interior skeleton by the layers selection rule (first 92 interiors by native order == every interior). Same page set as 2d, distinct strategy name so the effectiveness comparison keys on the workstation's layers_92 cell. Transitively pinned via the classifier sha in the native-YCSB pin."
     }
   },
   "expected_page_count": 26331,
@@ -692,6 +895,52 @@
               10
             ]
           }
+        },
+        "2f_top14": {
+          "path": "deployment/openwhisk/config/plans/keyed/2f_top14_native_ycsb_c_read_zipf_seed1.csv",
+          "sha256": "b47f4c95b55578a34c750905d1f6add40f37232d9aa387c492c9d694c5d4b3f6",
+          "kind": "freqdump_ranked_partial",
+          "expected_pages": 14,
+          "expected_interior_pages": 13,
+          "expected_leaf_pages": 1,
+          "workload": "native_ycsb_c_read_zipf",
+          "seed": 1,
+          "strategy": "2f_top14",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "results/native_headtohead/seed1/main/work/hotset_YC_orig_2f_top14.csv",
+            "sha256": "c4aca6e1e19b54b9b74cfc2ee40ba672b6fda260d34e533402e8e64cd3fe11b3"
+          }
+        },
+        "learned_markov_14": {
+          "path": "deployment/openwhisk/config/plans/keyed/learned_markov_14_native_ycsb_c_read_zipf_seed1.csv",
+          "sha256": "b47f4c95b55578a34c750905d1f6add40f37232d9aa387c492c9d694c5d4b3f6",
+          "kind": "learned_markov_partial",
+          "expected_pages": 14,
+          "expected_interior_pages": 13,
+          "expected_leaf_pages": 1,
+          "workload": "native_ycsb_c_read_zipf",
+          "seed": 1,
+          "strategy": "learned_markov_14",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/learned_markov_YC_orig_N14_test1.csv",
+            "sha256": "1e2903e69842a5366c2772fafdda2e6894baef0364205925f5d2be6515d8af4d"
+          },
+          "loso": {
+            "test_seed": 1,
+            "train_seeds": [
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10
+            ]
+          }
         }
       },
       "2": {
@@ -852,6 +1101,52 @@
               10
             ]
           }
+        },
+        "2f_top14": {
+          "path": "deployment/openwhisk/config/plans/keyed/2f_top14_native_ycsb_c_read_zipf_seed2.csv",
+          "sha256": "b47f4c95b55578a34c750905d1f6add40f37232d9aa387c492c9d694c5d4b3f6",
+          "kind": "freqdump_ranked_partial",
+          "expected_pages": 14,
+          "expected_interior_pages": 13,
+          "expected_leaf_pages": 1,
+          "workload": "native_ycsb_c_read_zipf",
+          "seed": 2,
+          "strategy": "2f_top14",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "results/native_headtohead/seed2/main/work/hotset_YC_orig_2f_top14.csv",
+            "sha256": "c4aca6e1e19b54b9b74cfc2ee40ba672b6fda260d34e533402e8e64cd3fe11b3"
+          }
+        },
+        "learned_markov_14": {
+          "path": "deployment/openwhisk/config/plans/keyed/learned_markov_14_native_ycsb_c_read_zipf_seed2.csv",
+          "sha256": "b47f4c95b55578a34c750905d1f6add40f37232d9aa387c492c9d694c5d4b3f6",
+          "kind": "learned_markov_partial",
+          "expected_pages": 14,
+          "expected_interior_pages": 13,
+          "expected_leaf_pages": 1,
+          "workload": "native_ycsb_c_read_zipf",
+          "seed": 2,
+          "strategy": "learned_markov_14",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/learned_markov_YC_orig_N14_test2.csv",
+            "sha256": "1e2903e69842a5366c2772fafdda2e6894baef0364205925f5d2be6515d8af4d"
+          },
+          "loso": {
+            "test_seed": 2,
+            "train_seeds": [
+              1,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10
+            ]
+          }
         }
       },
       "3": {
@@ -997,6 +1292,52 @@
           "native_source": {
             "path": "strategies/access/runs/learned_markov_YC_orig_N28_test3.csv",
             "sha256": "db3f7a7329607bb130d89819de3d268dc33747d3dcc89ae9567809abcd0fe85d"
+          },
+          "loso": {
+            "test_seed": 3,
+            "train_seeds": [
+              1,
+              2,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10
+            ]
+          }
+        },
+        "2f_top14": {
+          "path": "deployment/openwhisk/config/plans/keyed/2f_top14_native_ycsb_c_read_zipf_seed3.csv",
+          "sha256": "b47f4c95b55578a34c750905d1f6add40f37232d9aa387c492c9d694c5d4b3f6",
+          "kind": "freqdump_ranked_partial",
+          "expected_pages": 14,
+          "expected_interior_pages": 13,
+          "expected_leaf_pages": 1,
+          "workload": "native_ycsb_c_read_zipf",
+          "seed": 3,
+          "strategy": "2f_top14",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "results/native_headtohead/seed3/main/work/hotset_YC_orig_2f_top14.csv",
+            "sha256": "c4aca6e1e19b54b9b74cfc2ee40ba672b6fda260d34e533402e8e64cd3fe11b3"
+          }
+        },
+        "learned_markov_14": {
+          "path": "deployment/openwhisk/config/plans/keyed/learned_markov_14_native_ycsb_c_read_zipf_seed3.csv",
+          "sha256": "b47f4c95b55578a34c750905d1f6add40f37232d9aa387c492c9d694c5d4b3f6",
+          "kind": "learned_markov_partial",
+          "expected_pages": 14,
+          "expected_interior_pages": 13,
+          "expected_leaf_pages": 1,
+          "workload": "native_ycsb_c_read_zipf",
+          "seed": 3,
+          "strategy": "learned_markov_14",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/learned_markov_YC_orig_N14_test3.csv",
+            "sha256": "1e2903e69842a5366c2772fafdda2e6894baef0364205925f5d2be6515d8af4d"
           },
           "loso": {
             "test_seed": 3,
@@ -1846,6 +2187,114 @@
             "path": "/home/u03/sqlite-research-fork/strategies/slru/runs/hotpages_ycu_seed1.csv",
             "sha256": "2a2eb5bb1b3023628c6917d45c378d2dad4e2fbcca252b2f787f0c34f861310e"
           }
+        },
+        "2e_K500": {
+          "path": "deployment/openwhisk/config/plans/keyed/2e_K500_native_ycsb_c_read_uniform_seed1.csv",
+          "sha256": "4d19e9496706ae8707208f7b26dd851b05dd55141f356341ced08c3be2f44f10",
+          "kind": "hot2e_interior_union_leaf",
+          "expected_pages": 592,
+          "expected_interior_pages": 92,
+          "expected_leaf_pages": 500,
+          "workload": "native_ycsb_c_read_uniform",
+          "seed": 1,
+          "strategy": "2e_K500",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "results/native_headtohead_YCu/seed1/main/work/hotset_YCu_orig_2e_K500.csv",
+            "sha256": "0b4676db9ce51b1825f1a24cb31fc380e4699eed105a218b55bf4ff66facd7c6"
+          }
+        },
+        "2f_top28": {
+          "path": "deployment/openwhisk/config/plans/keyed/2f_top28_native_ycsb_c_read_uniform_seed1.csv",
+          "sha256": "cd262561ba6bd10a86ec609b0cb396efd0a958cc024be00e68bcd65c743d55c4",
+          "kind": "freqdump_ranked_partial",
+          "expected_pages": 28,
+          "expected_interior_pages": 28,
+          "expected_leaf_pages": 0,
+          "workload": "native_ycsb_c_read_uniform",
+          "seed": 1,
+          "strategy": "2f_top28",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "results/native_headtohead_YCu/seed1/main/work/hotset_YCu_orig_2f_top28.csv",
+            "sha256": "38a35feb9e6ac8def53653c4039f6ef629fcfe097e1a259e0d817e112f68dec7"
+          }
+        },
+        "2f_top14": {
+          "path": "deployment/openwhisk/config/plans/keyed/2f_top14_native_ycsb_c_read_uniform_seed1.csv",
+          "sha256": "74b2a1b3923d6bb6413fb321a50b4147ed5ad355af95296e9763006314830aa2",
+          "kind": "freqdump_ranked_partial",
+          "expected_pages": 14,
+          "expected_interior_pages": 14,
+          "expected_leaf_pages": 0,
+          "workload": "native_ycsb_c_read_uniform",
+          "seed": 1,
+          "strategy": "2f_top14",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "results/native_headtohead_YCu/seed1/main/work/hotset_YCu_orig_2f_top14.csv",
+            "sha256": "a5660bc2c8917193383d4fde5fb2631d6368b48bac31823888b71c904fc52e16"
+          }
+        },
+        "learned_markov_28": {
+          "path": "deployment/openwhisk/config/plans/keyed/learned_markov_28_native_ycsb_c_read_uniform_seed1.csv",
+          "sha256": "211072e8437856e3b6c9e797dac6086999a84b718688e35929b2819806cecb37",
+          "kind": "learned_markov_partial",
+          "expected_pages": 28,
+          "expected_interior_pages": 28,
+          "expected_leaf_pages": 0,
+          "workload": "native_ycsb_c_read_uniform",
+          "seed": 1,
+          "strategy": "learned_markov_28",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/learned_markov_YCu_orig_N28_test1.csv",
+            "sha256": "36076c8bdb25755dc8ca1c90354a491f815b103707c712a3cbf2f071a3b218c8"
+          },
+          "loso": {
+            "test_seed": 1,
+            "train_seeds": [
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10
+            ]
+          }
+        },
+        "learned_markov_14": {
+          "path": "deployment/openwhisk/config/plans/keyed/learned_markov_14_native_ycsb_c_read_uniform_seed1.csv",
+          "sha256": "4c9c675483cbe295f1dec35409aae33b5edde476b7144a6eb58db388ba7f01d6",
+          "kind": "learned_markov_partial",
+          "expected_pages": 14,
+          "expected_interior_pages": 14,
+          "expected_leaf_pages": 0,
+          "workload": "native_ycsb_c_read_uniform",
+          "seed": 1,
+          "strategy": "learned_markov_14",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/learned_markov_YCu_orig_N14_test1.csv",
+            "sha256": "68c48affbc926d7301e81e56beba0513d7a1a94f19213d55e0f7b6c119ed3a2e"
+          },
+          "loso": {
+            "test_seed": 1,
+            "train_seeds": [
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10
+            ]
+          }
         }
       },
       "2": {
@@ -1880,6 +2329,114 @@
             "path": "/home/u03/sqlite-research-fork/strategies/slru/runs/hotpages_ycu_seed2.csv",
             "sha256": "5d29be373d1d54aced621c188e92ee040f71a84e67e0e2a05caa2b012421d5ab"
           }
+        },
+        "2e_K500": {
+          "path": "deployment/openwhisk/config/plans/keyed/2e_K500_native_ycsb_c_read_uniform_seed2.csv",
+          "sha256": "4d19e9496706ae8707208f7b26dd851b05dd55141f356341ced08c3be2f44f10",
+          "kind": "hot2e_interior_union_leaf",
+          "expected_pages": 592,
+          "expected_interior_pages": 92,
+          "expected_leaf_pages": 500,
+          "workload": "native_ycsb_c_read_uniform",
+          "seed": 2,
+          "strategy": "2e_K500",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "results/native_headtohead_YCu/seed2/main/work/hotset_YCu_orig_2e_K500.csv",
+            "sha256": "0b4676db9ce51b1825f1a24cb31fc380e4699eed105a218b55bf4ff66facd7c6"
+          }
+        },
+        "2f_top28": {
+          "path": "deployment/openwhisk/config/plans/keyed/2f_top28_native_ycsb_c_read_uniform_seed2.csv",
+          "sha256": "cd262561ba6bd10a86ec609b0cb396efd0a958cc024be00e68bcd65c743d55c4",
+          "kind": "freqdump_ranked_partial",
+          "expected_pages": 28,
+          "expected_interior_pages": 28,
+          "expected_leaf_pages": 0,
+          "workload": "native_ycsb_c_read_uniform",
+          "seed": 2,
+          "strategy": "2f_top28",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "results/native_headtohead_YCu/seed2/main/work/hotset_YCu_orig_2f_top28.csv",
+            "sha256": "38a35feb9e6ac8def53653c4039f6ef629fcfe097e1a259e0d817e112f68dec7"
+          }
+        },
+        "2f_top14": {
+          "path": "deployment/openwhisk/config/plans/keyed/2f_top14_native_ycsb_c_read_uniform_seed2.csv",
+          "sha256": "74b2a1b3923d6bb6413fb321a50b4147ed5ad355af95296e9763006314830aa2",
+          "kind": "freqdump_ranked_partial",
+          "expected_pages": 14,
+          "expected_interior_pages": 14,
+          "expected_leaf_pages": 0,
+          "workload": "native_ycsb_c_read_uniform",
+          "seed": 2,
+          "strategy": "2f_top14",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "results/native_headtohead_YCu/seed2/main/work/hotset_YCu_orig_2f_top14.csv",
+            "sha256": "a5660bc2c8917193383d4fde5fb2631d6368b48bac31823888b71c904fc52e16"
+          }
+        },
+        "learned_markov_28": {
+          "path": "deployment/openwhisk/config/plans/keyed/learned_markov_28_native_ycsb_c_read_uniform_seed2.csv",
+          "sha256": "c4df00f27a0d8036c836a909db5cbf2008cb7ead361e51c00c43079510cb7125",
+          "kind": "learned_markov_partial",
+          "expected_pages": 28,
+          "expected_interior_pages": 28,
+          "expected_leaf_pages": 0,
+          "workload": "native_ycsb_c_read_uniform",
+          "seed": 2,
+          "strategy": "learned_markov_28",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/learned_markov_YCu_orig_N28_test2.csv",
+            "sha256": "11be573b88a954f83410b547c0aadae48a3d500260e67cac6a2ebb00fbba8112"
+          },
+          "loso": {
+            "test_seed": 2,
+            "train_seeds": [
+              1,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10
+            ]
+          }
+        },
+        "learned_markov_14": {
+          "path": "deployment/openwhisk/config/plans/keyed/learned_markov_14_native_ycsb_c_read_uniform_seed2.csv",
+          "sha256": "49cd0216a22c9045510185883208bc245a8cd7e801d831e16a78673548924957",
+          "kind": "learned_markov_partial",
+          "expected_pages": 14,
+          "expected_interior_pages": 14,
+          "expected_leaf_pages": 0,
+          "workload": "native_ycsb_c_read_uniform",
+          "seed": 2,
+          "strategy": "learned_markov_14",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/learned_markov_YCu_orig_N14_test2.csv",
+            "sha256": "c92b5aaf1d3b17a56f4d63e80be5eba76393cb59345fce4da9ce66ff8cdff694"
+          },
+          "loso": {
+            "test_seed": 2,
+            "train_seeds": [
+              1,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10
+            ]
+          }
         }
       },
       "3": {
@@ -1913,6 +2470,114 @@
           "native_source": {
             "path": "/home/u03/sqlite-research-fork/strategies/slru/runs/hotpages_ycu_seed3.csv",
             "sha256": "518964a3720934c6346ae832ae6e306db20d6cb00effafee3390ec9f3c7cdb33"
+          }
+        },
+        "2e_K500": {
+          "path": "deployment/openwhisk/config/plans/keyed/2e_K500_native_ycsb_c_read_uniform_seed3.csv",
+          "sha256": "4d19e9496706ae8707208f7b26dd851b05dd55141f356341ced08c3be2f44f10",
+          "kind": "hot2e_interior_union_leaf",
+          "expected_pages": 592,
+          "expected_interior_pages": 92,
+          "expected_leaf_pages": 500,
+          "workload": "native_ycsb_c_read_uniform",
+          "seed": 3,
+          "strategy": "2e_K500",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "results/native_headtohead_YCu/seed3/main/work/hotset_YCu_orig_2e_K500.csv",
+            "sha256": "0b4676db9ce51b1825f1a24cb31fc380e4699eed105a218b55bf4ff66facd7c6"
+          }
+        },
+        "2f_top28": {
+          "path": "deployment/openwhisk/config/plans/keyed/2f_top28_native_ycsb_c_read_uniform_seed3.csv",
+          "sha256": "cd262561ba6bd10a86ec609b0cb396efd0a958cc024be00e68bcd65c743d55c4",
+          "kind": "freqdump_ranked_partial",
+          "expected_pages": 28,
+          "expected_interior_pages": 28,
+          "expected_leaf_pages": 0,
+          "workload": "native_ycsb_c_read_uniform",
+          "seed": 3,
+          "strategy": "2f_top28",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "results/native_headtohead_YCu/seed3/main/work/hotset_YCu_orig_2f_top28.csv",
+            "sha256": "38a35feb9e6ac8def53653c4039f6ef629fcfe097e1a259e0d817e112f68dec7"
+          }
+        },
+        "2f_top14": {
+          "path": "deployment/openwhisk/config/plans/keyed/2f_top14_native_ycsb_c_read_uniform_seed3.csv",
+          "sha256": "74b2a1b3923d6bb6413fb321a50b4147ed5ad355af95296e9763006314830aa2",
+          "kind": "freqdump_ranked_partial",
+          "expected_pages": 14,
+          "expected_interior_pages": 14,
+          "expected_leaf_pages": 0,
+          "workload": "native_ycsb_c_read_uniform",
+          "seed": 3,
+          "strategy": "2f_top14",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "results/native_headtohead_YCu/seed3/main/work/hotset_YCu_orig_2f_top14.csv",
+            "sha256": "a5660bc2c8917193383d4fde5fb2631d6368b48bac31823888b71c904fc52e16"
+          }
+        },
+        "learned_markov_28": {
+          "path": "deployment/openwhisk/config/plans/keyed/learned_markov_28_native_ycsb_c_read_uniform_seed3.csv",
+          "sha256": "23f26130a0579c4b1c77c8eb73544703429b36fe11fa1ca5d6b12e18460f8506",
+          "kind": "learned_markov_partial",
+          "expected_pages": 28,
+          "expected_interior_pages": 28,
+          "expected_leaf_pages": 0,
+          "workload": "native_ycsb_c_read_uniform",
+          "seed": 3,
+          "strategy": "learned_markov_28",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/learned_markov_YCu_orig_N28_test3.csv",
+            "sha256": "d9c0580069f6bb025a200d9fe33a6b8aecf99d228c6e23b068854ea8af35723f"
+          },
+          "loso": {
+            "test_seed": 3,
+            "train_seeds": [
+              1,
+              2,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10
+            ]
+          }
+        },
+        "learned_markov_14": {
+          "path": "deployment/openwhisk/config/plans/keyed/learned_markov_14_native_ycsb_c_read_uniform_seed3.csv",
+          "sha256": "77664f75091d9d28c1beae035098b948bd933451ad83b925d581bf444bff62bb",
+          "kind": "learned_markov_partial",
+          "expected_pages": 14,
+          "expected_interior_pages": 14,
+          "expected_leaf_pages": 0,
+          "workload": "native_ycsb_c_read_uniform",
+          "seed": 3,
+          "strategy": "learned_markov_14",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/learned_markov_YCu_orig_N14_test3.csv",
+            "sha256": "c4a8e607ab581cc860ef01801712bc4d2eabce509fb1ec97fc2c6343fbbe755e"
+          },
+          "loso": {
+            "test_seed": 3,
+            "train_seeds": [
+              1,
+              2,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10
+            ]
           }
         }
       }
@@ -1950,6 +2615,114 @@
             "path": "/home/u03/sqlite-research-fork/strategies/slru/runs/hotpages_ych01_seed1.csv",
             "sha256": "84714e44ea5a1748469c39bc6b17fec5b42a5907319a876b97f61c99e93decd3"
           }
+        },
+        "2e_K500": {
+          "path": "deployment/openwhisk/config/plans/keyed/2e_K500_native_ycsb_c_hot_hashed_01_seed1.csv",
+          "sha256": "8e4fde30e14ca01670415e10660f7b0c16856a34447ffd33d5721dd18661460b",
+          "kind": "hot2e_interior_union_leaf",
+          "expected_pages": 592,
+          "expected_interior_pages": 92,
+          "expected_leaf_pages": 500,
+          "workload": "native_ycsb_c_hot_hashed_01",
+          "seed": 1,
+          "strategy": "2e_K500",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "results/native_headtohead_YCh01/seed1/main/work/hotset_YCh01_orig_2e_K500.csv",
+            "sha256": "900366f30803e0ff1657ce35fa50a215b8f6ac46f439b01c2c15e37c569baf4e"
+          }
+        },
+        "2f_top28": {
+          "path": "deployment/openwhisk/config/plans/keyed/2f_top28_native_ycsb_c_hot_hashed_01_seed1.csv",
+          "sha256": "2666de8e2b8ad23e6337f384c872e2c63b20c0dca9c178d779e5673774363cc6",
+          "kind": "freqdump_ranked_partial",
+          "expected_pages": 28,
+          "expected_interior_pages": 28,
+          "expected_leaf_pages": 0,
+          "workload": "native_ycsb_c_hot_hashed_01",
+          "seed": 1,
+          "strategy": "2f_top28",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "results/native_headtohead_YCh01/seed1/main/work/hotset_YCh01_orig_2f_top28.csv",
+            "sha256": "4f225cf151ed0513b9c3733b40bd27c36618c5839e55f8e1099d155405d4774e"
+          }
+        },
+        "2f_top14": {
+          "path": "deployment/openwhisk/config/plans/keyed/2f_top14_native_ycsb_c_hot_hashed_01_seed1.csv",
+          "sha256": "6bc163bdc37961faaced818a72cf90f8eb214f319c881d7bcdb2bab3f1d991b2",
+          "kind": "freqdump_ranked_partial",
+          "expected_pages": 14,
+          "expected_interior_pages": 14,
+          "expected_leaf_pages": 0,
+          "workload": "native_ycsb_c_hot_hashed_01",
+          "seed": 1,
+          "strategy": "2f_top14",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "results/native_headtohead_YCh01/seed1/main/work/hotset_YCh01_orig_2f_top14.csv",
+            "sha256": "d9defadc8ab6820b4d40bfae0172e51ee3c89bbc3d799f08403e1374fe520203"
+          }
+        },
+        "learned_markov_28": {
+          "path": "deployment/openwhisk/config/plans/keyed/learned_markov_28_native_ycsb_c_hot_hashed_01_seed1.csv",
+          "sha256": "4cb5ae521d7159f7f5b5f620b7329834cc11f10dbd430d88031e576b73eab056",
+          "kind": "learned_markov_partial",
+          "expected_pages": 28,
+          "expected_interior_pages": 28,
+          "expected_leaf_pages": 0,
+          "workload": "native_ycsb_c_hot_hashed_01",
+          "seed": 1,
+          "strategy": "learned_markov_28",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/learned_markov_YCh01_orig_N28_test1.csv",
+            "sha256": "41081610cdce5c41e7c80fac96ddb825a433fe2cca1faa0747f97a1119573a28"
+          },
+          "loso": {
+            "test_seed": 1,
+            "train_seeds": [
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10
+            ]
+          }
+        },
+        "learned_markov_14": {
+          "path": "deployment/openwhisk/config/plans/keyed/learned_markov_14_native_ycsb_c_hot_hashed_01_seed1.csv",
+          "sha256": "a7cad67b1359631dfe74b1b9e31fa4f2c982288e88023588a513d4d4c9dad4a9",
+          "kind": "learned_markov_partial",
+          "expected_pages": 14,
+          "expected_interior_pages": 14,
+          "expected_leaf_pages": 0,
+          "workload": "native_ycsb_c_hot_hashed_01",
+          "seed": 1,
+          "strategy": "learned_markov_14",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/learned_markov_YCh01_orig_N14_test1.csv",
+            "sha256": "846b7fa25b2f798da7b14179a2ef01c6eca51f9e416dda9142413e77df3fb40b"
+          },
+          "loso": {
+            "test_seed": 1,
+            "train_seeds": [
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10
+            ]
+          }
         }
       },
       "2": {
@@ -1984,6 +2757,114 @@
             "path": "/home/u03/sqlite-research-fork/strategies/slru/runs/hotpages_ych01_seed2.csv",
             "sha256": "40f7da7f5715725de553f39ea7bf19aacc5fdfc026f2833ca2cb5e87181e4d9f"
           }
+        },
+        "2e_K500": {
+          "path": "deployment/openwhisk/config/plans/keyed/2e_K500_native_ycsb_c_hot_hashed_01_seed2.csv",
+          "sha256": "8e4fde30e14ca01670415e10660f7b0c16856a34447ffd33d5721dd18661460b",
+          "kind": "hot2e_interior_union_leaf",
+          "expected_pages": 592,
+          "expected_interior_pages": 92,
+          "expected_leaf_pages": 500,
+          "workload": "native_ycsb_c_hot_hashed_01",
+          "seed": 2,
+          "strategy": "2e_K500",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "results/native_headtohead_YCh01/seed2/main/work/hotset_YCh01_orig_2e_K500.csv",
+            "sha256": "900366f30803e0ff1657ce35fa50a215b8f6ac46f439b01c2c15e37c569baf4e"
+          }
+        },
+        "2f_top28": {
+          "path": "deployment/openwhisk/config/plans/keyed/2f_top28_native_ycsb_c_hot_hashed_01_seed2.csv",
+          "sha256": "2666de8e2b8ad23e6337f384c872e2c63b20c0dca9c178d779e5673774363cc6",
+          "kind": "freqdump_ranked_partial",
+          "expected_pages": 28,
+          "expected_interior_pages": 28,
+          "expected_leaf_pages": 0,
+          "workload": "native_ycsb_c_hot_hashed_01",
+          "seed": 2,
+          "strategy": "2f_top28",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "results/native_headtohead_YCh01/seed2/main/work/hotset_YCh01_orig_2f_top28.csv",
+            "sha256": "4f225cf151ed0513b9c3733b40bd27c36618c5839e55f8e1099d155405d4774e"
+          }
+        },
+        "2f_top14": {
+          "path": "deployment/openwhisk/config/plans/keyed/2f_top14_native_ycsb_c_hot_hashed_01_seed2.csv",
+          "sha256": "6bc163bdc37961faaced818a72cf90f8eb214f319c881d7bcdb2bab3f1d991b2",
+          "kind": "freqdump_ranked_partial",
+          "expected_pages": 14,
+          "expected_interior_pages": 14,
+          "expected_leaf_pages": 0,
+          "workload": "native_ycsb_c_hot_hashed_01",
+          "seed": 2,
+          "strategy": "2f_top14",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "results/native_headtohead_YCh01/seed2/main/work/hotset_YCh01_orig_2f_top14.csv",
+            "sha256": "d9defadc8ab6820b4d40bfae0172e51ee3c89bbc3d799f08403e1374fe520203"
+          }
+        },
+        "learned_markov_28": {
+          "path": "deployment/openwhisk/config/plans/keyed/learned_markov_28_native_ycsb_c_hot_hashed_01_seed2.csv",
+          "sha256": "4cb5ae521d7159f7f5b5f620b7329834cc11f10dbd430d88031e576b73eab056",
+          "kind": "learned_markov_partial",
+          "expected_pages": 28,
+          "expected_interior_pages": 28,
+          "expected_leaf_pages": 0,
+          "workload": "native_ycsb_c_hot_hashed_01",
+          "seed": 2,
+          "strategy": "learned_markov_28",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/learned_markov_YCh01_orig_N28_test2.csv",
+            "sha256": "41081610cdce5c41e7c80fac96ddb825a433fe2cca1faa0747f97a1119573a28"
+          },
+          "loso": {
+            "test_seed": 2,
+            "train_seeds": [
+              1,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10
+            ]
+          }
+        },
+        "learned_markov_14": {
+          "path": "deployment/openwhisk/config/plans/keyed/learned_markov_14_native_ycsb_c_hot_hashed_01_seed2.csv",
+          "sha256": "a7cad67b1359631dfe74b1b9e31fa4f2c982288e88023588a513d4d4c9dad4a9",
+          "kind": "learned_markov_partial",
+          "expected_pages": 14,
+          "expected_interior_pages": 14,
+          "expected_leaf_pages": 0,
+          "workload": "native_ycsb_c_hot_hashed_01",
+          "seed": 2,
+          "strategy": "learned_markov_14",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/learned_markov_YCh01_orig_N14_test2.csv",
+            "sha256": "846b7fa25b2f798da7b14179a2ef01c6eca51f9e416dda9142413e77df3fb40b"
+          },
+          "loso": {
+            "test_seed": 2,
+            "train_seeds": [
+              1,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10
+            ]
+          }
         }
       },
       "3": {
@@ -2017,6 +2898,114 @@
           "native_source": {
             "path": "/home/u03/sqlite-research-fork/strategies/slru/runs/hotpages_ych01_seed3.csv",
             "sha256": "5766c4bfc70f174505c35c65575b74e37bd24558b677426e057ed9aa4a894c12"
+          }
+        },
+        "2e_K500": {
+          "path": "deployment/openwhisk/config/plans/keyed/2e_K500_native_ycsb_c_hot_hashed_01_seed3.csv",
+          "sha256": "8e4fde30e14ca01670415e10660f7b0c16856a34447ffd33d5721dd18661460b",
+          "kind": "hot2e_interior_union_leaf",
+          "expected_pages": 592,
+          "expected_interior_pages": 92,
+          "expected_leaf_pages": 500,
+          "workload": "native_ycsb_c_hot_hashed_01",
+          "seed": 3,
+          "strategy": "2e_K500",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "results/native_headtohead_YCh01/seed3/main/work/hotset_YCh01_orig_2e_K500.csv",
+            "sha256": "900366f30803e0ff1657ce35fa50a215b8f6ac46f439b01c2c15e37c569baf4e"
+          }
+        },
+        "2f_top28": {
+          "path": "deployment/openwhisk/config/plans/keyed/2f_top28_native_ycsb_c_hot_hashed_01_seed3.csv",
+          "sha256": "2666de8e2b8ad23e6337f384c872e2c63b20c0dca9c178d779e5673774363cc6",
+          "kind": "freqdump_ranked_partial",
+          "expected_pages": 28,
+          "expected_interior_pages": 28,
+          "expected_leaf_pages": 0,
+          "workload": "native_ycsb_c_hot_hashed_01",
+          "seed": 3,
+          "strategy": "2f_top28",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "results/native_headtohead_YCh01/seed3/main/work/hotset_YCh01_orig_2f_top28.csv",
+            "sha256": "4f225cf151ed0513b9c3733b40bd27c36618c5839e55f8e1099d155405d4774e"
+          }
+        },
+        "2f_top14": {
+          "path": "deployment/openwhisk/config/plans/keyed/2f_top14_native_ycsb_c_hot_hashed_01_seed3.csv",
+          "sha256": "6bc163bdc37961faaced818a72cf90f8eb214f319c881d7bcdb2bab3f1d991b2",
+          "kind": "freqdump_ranked_partial",
+          "expected_pages": 14,
+          "expected_interior_pages": 14,
+          "expected_leaf_pages": 0,
+          "workload": "native_ycsb_c_hot_hashed_01",
+          "seed": 3,
+          "strategy": "2f_top14",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "results/native_headtohead_YCh01/seed3/main/work/hotset_YCh01_orig_2f_top14.csv",
+            "sha256": "d9defadc8ab6820b4d40bfae0172e51ee3c89bbc3d799f08403e1374fe520203"
+          }
+        },
+        "learned_markov_28": {
+          "path": "deployment/openwhisk/config/plans/keyed/learned_markov_28_native_ycsb_c_hot_hashed_01_seed3.csv",
+          "sha256": "4cb5ae521d7159f7f5b5f620b7329834cc11f10dbd430d88031e576b73eab056",
+          "kind": "learned_markov_partial",
+          "expected_pages": 28,
+          "expected_interior_pages": 28,
+          "expected_leaf_pages": 0,
+          "workload": "native_ycsb_c_hot_hashed_01",
+          "seed": 3,
+          "strategy": "learned_markov_28",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/learned_markov_YCh01_orig_N28_test3.csv",
+            "sha256": "41081610cdce5c41e7c80fac96ddb825a433fe2cca1faa0747f97a1119573a28"
+          },
+          "loso": {
+            "test_seed": 3,
+            "train_seeds": [
+              1,
+              2,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10
+            ]
+          }
+        },
+        "learned_markov_14": {
+          "path": "deployment/openwhisk/config/plans/keyed/learned_markov_14_native_ycsb_c_hot_hashed_01_seed3.csv",
+          "sha256": "a7cad67b1359631dfe74b1b9e31fa4f2c982288e88023588a513d4d4c9dad4a9",
+          "kind": "learned_markov_partial",
+          "expected_pages": 14,
+          "expected_interior_pages": 14,
+          "expected_leaf_pages": 0,
+          "workload": "native_ycsb_c_hot_hashed_01",
+          "seed": 3,
+          "strategy": "learned_markov_14",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/learned_markov_YCh01_orig_N14_test3.csv",
+            "sha256": "846b7fa25b2f798da7b14179a2ef01c6eca51f9e416dda9142413e77df3fb40b"
+          },
+          "loso": {
+            "test_seed": 3,
+            "train_seeds": [
+              1,
+              2,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10
+            ]
           }
         }
       }
@@ -2086,6 +3075,84 @@
             "path": "strategies/access/runs/hot2e_C_orig_K10_seed1.csv",
             "sha256": "29f19a9080c12711d765c5562379a613e01bf2553e792fa2b3da0bd643a67f56"
           }
+        },
+        "2f_top14": {
+          "path": "deployment/openwhisk/config/plans/keyed/2f_top14_read_tail_mixed_20k_seed1.csv",
+          "sha256": "cb5f462cb3fa6e72df6b40203e1ea55b5a6c9d549b6d543c9e21d44a8579635e",
+          "kind": "freqdump_ranked_partial",
+          "expected_pages": 14,
+          "expected_interior_pages": 2,
+          "expected_leaf_pages": 12,
+          "workload": "read_tail_mixed_20k",
+          "seed": 1,
+          "strategy": "2f_top14",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/freqdump_C_orig_N14_seed1.csv",
+            "sha256": "db030022208b36168dec489220af7d4e577a6466a1fda009ff8138cbc8ab3f6b"
+          }
+        },
+        "2f_top28": {
+          "path": "deployment/openwhisk/config/plans/keyed/2f_top28_read_tail_mixed_20k_seed1.csv",
+          "sha256": "8ffdc0fcf1045e1a0e6731788887a7b7407f576b1f492cc304f2430b8655dbc7",
+          "kind": "freqdump_ranked_partial",
+          "expected_pages": 28,
+          "expected_interior_pages": 2,
+          "expected_leaf_pages": 26,
+          "workload": "read_tail_mixed_20k",
+          "seed": 1,
+          "strategy": "2f_top28",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/freqdump_C_orig_N28_seed1.csv",
+            "sha256": "5f410176a4b33dfddb09af595c38d357d4e0847dfe7b0710f1f876fa26524d7f"
+          }
+        },
+        "2e_K500": {
+          "path": "deployment/openwhisk/config/plans/keyed/2e_K500_read_tail_mixed_20k_seed1.csv",
+          "sha256": "54e2e4214cf749debb1fd2b28764d25c07c9d262dcf44d3520b7fae8ecc5cf0a",
+          "kind": "hot2e_interior_union_leaf",
+          "expected_pages": 426,
+          "expected_interior_pages": 92,
+          "expected_leaf_pages": 334,
+          "workload": "read_tail_mixed_20k",
+          "seed": 1,
+          "strategy": "2e_K500",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/hot2e_C_orig_K500_seed1.csv",
+            "sha256": "6f45e095826035cbd4dc60aa0f5db8548fe0074b932f60b3e4ce425383527bf8"
+          }
+        },
+        "learned_markov_28": {
+          "path": "deployment/openwhisk/config/plans/keyed/learned_markov_28_read_tail_mixed_20k_seed1.csv",
+          "sha256": "8ffdc0fcf1045e1a0e6731788887a7b7407f576b1f492cc304f2430b8655dbc7",
+          "kind": "learned_markov_partial",
+          "expected_pages": 28,
+          "expected_interior_pages": 2,
+          "expected_leaf_pages": 26,
+          "workload": "read_tail_mixed_20k",
+          "seed": 1,
+          "strategy": "learned_markov_28",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/learned_markov_C_orig_N28_test1.csv",
+            "sha256": "7852ee4ac3c3cd5d6172f62b312a44b994a59ddf6d0496667f5d23b8fd3c379f"
+          },
+          "loso": {
+            "test_seed": 1,
+            "train_seeds": [
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10
+            ]
+          }
         }
       },
       "2": {
@@ -2151,6 +3218,84 @@
           "native_source": {
             "path": "strategies/access/runs/hot2e_C_orig_K10_seed2.csv",
             "sha256": "29f19a9080c12711d765c5562379a613e01bf2553e792fa2b3da0bd643a67f56"
+          }
+        },
+        "2f_top14": {
+          "path": "deployment/openwhisk/config/plans/keyed/2f_top14_read_tail_mixed_20k_seed2.csv",
+          "sha256": "cb5f462cb3fa6e72df6b40203e1ea55b5a6c9d549b6d543c9e21d44a8579635e",
+          "kind": "freqdump_ranked_partial",
+          "expected_pages": 14,
+          "expected_interior_pages": 2,
+          "expected_leaf_pages": 12,
+          "workload": "read_tail_mixed_20k",
+          "seed": 2,
+          "strategy": "2f_top14",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/freqdump_C_orig_N14_seed2.csv",
+            "sha256": "326221298db47fade8c7b7b786c77eb97130ee694377a2432a4504b0740ee04f"
+          }
+        },
+        "2f_top28": {
+          "path": "deployment/openwhisk/config/plans/keyed/2f_top28_read_tail_mixed_20k_seed2.csv",
+          "sha256": "8ffdc0fcf1045e1a0e6731788887a7b7407f576b1f492cc304f2430b8655dbc7",
+          "kind": "freqdump_ranked_partial",
+          "expected_pages": 28,
+          "expected_interior_pages": 2,
+          "expected_leaf_pages": 26,
+          "workload": "read_tail_mixed_20k",
+          "seed": 2,
+          "strategy": "2f_top28",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/freqdump_C_orig_N28_seed2.csv",
+            "sha256": "5d143aee9437063f210c3686a887b2e4a2d536939c2efcabdc373a410e14100d"
+          }
+        },
+        "2e_K500": {
+          "path": "deployment/openwhisk/config/plans/keyed/2e_K500_read_tail_mixed_20k_seed2.csv",
+          "sha256": "54e2e4214cf749debb1fd2b28764d25c07c9d262dcf44d3520b7fae8ecc5cf0a",
+          "kind": "hot2e_interior_union_leaf",
+          "expected_pages": 426,
+          "expected_interior_pages": 92,
+          "expected_leaf_pages": 334,
+          "workload": "read_tail_mixed_20k",
+          "seed": 2,
+          "strategy": "2e_K500",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/hot2e_C_orig_K500_seed2.csv",
+            "sha256": "6f45e095826035cbd4dc60aa0f5db8548fe0074b932f60b3e4ce425383527bf8"
+          }
+        },
+        "learned_markov_28": {
+          "path": "deployment/openwhisk/config/plans/keyed/learned_markov_28_read_tail_mixed_20k_seed2.csv",
+          "sha256": "8ffdc0fcf1045e1a0e6731788887a7b7407f576b1f492cc304f2430b8655dbc7",
+          "kind": "learned_markov_partial",
+          "expected_pages": 28,
+          "expected_interior_pages": 2,
+          "expected_leaf_pages": 26,
+          "workload": "read_tail_mixed_20k",
+          "seed": 2,
+          "strategy": "learned_markov_28",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/learned_markov_C_orig_N28_test2.csv",
+            "sha256": "7852ee4ac3c3cd5d6172f62b312a44b994a59ddf6d0496667f5d23b8fd3c379f"
+          },
+          "loso": {
+            "test_seed": 2,
+            "train_seeds": [
+              1,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10
+            ]
           }
         }
       },
@@ -2218,6 +3363,84 @@
             "path": "strategies/access/runs/hot2e_C_orig_K10_seed3.csv",
             "sha256": "29f19a9080c12711d765c5562379a613e01bf2553e792fa2b3da0bd643a67f56"
           }
+        },
+        "2f_top14": {
+          "path": "deployment/openwhisk/config/plans/keyed/2f_top14_read_tail_mixed_20k_seed3.csv",
+          "sha256": "cb5f462cb3fa6e72df6b40203e1ea55b5a6c9d549b6d543c9e21d44a8579635e",
+          "kind": "freqdump_ranked_partial",
+          "expected_pages": 14,
+          "expected_interior_pages": 2,
+          "expected_leaf_pages": 12,
+          "workload": "read_tail_mixed_20k",
+          "seed": 3,
+          "strategy": "2f_top14",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/freqdump_C_orig_N14_seed3.csv",
+            "sha256": "fde482124e46fcde78a8955fb490caa8de33024a4bb3a7cf1ca0240168ce401d"
+          }
+        },
+        "2f_top28": {
+          "path": "deployment/openwhisk/config/plans/keyed/2f_top28_read_tail_mixed_20k_seed3.csv",
+          "sha256": "8ffdc0fcf1045e1a0e6731788887a7b7407f576b1f492cc304f2430b8655dbc7",
+          "kind": "freqdump_ranked_partial",
+          "expected_pages": 28,
+          "expected_interior_pages": 2,
+          "expected_leaf_pages": 26,
+          "workload": "read_tail_mixed_20k",
+          "seed": 3,
+          "strategy": "2f_top28",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/freqdump_C_orig_N28_seed3.csv",
+            "sha256": "b77748acafc1942f2251e07be092a3f29eee42e78ad1abe1a78df59dbfc228bd"
+          }
+        },
+        "2e_K500": {
+          "path": "deployment/openwhisk/config/plans/keyed/2e_K500_read_tail_mixed_20k_seed3.csv",
+          "sha256": "54e2e4214cf749debb1fd2b28764d25c07c9d262dcf44d3520b7fae8ecc5cf0a",
+          "kind": "hot2e_interior_union_leaf",
+          "expected_pages": 426,
+          "expected_interior_pages": 92,
+          "expected_leaf_pages": 334,
+          "workload": "read_tail_mixed_20k",
+          "seed": 3,
+          "strategy": "2e_K500",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/hot2e_C_orig_K500_seed3.csv",
+            "sha256": "6f45e095826035cbd4dc60aa0f5db8548fe0074b932f60b3e4ce425383527bf8"
+          }
+        },
+        "learned_markov_28": {
+          "path": "deployment/openwhisk/config/plans/keyed/learned_markov_28_read_tail_mixed_20k_seed3.csv",
+          "sha256": "8ffdc0fcf1045e1a0e6731788887a7b7407f576b1f492cc304f2430b8655dbc7",
+          "kind": "learned_markov_partial",
+          "expected_pages": 28,
+          "expected_interior_pages": 2,
+          "expected_leaf_pages": 26,
+          "workload": "read_tail_mixed_20k",
+          "seed": 3,
+          "strategy": "learned_markov_28",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/learned_markov_C_orig_N28_test3.csv",
+            "sha256": "7852ee4ac3c3cd5d6172f62b312a44b994a59ddf6d0496667f5d23b8fd3c379f"
+          },
+          "loso": {
+            "test_seed": 3,
+            "train_seeds": [
+              1,
+              2,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10
+            ]
+          }
         }
       }
     },
@@ -2254,6 +3477,114 @@
             "path": "strategies/slru/runs/hotpages_c_hit_seed1.csv",
             "sha256": "63e7f7a9383056457cbcaa57fb1be5978c4bfbcdc8385f59e6ce10feece56f76"
           }
+        },
+        "2e_K500": {
+          "path": "deployment/openwhisk/config/plans/keyed/2e_K500_read_tail_hit_20k_seed1.csv",
+          "sha256": "ed625bb888983d512035aad499bdee0d5ffa34eb5e1c6f1373dd249be27ba729",
+          "kind": "hot2e_interior_union_leaf",
+          "expected_pages": 592,
+          "expected_interior_pages": 92,
+          "expected_leaf_pages": 500,
+          "workload": "read_tail_hit_20k",
+          "seed": 1,
+          "strategy": "2e_K500",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/hot2e_C_hit_orig_K500_seed1.csv",
+            "sha256": "2befedb4e089f1203bb00896d20c75eb7ecc0be60eeb729a7e8a5759b4d3ee57"
+          }
+        },
+        "2f_top28": {
+          "path": "deployment/openwhisk/config/plans/keyed/2f_top28_read_tail_hit_20k_seed1.csv",
+          "sha256": "5c4caac439f8c171c434e44c570dc4515cbb684183ec768698fe538ff17870af",
+          "kind": "freqdump_ranked_partial",
+          "expected_pages": 28,
+          "expected_interior_pages": 3,
+          "expected_leaf_pages": 25,
+          "workload": "read_tail_hit_20k",
+          "seed": 1,
+          "strategy": "2f_top28",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/freqdump_C_hit_orig_N28_seed1.csv",
+            "sha256": "81d7c7e32de8d4b79c1a70832d8b345ee51b8113e5ea06b19c0b1c50893e7105"
+          }
+        },
+        "2f_top14": {
+          "path": "deployment/openwhisk/config/plans/keyed/2f_top14_read_tail_hit_20k_seed1.csv",
+          "sha256": "27ed80b07e89cb3a38485b5674ae97170321ee42605c2e064df0404b5db17ab0",
+          "kind": "freqdump_ranked_partial",
+          "expected_pages": 14,
+          "expected_interior_pages": 3,
+          "expected_leaf_pages": 11,
+          "workload": "read_tail_hit_20k",
+          "seed": 1,
+          "strategy": "2f_top14",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/freqdump_C_hit_orig_N14_seed1.csv",
+            "sha256": "4237d64e8ab813b02ba11ac285a13a1788ad823d20be2bcd46fdf9eaaa31a4d7"
+          }
+        },
+        "learned_markov_28": {
+          "path": "deployment/openwhisk/config/plans/keyed/learned_markov_28_read_tail_hit_20k_seed1.csv",
+          "sha256": "5c4caac439f8c171c434e44c570dc4515cbb684183ec768698fe538ff17870af",
+          "kind": "learned_markov_partial",
+          "expected_pages": 28,
+          "expected_interior_pages": 3,
+          "expected_leaf_pages": 25,
+          "workload": "read_tail_hit_20k",
+          "seed": 1,
+          "strategy": "learned_markov_28",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/learned_markov_C_hit_orig_N28_test1.csv",
+            "sha256": "56e3045137d6ff1e83c26ba1754138fca7d4da9f29705d53210c9ccb66036bc2"
+          },
+          "loso": {
+            "test_seed": 1,
+            "train_seeds": [
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10
+            ]
+          }
+        },
+        "learned_markov_14": {
+          "path": "deployment/openwhisk/config/plans/keyed/learned_markov_14_read_tail_hit_20k_seed1.csv",
+          "sha256": "27ed80b07e89cb3a38485b5674ae97170321ee42605c2e064df0404b5db17ab0",
+          "kind": "learned_markov_partial",
+          "expected_pages": 14,
+          "expected_interior_pages": 3,
+          "expected_leaf_pages": 11,
+          "workload": "read_tail_hit_20k",
+          "seed": 1,
+          "strategy": "learned_markov_14",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/learned_markov_C_hit_orig_N14_test1.csv",
+            "sha256": "cf26d12b366dc0ff5735e16bd7cf0fcc058c2d80ae9606798a056f1e167a5f57"
+          },
+          "loso": {
+            "test_seed": 1,
+            "train_seeds": [
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10
+            ]
+          }
         }
       },
       "2": {
@@ -2288,6 +3619,114 @@
             "path": "strategies/slru/runs/hotpages_c_hit_seed2.csv",
             "sha256": "92d57dd11d714ffa8899d978df46ff5406818b54424a122e7ca1c8ebae628bc3"
           }
+        },
+        "2e_K500": {
+          "path": "deployment/openwhisk/config/plans/keyed/2e_K500_read_tail_hit_20k_seed2.csv",
+          "sha256": "ed625bb888983d512035aad499bdee0d5ffa34eb5e1c6f1373dd249be27ba729",
+          "kind": "hot2e_interior_union_leaf",
+          "expected_pages": 592,
+          "expected_interior_pages": 92,
+          "expected_leaf_pages": 500,
+          "workload": "read_tail_hit_20k",
+          "seed": 2,
+          "strategy": "2e_K500",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/hot2e_C_hit_orig_K500_seed2.csv",
+            "sha256": "2befedb4e089f1203bb00896d20c75eb7ecc0be60eeb729a7e8a5759b4d3ee57"
+          }
+        },
+        "2f_top28": {
+          "path": "deployment/openwhisk/config/plans/keyed/2f_top28_read_tail_hit_20k_seed2.csv",
+          "sha256": "5c4caac439f8c171c434e44c570dc4515cbb684183ec768698fe538ff17870af",
+          "kind": "freqdump_ranked_partial",
+          "expected_pages": 28,
+          "expected_interior_pages": 3,
+          "expected_leaf_pages": 25,
+          "workload": "read_tail_hit_20k",
+          "seed": 2,
+          "strategy": "2f_top28",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/freqdump_C_hit_orig_N28_seed2.csv",
+            "sha256": "ab17b9b8a2e4d2d88e7149de9dc11f9ef3e355a54ac8ed310f3264e136e82489"
+          }
+        },
+        "2f_top14": {
+          "path": "deployment/openwhisk/config/plans/keyed/2f_top14_read_tail_hit_20k_seed2.csv",
+          "sha256": "27ed80b07e89cb3a38485b5674ae97170321ee42605c2e064df0404b5db17ab0",
+          "kind": "freqdump_ranked_partial",
+          "expected_pages": 14,
+          "expected_interior_pages": 3,
+          "expected_leaf_pages": 11,
+          "workload": "read_tail_hit_20k",
+          "seed": 2,
+          "strategy": "2f_top14",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/freqdump_C_hit_orig_N14_seed2.csv",
+            "sha256": "3b9ab2fb2ae9e6e712d3880199c7941d91f180f053a4b338d0ccb9d60f0e4f4e"
+          }
+        },
+        "learned_markov_28": {
+          "path": "deployment/openwhisk/config/plans/keyed/learned_markov_28_read_tail_hit_20k_seed2.csv",
+          "sha256": "5c4caac439f8c171c434e44c570dc4515cbb684183ec768698fe538ff17870af",
+          "kind": "learned_markov_partial",
+          "expected_pages": 28,
+          "expected_interior_pages": 3,
+          "expected_leaf_pages": 25,
+          "workload": "read_tail_hit_20k",
+          "seed": 2,
+          "strategy": "learned_markov_28",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/learned_markov_C_hit_orig_N28_test2.csv",
+            "sha256": "56e3045137d6ff1e83c26ba1754138fca7d4da9f29705d53210c9ccb66036bc2"
+          },
+          "loso": {
+            "test_seed": 2,
+            "train_seeds": [
+              1,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10
+            ]
+          }
+        },
+        "learned_markov_14": {
+          "path": "deployment/openwhisk/config/plans/keyed/learned_markov_14_read_tail_hit_20k_seed2.csv",
+          "sha256": "27ed80b07e89cb3a38485b5674ae97170321ee42605c2e064df0404b5db17ab0",
+          "kind": "learned_markov_partial",
+          "expected_pages": 14,
+          "expected_interior_pages": 3,
+          "expected_leaf_pages": 11,
+          "workload": "read_tail_hit_20k",
+          "seed": 2,
+          "strategy": "learned_markov_14",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/learned_markov_C_hit_orig_N14_test2.csv",
+            "sha256": "cf26d12b366dc0ff5735e16bd7cf0fcc058c2d80ae9606798a056f1e167a5f57"
+          },
+          "loso": {
+            "test_seed": 2,
+            "train_seeds": [
+              1,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10
+            ]
+          }
         }
       },
       "3": {
@@ -2321,6 +3760,114 @@
           "native_source": {
             "path": "strategies/slru/runs/hotpages_c_hit_seed3.csv",
             "sha256": "9eabdc7e602fccf4bbc59c2c1b197bc64f76b6179c85bdb094f2954054484888"
+          }
+        },
+        "2e_K500": {
+          "path": "deployment/openwhisk/config/plans/keyed/2e_K500_read_tail_hit_20k_seed3.csv",
+          "sha256": "ed625bb888983d512035aad499bdee0d5ffa34eb5e1c6f1373dd249be27ba729",
+          "kind": "hot2e_interior_union_leaf",
+          "expected_pages": 592,
+          "expected_interior_pages": 92,
+          "expected_leaf_pages": 500,
+          "workload": "read_tail_hit_20k",
+          "seed": 3,
+          "strategy": "2e_K500",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/hot2e_C_hit_orig_K500_seed3.csv",
+            "sha256": "2befedb4e089f1203bb00896d20c75eb7ecc0be60eeb729a7e8a5759b4d3ee57"
+          }
+        },
+        "2f_top28": {
+          "path": "deployment/openwhisk/config/plans/keyed/2f_top28_read_tail_hit_20k_seed3.csv",
+          "sha256": "5c4caac439f8c171c434e44c570dc4515cbb684183ec768698fe538ff17870af",
+          "kind": "freqdump_ranked_partial",
+          "expected_pages": 28,
+          "expected_interior_pages": 3,
+          "expected_leaf_pages": 25,
+          "workload": "read_tail_hit_20k",
+          "seed": 3,
+          "strategy": "2f_top28",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/freqdump_C_hit_orig_N28_seed3.csv",
+            "sha256": "f521857d269c1ec74e86a0005cb08c7143662bf2aea71d1f68297ca84c48b493"
+          }
+        },
+        "2f_top14": {
+          "path": "deployment/openwhisk/config/plans/keyed/2f_top14_read_tail_hit_20k_seed3.csv",
+          "sha256": "27ed80b07e89cb3a38485b5674ae97170321ee42605c2e064df0404b5db17ab0",
+          "kind": "freqdump_ranked_partial",
+          "expected_pages": 14,
+          "expected_interior_pages": 3,
+          "expected_leaf_pages": 11,
+          "workload": "read_tail_hit_20k",
+          "seed": 3,
+          "strategy": "2f_top14",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/freqdump_C_hit_orig_N14_seed3.csv",
+            "sha256": "0b6ce6e53277cd95d198a1190e68cb72787701b3ced0c87757ad1756f240b6dd"
+          }
+        },
+        "learned_markov_28": {
+          "path": "deployment/openwhisk/config/plans/keyed/learned_markov_28_read_tail_hit_20k_seed3.csv",
+          "sha256": "5c4caac439f8c171c434e44c570dc4515cbb684183ec768698fe538ff17870af",
+          "kind": "learned_markov_partial",
+          "expected_pages": 28,
+          "expected_interior_pages": 3,
+          "expected_leaf_pages": 25,
+          "workload": "read_tail_hit_20k",
+          "seed": 3,
+          "strategy": "learned_markov_28",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/learned_markov_C_hit_orig_N28_test3.csv",
+            "sha256": "56e3045137d6ff1e83c26ba1754138fca7d4da9f29705d53210c9ccb66036bc2"
+          },
+          "loso": {
+            "test_seed": 3,
+            "train_seeds": [
+              1,
+              2,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10
+            ]
+          }
+        },
+        "learned_markov_14": {
+          "path": "deployment/openwhisk/config/plans/keyed/learned_markov_14_read_tail_hit_20k_seed3.csv",
+          "sha256": "27ed80b07e89cb3a38485b5674ae97170321ee42605c2e064df0404b5db17ab0",
+          "kind": "learned_markov_partial",
+          "expected_pages": 14,
+          "expected_interior_pages": 3,
+          "expected_leaf_pages": 11,
+          "workload": "read_tail_hit_20k",
+          "seed": 3,
+          "strategy": "learned_markov_14",
+          "bound_db_sha256": "2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1",
+          "native_source": {
+            "path": "strategies/access/runs/learned_markov_C_hit_orig_N14_test3.csv",
+            "sha256": "cf26d12b366dc0ff5735e16bd7cf0fcc058c2d80ae9606798a056f1e167a5f57"
+          },
+          "loso": {
+            "test_seed": 3,
+            "train_seeds": [
+              1,
+              2,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10
+            ]
           }
         }
       }
@@ -2544,5 +4091,172 @@
     "total_invocations": 468
   },
   "portability_run_config_sha256": "64f44c3e06be421a026aa523ded93010d3a7d3ab8e2cf773e033ec30c0657947",
-  "portability_run_config_sha256_note": "Deterministic sha256 over the canonical portability_invocation_plan (sorted-key compact JSON). Independent identity for the workstation->OpenWhisk portability matrix (234 pairs / 468 invocations across 4 rectangular sub-matrices, schedule_seed=20260826). Distinct from the primary (022fbeb0...) and secondary (441609e6...) YC run configs, which are byte-frozen and untouched. Deployment/feasibility + footprint evidence only; warm paired first-query latency is NOT a strategy-performance estimate (see analysis/thesis/threats_to_validity.md)."
+  "portability_run_config_sha256_note": "Deterministic sha256 over the canonical portability_invocation_plan (sorted-key compact JSON). Independent identity for the workstation->OpenWhisk portability matrix (234 pairs / 468 invocations across 4 rectangular sub-matrices, schedule_seed=20260826). Distinct from the primary (022fbeb0...) and secondary (441609e6...) YC run configs, which are byte-frozen and untouched. Deployment/feasibility + footprint evidence only; warm paired first-query latency is NOT a strategy-performance estimate (see analysis/thesis/threats_to_validity.md).",
+  "portability_ext_invocation_plan": {
+    "kind": "portability_ext_matrix",
+    "workload_set": [
+      "native_ycsb_c_hot_hashed_01",
+      "native_ycsb_c_read_uniform",
+      "native_ycsb_c_read_zipf",
+      "read_tail_hit_20k",
+      "read_tail_mixed_20k"
+    ],
+    "strategies": [
+      "2d",
+      "2e_K500",
+      "2f_top14",
+      "2f_top28",
+      "baseline",
+      "layers_5",
+      "layers_92",
+      "learned_markov_14",
+      "learned_markov_28"
+    ],
+    "seeds": [
+      1,
+      2,
+      3
+    ],
+    "handle_modes": [
+      "warm",
+      "standalone"
+    ],
+    "first_operation_ids": [
+      0
+    ],
+    "repetitions": 3,
+    "schedule_seed": 20260828,
+    "concurrency": 1,
+    "sequential": true,
+    "matrices": [
+      {
+        "name": "B5",
+        "workloads": [
+          "native_ycsb_c_read_zipf"
+        ],
+        "strategies": [
+          "baseline",
+          "2f_top14",
+          "learned_markov_14"
+        ],
+        "seeds": [
+          1,
+          2,
+          3
+        ],
+        "pairs": 36
+      },
+      {
+        "name": "B6",
+        "workloads": [
+          "native_ycsb_c_read_uniform",
+          "native_ycsb_c_hot_hashed_01"
+        ],
+        "strategies": [
+          "baseline",
+          "2e_K500",
+          "2f_top28",
+          "2f_top14",
+          "learned_markov_28",
+          "learned_markov_14"
+        ],
+        "seeds": [
+          1,
+          2,
+          3
+        ],
+        "pairs": 180
+      },
+      {
+        "name": "B7",
+        "workloads": [
+          "read_tail_hit_20k"
+        ],
+        "strategies": [
+          "baseline",
+          "2e_K500",
+          "2f_top28",
+          "learned_markov_28",
+          "2f_top14",
+          "learned_markov_14"
+        ],
+        "seeds": [
+          1,
+          2,
+          3
+        ],
+        "pairs": 90
+      },
+      {
+        "name": "B8",
+        "workloads": [
+          "read_tail_mixed_20k"
+        ],
+        "strategies": [
+          "baseline",
+          "2f_top14",
+          "2f_top28",
+          "2e_K500",
+          "learned_markov_28"
+        ],
+        "seeds": [
+          1,
+          2,
+          3
+        ],
+        "pairs": 72
+      },
+      {
+        "name": "B9",
+        "workloads": [
+          "native_ycsb_c_read_zipf",
+          "native_ycsb_c_read_uniform",
+          "native_ycsb_c_hot_hashed_01",
+          "read_tail_hit_20k"
+        ],
+        "strategies": [
+          "baseline",
+          "layers_92"
+        ],
+        "seeds": [
+          1
+        ],
+        "pairs": 24
+      },
+      {
+        "name": "B10",
+        "workloads": [
+          "native_ycsb_c_read_uniform",
+          "native_ycsb_c_hot_hashed_01",
+          "read_tail_mixed_20k"
+        ],
+        "strategies": [
+          "baseline",
+          "layers_5"
+        ],
+        "seeds": [
+          1
+        ],
+        "pairs": 18
+      },
+      {
+        "name": "B11",
+        "workloads": [
+          "read_tail_hit_20k"
+        ],
+        "strategies": [
+          "baseline",
+          "2d"
+        ],
+        "seeds": [
+          1
+        ],
+        "pairs": 6
+      }
+    ],
+    "total_pairs": 426,
+    "total_invocations": 852
+  },
+  "portability_ext_run_config_sha256": "bf504a28fb0ac3cec3b189a4de1f7b8968a35bbd9866c2ae1d5784ccc3bf77da",
+  "portability_ext_run_config_sha256_note": "Deterministic sha256 over the canonical portability_ext_invocation_plan (sorted-key compact JSON). Independent identity for the portability-EXTENSION matrix (426 pairs / 852 invocations across seven rectangular sub-matrices B5-B11, schedule_seed=20260828) covering the 29 (workload,strategy) cells the workstation ran but the primary/secondary/portability OpenWhisk campaigns did not. Distinct from primary (022fbeb0..), secondary (441609e6..) and portability (64f44c3e..) run configs, which are byte-frozen and untouched. Deployment/feasibility + relative-effectiveness evidence only; warm paired first-query latency is NOT a strategy-performance estimate (analysis/thesis/threats_to_validity.md)."
 }

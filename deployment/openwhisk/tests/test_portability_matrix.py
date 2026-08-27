@@ -518,12 +518,16 @@ class SessionLoadAndDispatch(unittest.TestCase):
     def test_multiworkload_dispatch_fails_closed(self):
         # A keyed plan absent for the exact (strategy, workload, seed) must raise --
         # never fall back to the canonical YC plan or any other workload.
+        # NB: the portability-EXT campaign froze 2f_top28 on read_tail_mixed_20k (B8)
+        # and learned_markov_28 on read_tail_hit_20k (B7), so those are now VALID keyed
+        # cells and no longer prove fail-closed. These probes use cells still genuinely
+        # absent from every frozen layer.
         with self.assertRaises(ValueError):
-            main.select_offsets("2f_top28", self.sess,
-                                workload="read_tail_mixed_20k", seed=1)  # 2f_top28 only on read_zipf
+            main.select_offsets("learned_markov_14", self.sess,
+                                workload="read_tail_mixed_20k", seed=1)  # C has no N=14 learned cell
         with self.assertRaises(ValueError):
-            main.select_offsets("learned_markov_28", self.sess,
-                                workload="read_tail_hit_20k", seed=1)  # LOSO only on read_zipf
+            main.select_offsets("2f_top102", self.sess,
+                                workload="read_tail_mixed_20k", seed=1)  # N=102 is YC-secondary only
         with self.assertRaises(ValueError):
             main.select_offsets("2e_K10", self.sess,
                                 workload="no_such_workload", seed=1)  # unknown workload
