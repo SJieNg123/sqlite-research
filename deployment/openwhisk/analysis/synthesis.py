@@ -53,6 +53,33 @@ DESC_INPUTS = [
     "order_position_descriptives.csv",
 ]
 
+# ---------------------------------------------------------------------------
+# cross-workload PORTABILITY campaign (SECOND OpenWhisk role; additive).
+# These outputs are produced by the separate portability pipeline
+# (normalize_portability.py -> descriptive_portability.py). They are SHA-gated
+# here so the thesis two-role framing (3600 strategy-space + 468 portability =
+# 4068 formal invocations) is machine-checked, NOT prose the writer can drift.
+# The primary/secondary strategy-space synthesis above is entirely unaffected:
+# the portability chain has its OWN manifests and its own descriptive CSVs.
+# ---------------------------------------------------------------------------
+PORT_DESC_DIR = _ANALYSIS_DIR / "descriptive" / "portability"
+PORT_NORM_DIR = _ANALYSIS_DIR / "normalized" / "portability"
+PORT_DESC_INPUTS = [
+    "portability_coverage.csv",
+    "portability_plan_parity.csv",
+    "portability_workload_summary.csv",
+]
+# fail-closed shape of the completed single-batch portability campaign
+PORT_EXPECTED = {
+    "invocations": 468, "pairs": 234,
+    "block_pairs": {"block1": 108, "block2": 72, "block3": 36, "block4": 18},
+    "workloads": 5,
+    "matrix_fingerprint":
+        "a3274bc9632ab7aa393f015c00829373a33312d15ff8e6521759255f01eac10e",
+    "run_config_sha256":
+        "64f44c3e06be421a026aa523ded93010d3a7d3ab8e2cf773e033ec30c0657947",
+}
+
 # neutral deployment-role labels (from repo provenance / comparison scaffolding);
 # descriptive, NOT a ranking.
 DEPLOYMENT_ROLE = {
@@ -77,6 +104,8 @@ CLAIM_RESTRICTIONS = {
     "no_strategy_winner_claim": True,
     "first_query_us_is_query_phase_not_total_cold_start": True,
     "order_effect_is_not_random_hardware_noise": True,
+    "portability_is_execution_binding_not_latency_ranking": True,
+    "portability_and_strategy_space_campaigns_not_pooled": True,
 }
 
 # cost-vector column legend (§5: clearly mark the phases)
@@ -244,6 +273,36 @@ CLAIM_MAP = [
      "reason": "AB/BA are not exactly 50/50 and second-position observations are "
                "retained; the first-arm view is a diagnostic, not a deconfounded "
                "estimator -- medians must not be subtracted."},
+    # L. cross-workload portability (SECOND OpenWhisk role)
+    {"category": "L_cross_workload_portability",
+     "claim": "The representative strategy mechanisms were executed and validated "
+              "across five workload families (YC, YCu, YCh01, C, C_hit) in a "
+              "separate single-batch OpenWhisk campaign of 468 formal invocations "
+              "/ 234 baseline-target pairs, with per-plan page-set + offset parity "
+              "(exact native, semantic 2e contract, or structural-static) proven "
+              "against the frozen keyed contract.",
+     "classification": "SAFE",
+     "support": "normalized/portability/portability_normalization_manifest.json; "
+                "descriptive/portability/portability_plan_parity.csv; "
+                "portability_workload_summary.csv",
+     "qualification": "Portability = deployment execution / correctness / workload "
+                      "+ plan binding across workloads. It is NOT a latency, "
+                      "ranking, or warm-speedup result, and the five families are "
+                      "representative coverage, not exhaustive.",
+     "reason": "Demonstrated by the runs themselves (execution + SHA-bound plan "
+               "parity), independent of any latency interpretation; native/WK1 "
+               "remains the primary performance evidence."},
+    {"category": "L_cross_workload_portability",
+     "claim": "The 468 portability invocations and the 3600 strategy-space "
+              "invocations jointly estimate a single cross-workload performance "
+              "effect (4068 pooled measurements of one quantity).",
+     "classification": "DO_NOT_CLAIM",
+     "support": "",
+     "qualification": "",
+     "reason": "The two campaigns answer different questions (strategy-space cost "
+               "structure on YC vs. cross-workload deployment portability) and are "
+               "reported separately; they must never be pooled into one effect "
+               "estimate, and neither is a warm-latency ranking."},
 ]
 
 
@@ -303,6 +362,86 @@ def load_inputs(desc_dir=_DESC_DIR, norm_dir=_NORM_DIR):
         "problems": problems,
     }
     return data
+
+
+def load_portability(port_desc_dir=PORT_DESC_DIR, port_norm_dir=PORT_NORM_DIR):
+    """Load + SHA-gate the cross-workload portability campaign facts (§13).
+
+    Fail-closed: the portability descriptive CSVs must match their descriptive
+    manifest SHAs; the descriptive manifest's recorded normalized inputs must
+    match the portability normalization manifest's own output SHAs; and the
+    campaign shape (468/234, block counts, 5 workloads, live fingerprint /
+    run-config identity) must be exactly the completed single-batch campaign.
+    Returns (facts, problems)."""
+    port_desc_dir = Path(port_desc_dir)
+    port_norm_dir = Path(port_norm_dir)
+    problems = []
+
+    dm_path = port_desc_dir / "portability_descriptive_manifest.json"
+    nm_path = port_norm_dir / "portability_normalization_manifest.json"
+    if not dm_path.exists() or not nm_path.exists():
+        problems.append("portability manifests missing (run normalize_portability.py "
+                        "then descriptive_portability.py before synthesis)")
+        return None, problems
+    desc_m = json.loads(dm_path.read_text())
+    norm_m = json.loads(nm_path.read_text())
+
+    # (1) descriptive CSV SHAs
+    for name in PORT_DESC_INPUTS:
+        actual = D.sha256_file(port_desc_dir / name)
+        expected = desc_m["outputs"].get(name, {}).get("sha256")
+        if expected is None:
+            problems.append("portability descriptive manifest has no sha for %s" % name)
+        elif actual != expected:
+            problems.append("portability %s sha %s != manifest %s"
+                            % (name, actual, expected))
+
+    # (2) chain: descriptive inputs count must match the normalization outputs
+    if desc_m.get("inputs", {}).get("portability_normalized_invocations.csv") \
+            != norm_m.get("counts", {}).get("invocations"):
+        problems.append("portability chain mismatch on invocation count")
+
+    # (3) campaign shape + identity (fail-closed vs the frozen single batch)
+    counts = norm_m.get("counts", {})
+    if counts.get("invocations") != PORT_EXPECTED["invocations"]:
+        problems.append("portability invocations %s != %d"
+                        % (counts.get("invocations"), PORT_EXPECTED["invocations"]))
+    if counts.get("pairs") != PORT_EXPECTED["pairs"]:
+        problems.append("portability pairs %s != %d"
+                        % (counts.get("pairs"), PORT_EXPECTED["pairs"]))
+    if norm_m.get("block_pairs") != PORT_EXPECTED["block_pairs"]:
+        problems.append("portability block_pairs %s != %s"
+                        % (norm_m.get("block_pairs"), PORT_EXPECTED["block_pairs"]))
+    if norm_m.get("matrix_fingerprint") != PORT_EXPECTED["matrix_fingerprint"]:
+        problems.append("portability matrix_fingerprint != frozen a3274bc9...")
+    if norm_m.get("authoritative_run_config_sha256") != PORT_EXPECTED["run_config_sha256"]:
+        problems.append("portability run_config != frozen 64f44c3e...")
+    if not norm_m.get("ok"):
+        problems.append("portability normalization manifest ok=false")
+    if desc_m.get("workloads") != PORT_EXPECTED["workloads"]:
+        problems.append("portability workloads %s != %d"
+                        % (desc_m.get("workloads"), PORT_EXPECTED["workloads"]))
+
+    facts = {
+        "invocations": counts.get("invocations"),
+        "pairs": counts.get("pairs"),
+        "block_pairs": norm_m.get("block_pairs"),
+        "workloads": desc_m.get("workloads"),
+        "workload_families": norm_m.get("workload_families", {}),
+        "distinct_target_plans": desc_m.get("distinct_target_plans"),
+        "parity_type_counts": desc_m.get("parity_type_counts", {}),
+        "matrix_fingerprint": norm_m.get("matrix_fingerprint"),
+        "run_config_sha256": norm_m.get("authoritative_run_config_sha256"),
+        "artifact_manifest_sha256": norm_m.get("artifact_manifest_sha256"),
+        "action_image_digest": norm_m.get("action_image_digest"),
+        "source_bundle_sha256": norm_m.get("source_bundle_sha256"),
+        "source_bundle_filename": norm_m.get("source_bundle_filename"),
+        "sqlite_research_git_sha": norm_m.get("sqlite_research_git_sha"),
+        "desc_manifest_sha256": D.sha256_file(dm_path),
+        "norm_manifest_sha256": D.sha256_file(nm_path),
+        "desc_shas": {n: D.sha256_file(port_desc_dir / n) for n in PORT_DESC_INPUTS},
+    }
+    return facts, problems
 
 
 def _cv_index(cost_vectors):
@@ -805,7 +944,30 @@ def _md_cell(s):
     return str(s).replace("|", "\\|").replace("\n", " ")
 
 
-THESIS_NOTES_MD = """# OpenWhisk thesis notes (deployment complement)
+def render_thesis_notes_md(port):
+    """Two-role thesis notes (§13). Role A = the YC strategy-space campaign
+    (3600 inv). Role B = the cross-workload portability campaign (`port` facts,
+    468 inv). Counts come from the SHA-gated portability manifests so the 4068
+    two-role total is machine-checked, never free prose."""
+    fam = port["workload_families"]
+    fam_line = ", ".join("%s (%s)" % (code, wl) for wl, code in sorted(
+        fam.items(), key=lambda kv: kv[1])) if fam else \
+        "YC, YCu, YCh01, C, C_hit"
+    pt = port["parity_type_counts"]
+    return THESIS_NOTES_TMPL.format(
+        port_inv=port["invocations"], port_pairs=port["pairs"],
+        n_workloads=port["workloads"], fam_line=fam_line,
+        n_plans=port["distinct_target_plans"],
+        exact=pt.get("exact_native_plan", 0),
+        semantic=pt.get("semantic_contract_reconstruction", 0),
+        static=pt.get("structural_static", 0),
+        port_fp=port["matrix_fingerprint"][:8],
+        port_rc=port["run_config_sha256"][:8],
+        bundle_sha=port["source_bundle_sha256"][:12],
+        tail=THESIS_NOTES_TAIL)
+
+
+THESIS_NOTES_TMPL = """# OpenWhisk thesis notes (deployment complement)
 
 Concise, thesis-ready notes for later integration. Descriptive only; no speedup,
 winner, ranking, Pareto frontier, percentage, or significance is asserted here.
@@ -818,7 +980,17 @@ observe the deployment-side cost structure (footprint, page-delivery work, and t
 instrumented query phase) that the strategies imply. It is a **deployment
 complement** to the controlled native/WK1 experiments, not a replacement for them.
 
-## Experimental coverage
+## Two OpenWhisk campaigns (do not pool)
+
+Across the completed OpenWhisk evaluation, **4068 formal invocations** were
+executed: **3600** in the **YC deployment / strategy-space campaign** and **{port_inv}**
+in the **cross-workload portability campaign**. These are two DIFFERENT roles that
+answer two DIFFERENT questions -- the strategy-space cost structure on one canonical
+workload, and cross-workload deployment portability of representative mechanisms.
+They are reported separately and **must not be pooled into a single effect
+estimate**, and neither is a warm-latency ranking.
+
+## Experimental coverage (Role A -- YC strategy-space campaign)
 
 - 9 target strategy families (primary: 2d, layers_5, 2e_K10, 2f_slru; secondary:
   2e_K500, leaf_freq_K10, leaf_rand_K10, 2f_top102, learned_markov_102).
@@ -828,8 +1000,28 @@ complement** to the controlled native/WK1 experiments, not a replacement for the
 - Two byte-frozen run-config identities (primary `022fbeb0...`, secondary
   `441609e6...`); all invocations passed the frozen validity gates.
 
-## Deployment feasibility
+## Cross-workload portability (Role B -- second OpenWhisk role)
 
+- A single-batch, block-union campaign: **{port_inv} formal invocations /
+  {port_pairs} baseline-target pairs**, one live matrix fingerprint
+  (`{port_fp}...`), one run-config identity (`{port_rc}...`), bundle
+  `{bundle_sha}...`.
+- **{n_workloads} representative workload families**: {fam_line}.
+- {n_plans} distinct executed target plans, each with proven page-set + offset
+  parity against the frozen keyed contract: {exact} exact-native-plan,
+  {semantic} semantic-2e-contract-reconstruction, {static} structural-static.
+- Every invocation passed the same frozen validity gates (cold reset, delivery,
+  oracle, measured-valid) as Role A.
+- Portability here means **deployment execution + correctness + workload/plan
+  binding across workloads** -- NOT a latency comparison, ranking, or warm
+  speedup. The five families are **representative** coverage, not exhaustive.
+
+## Deployment feasibility
+{tail}"""
+
+
+# tail (Role-A prose) appended verbatim after the two-role framing above
+THESIS_NOTES_TAIL = """
 Every strategy family -- structural skeletons, skeleton+hot-leaf unions, leaf-only
 controls, a full resident working set, and the two budget-matched ranked/learned
 plans -- was expressed as a frozen delivery plan and executed by the OpenWhisk
@@ -893,7 +1085,14 @@ diagnostic only.
 """
 
 
-THREATS_MD = """# OpenWhisk threats to validity (deployment complement)
+def render_threats_md(port):
+    """Threats note with the portability paragraph filled from gated facts (§16)."""
+    return THREATS_MD_TMPL.format(
+        port_inv=port["invocations"], port_pairs=port["pairs"],
+        n_workloads=port["workloads"])
+
+
+THREATS_MD_TMPL = """# OpenWhisk threats to validity (deployment complement)
 
 Cold-page state was reset and validated before each measured invocation: the cold
 gate confirmed zero resident database pages after reset (the page-cache-carryover
@@ -921,6 +1120,28 @@ This limitation is bounded. It does **not** invalidate:
 It **does** restrict interpretation of warm paired first-query latency as a direct,
 causal strategy effect. No stronger invalidation is claimed, and no stronger
 preservation than the items above is claimed.
+
+## Cross-workload portability campaign (second role)
+
+A separate single-batch campaign ({port_inv} formal invocations / {port_pairs}
+baseline-target pairs across {n_workloads} representative workload families) tested
+**cross-workload deployment portability**: whether the representative strategy
+mechanisms execute correctly and bind to the right per-workload plan under the same
+frozen validity gates. Two threats bound its interpretation:
+
+- **The same order/state effect applies.** The portability campaign shares the warm
+  handle mode and therefore the same positional effect. Its purpose is execution +
+  correctness + plan/workload binding, **not** latency; portability warm timings are
+  **not** used as a cross-workload speedup or ranking, and no portability latency
+  claim is made.
+- **Five families are representative, not exhaustive.** The workloads (YC, YCu,
+  YCh01, C, C_hit) are chosen coverage points; portability is demonstrated **for
+  these families**, not proven for every possible workload. Per-plan page-set +
+  offset parity against the frozen keyed contract is what is established.
+
+The portability campaign and the strategy-space campaign answer different questions
+and are **never pooled** into a single effect. Native/WK1 remains the primary
+controlled performance evidence for both.
 """
 
 
@@ -1002,6 +1223,19 @@ def run(desc_dir=_DESC_DIR, norm_dir=_NORM_DIR, out_dir=None):
         if CLAIM_RESTRICTIONS.get(k) != v:
             problems.append("restriction %s != %r" % (k, v))
 
+    # ---- SECOND role: cross-workload portability facts (SHA-gated, §13) -----
+    port, pp = load_portability()
+    problems += pp
+    # the two-role framing must carry the L claim category (SAFE + DO_NOT_CLAIM)
+    if ("L_cross_workload_portability", "SAFE") not in cls_index:
+        problems.append("claim_map missing SAFE cross-workload portability")
+    if ("L_cross_workload_portability", "DO_NOT_CLAIM") not in cls_index:
+        problems.append("claim_map missing DO_NOT_CLAIM portability-pooling guard")
+    for k, v in (("portability_is_execution_binding_not_latency_ranking", True),
+                 ("portability_and_strategy_space_campaigns_not_pooled", True)):
+        if CLAIM_RESTRICTIONS.get(k) != v:
+            problems.append("restriction %s != %r" % (k, v))
+
     ok = not problems
 
     # ---- write tables ------------------------------------------------------
@@ -1054,10 +1288,24 @@ def run(desc_dir=_DESC_DIR, norm_dir=_NORM_DIR, out_dir=None):
     # ---- write prose docs --------------------------------------------------
     (out_dir / "claim_map.md").write_text(render_claim_map_md())
     out_shas["claim_map.md"] = D.sha256_file(out_dir / "claim_map.md")
-    (out_dir / "openwhisk_thesis_notes.md").write_text(THESIS_NOTES_MD)
+    # portability facts render the two-role notes/threats; on a fail-closed miss
+    # (port is None) fall back to the frozen expected shape so the docs still
+    # write (ok is already False), never a crash.
+    port_facts = port if port is not None else {
+        "invocations": PORT_EXPECTED["invocations"],
+        "pairs": PORT_EXPECTED["pairs"],
+        "block_pairs": PORT_EXPECTED["block_pairs"],
+        "workloads": PORT_EXPECTED["workloads"],
+        "workload_families": {}, "distinct_target_plans": 0,
+        "parity_type_counts": {}, "matrix_fingerprint": PORT_EXPECTED["matrix_fingerprint"],
+        "run_config_sha256": PORT_EXPECTED["run_config_sha256"],
+        "source_bundle_sha256": "0" * 64,
+    }
+    (out_dir / "openwhisk_thesis_notes.md").write_text(
+        render_thesis_notes_md(port_facts))
     out_shas["openwhisk_thesis_notes.md"] = D.sha256_file(
         out_dir / "openwhisk_thesis_notes.md")
-    (out_dir / "threats_to_validity.md").write_text(THREATS_MD)
+    (out_dir / "threats_to_validity.md").write_text(render_threats_md(port_facts))
     out_shas["threats_to_validity.md"] = D.sha256_file(
         out_dir / "threats_to_validity.md")
 
@@ -1118,6 +1366,28 @@ def run(desc_dir=_DESC_DIR, norm_dir=_NORM_DIR, out_dir=None):
                 dm["source"]["normalized_invocations_sha256"],
             "normalized_pairs_sha256": dm["source"]["normalized_pairs_sha256"],
             "descriptive_inputs": {n: data["desc_shas"][n] for n in DESC_INPUTS},
+        },
+        "portability_source": {
+            # §13 two-role chain: the portability campaign feeds the thesis notes
+            # + threats docs, so its provenance is recorded here for audit
+            # traceability (SHA-gated in load_portability, fail-closed).
+            "portability_present": port is not None,
+            "normalization_manifest_sha256": port_facts.get("norm_manifest_sha256"),
+            "descriptive_manifest_sha256": port_facts.get("desc_manifest_sha256"),
+            "source_bundle_sha256": port_facts.get("source_bundle_sha256"),
+            "source_bundle_filename": port_facts.get("source_bundle_filename"),
+            "matrix_fingerprint": port_facts.get("matrix_fingerprint"),
+            "run_config_sha256": port_facts.get("run_config_sha256"),
+            "descriptive_inputs": port_facts.get("desc_shas", {}),
+        },
+        "two_role_summary": {
+            "strategy_space_formal_invocations": 3600,
+            "portability_formal_invocations": port_facts.get("invocations"),
+            "total_formal_invocations": 3600 + (port_facts.get("invocations") or 0),
+            "pooled": False,
+            "note": "3600 strategy-space + 468 portability = 4068 formal "
+                    "invocations across two campaigns answering different "
+                    "questions; NOT pooled into a single effect estimate.",
         },
         "outputs": {k: {"sha256": v} for k, v in sorted(out_shas.items())},
         "figures": {

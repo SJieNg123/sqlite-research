@@ -11,7 +11,17 @@ observe the deployment-side cost structure (footprint, page-delivery work, and t
 instrumented query phase) that the strategies imply. It is a **deployment
 complement** to the controlled native/WK1 experiments, not a replacement for them.
 
-## Experimental coverage
+## Two OpenWhisk campaigns (do not pool)
+
+Across the completed OpenWhisk evaluation, **4068 formal invocations** were
+executed: **3600** in the **YC deployment / strategy-space campaign** and **468**
+in the **cross-workload portability campaign**. These are two DIFFERENT roles that
+answer two DIFFERENT questions -- the strategy-space cost structure on one canonical
+workload, and cross-workload deployment portability of representative mechanisms.
+They are reported separately and **must not be pooled into a single effect
+estimate**, and neither is a warm-latency ranking.
+
+## Experimental coverage (Role A -- YC strategy-space campaign)
 
 - 9 target strategy families (primary: 2d, layers_5, 2e_K10, 2f_slru; secondary:
   2e_K500, leaf_freq_K10, leaf_rand_K10, 2f_top102, learned_markov_102).
@@ -20,6 +30,22 @@ complement** to the controlled native/WK1 experiments, not a replacement for the
 - Two handle modes: warm (keep-alive process) and standalone (fresh process).
 - Two byte-frozen run-config identities (primary `022fbeb0...`, secondary
   `441609e6...`); all invocations passed the frozen validity gates.
+
+## Cross-workload portability (Role B -- second OpenWhisk role)
+
+- A single-batch, block-union campaign: **468 formal invocations /
+  234 baseline-target pairs**, one live matrix fingerprint
+  (`a3274bc9...`), one run-config identity (`64f44c3e...`), bundle
+  `a7c9736cc65e...`.
+- **5 representative workload families**: C (read_tail_mixed_20k), C_hit (read_tail_hit_20k), YC (native_ycsb_c_read_zipf), YCh01 (native_ycsb_c_hot_hashed_01), YCu (native_ycsb_c_read_uniform).
+- 39 distinct executed target plans, each with proven page-set + offset
+  parity against the frozen keyed contract: 24 exact-native-plan,
+  12 semantic-2e-contract-reconstruction, 3 structural-static.
+- Every invocation passed the same frozen validity gates (cold reset, delivery,
+  oracle, measured-valid) as Role A.
+- Portability here means **deployment execution + correctness + workload/plan
+  binding across workloads** -- NOT a latency comparison, ranking, or warm
+  speedup. The five families are **representative** coverage, not exhaustive.
 
 ## Deployment feasibility
 

@@ -1,0 +1,83 @@
+# OpenWhisk WK1 PORTABILITY normalization — validation report
+
+overall: PASS
+role: cross-workload deployment portability complement (NOT a performance ranking; native/WK1 remains primary)
+
+## totals
+invocations: 468 (expected 468)
+pairs: 234 (expected 234)
+block_pairs: {"block1": 108, "block2": 72, "block3": 36, "block4": 18} (expected {block1:108, block2:72, block3:36, block4:18})
+
+## identity
+bundle_sha256: a7c9736cc65e29eff7700f2979abb4f5313d3d41c569a1120ccd1e22a28ac7a2 (sidecar=a7c9736cc65e29eff7700f2979abb4f5313d3d41c569a1120ccd1e22a28ac7a2, match=True)
+matrix_fingerprint: a3274bc9632ab7aa393f015c00829373a33312d15ff8e6521759255f01eac10e (recomputed=a3274bc9632ab7aa393f015c00829373a33312d15ff8e6521759255f01eac10e, match=True)
+run_config_sha256: 64f44c3e06be421a026aa523ded93010d3a7d3ab8e2cf773e033ec30c0657947
+artifact_manifest_sha256: 0631a93799f9224a3b7913efa4e71eee3ad04c8c431dd5de1382777e9eacebfb
+action_image_digest: localhost:5000/sqlite-coldstart@sha256:cc3a665b301b1ed05a9be7ccc21e58fe3ca608eaf8483421464ba384bb8ca108
+bundle_manifest_run_config_sha256: 022fbeb01a8d9d45686e56823eca1e1ef30712f2a13c4a878cb5f7ef0097b5b7
+status.status=done
+status.result=PASS
+status.git_sha=29e1585ce956d41171a4f2cadbeec76c34c22f62
+status.run_id=20260827T131443Z-29e1585ce956
+status.utc=2026-08-27T13:23:52Z
+
+## plan parity (per executed target plan; parity_type per §8)
+2d                native_ycsb_c_hot_hashed_01    s1  pages=92 int=92 leaf=0  structural_static  matches_frozen=static
+2d                native_ycsb_c_read_uniform     s1  pages=92 int=92 leaf=0  structural_static  matches_frozen=static
+2d                read_tail_mixed_20k            s1  pages=92 int=92 leaf=0  structural_static  matches_frozen=static
+2e_K10            native_ycsb_c_hot_hashed_01    s1  pages=102 int=92 leaf=10  semantic_contract_reconstruction  matches_frozen=True
+2e_K10            native_ycsb_c_hot_hashed_01    s2  pages=102 int=92 leaf=10  semantic_contract_reconstruction  matches_frozen=True
+2e_K10            native_ycsb_c_hot_hashed_01    s3  pages=102 int=92 leaf=10  semantic_contract_reconstruction  matches_frozen=True
+2e_K10            native_ycsb_c_read_uniform     s1  pages=102 int=92 leaf=10  semantic_contract_reconstruction  matches_frozen=True
+2e_K10            native_ycsb_c_read_uniform     s2  pages=102 int=92 leaf=10  semantic_contract_reconstruction  matches_frozen=True
+2e_K10            native_ycsb_c_read_uniform     s3  pages=102 int=92 leaf=10  semantic_contract_reconstruction  matches_frozen=True
+2e_K10            read_tail_hit_20k              s1  pages=102 int=92 leaf=10  semantic_contract_reconstruction  matches_frozen=True
+2e_K10            read_tail_hit_20k              s2  pages=102 int=92 leaf=10  semantic_contract_reconstruction  matches_frozen=True
+2e_K10            read_tail_hit_20k              s3  pages=102 int=92 leaf=10  semantic_contract_reconstruction  matches_frozen=True
+2e_K10            read_tail_mixed_20k            s1  pages=102 int=92 leaf=10  semantic_contract_reconstruction  matches_frozen=True
+2e_K10            read_tail_mixed_20k            s2  pages=102 int=92 leaf=10  semantic_contract_reconstruction  matches_frozen=True
+2e_K10            read_tail_mixed_20k            s3  pages=102 int=92 leaf=10  semantic_contract_reconstruction  matches_frozen=True
+2f_slru           native_ycsb_c_hot_hashed_01    s1  pages=26296 int=92 leaf=26204  exact_native_plan  matches_frozen=True
+2f_slru           native_ycsb_c_hot_hashed_01    s2  pages=26306 int=92 leaf=26214  exact_native_plan  matches_frozen=True
+2f_slru           native_ycsb_c_hot_hashed_01    s3  pages=26318 int=92 leaf=26226  exact_native_plan  matches_frozen=True
+2f_slru           native_ycsb_c_read_uniform     s1  pages=26327 int=92 leaf=26235  exact_native_plan  matches_frozen=True
+2f_slru           native_ycsb_c_read_uniform     s2  pages=26328 int=92 leaf=26236  exact_native_plan  matches_frozen=True
+2f_slru           native_ycsb_c_read_uniform     s3  pages=26327 int=92 leaf=26235  exact_native_plan  matches_frozen=True
+2f_slru           read_tail_hit_20k              s1  pages=916 int=5 leaf=911  exact_native_plan  matches_frozen=True
+2f_slru           read_tail_hit_20k              s2  pages=921 int=5 leaf=916  exact_native_plan  matches_frozen=True
+2f_slru           read_tail_hit_20k              s3  pages=918 int=5 leaf=913  exact_native_plan  matches_frozen=True
+2f_slru           read_tail_mixed_20k            s1  pages=483 int=4 leaf=479  exact_native_plan  matches_frozen=True
+2f_slru           read_tail_mixed_20k            s2  pages=467 int=4 leaf=463  exact_native_plan  matches_frozen=True
+2f_slru           read_tail_mixed_20k            s3  pages=473 int=4 leaf=469  exact_native_plan  matches_frozen=True
+2f_top28          native_ycsb_c_read_zipf        s1  pages=28 int=26 leaf=2  exact_native_plan  matches_frozen=True
+2f_top28          native_ycsb_c_read_zipf        s2  pages=28 int=26 leaf=2  exact_native_plan  matches_frozen=True
+2f_top28          native_ycsb_c_read_zipf        s3  pages=28 int=26 leaf=2  exact_native_plan  matches_frozen=True
+leaf_freq_K10     read_tail_mixed_20k            s1  pages=10 int=0 leaf=10  exact_native_plan  matches_frozen=True
+leaf_freq_K10     read_tail_mixed_20k            s2  pages=10 int=0 leaf=10  exact_native_plan  matches_frozen=True
+leaf_freq_K10     read_tail_mixed_20k            s3  pages=10 int=0 leaf=10  exact_native_plan  matches_frozen=True
+leaf_rand_K10     read_tail_mixed_20k            s1  pages=10 int=0 leaf=10  exact_native_plan  matches_frozen=True
+leaf_rand_K10     read_tail_mixed_20k            s2  pages=10 int=0 leaf=10  exact_native_plan  matches_frozen=True
+leaf_rand_K10     read_tail_mixed_20k            s3  pages=10 int=0 leaf=10  exact_native_plan  matches_frozen=True
+learned_markov_28 native_ycsb_c_read_zipf        s1  pages=28 int=26 leaf=2  exact_native_plan  matches_frozen=True
+learned_markov_28 native_ycsb_c_read_zipf        s2  pages=28 int=26 leaf=2  exact_native_plan  matches_frozen=True
+learned_markov_28 native_ycsb_c_read_zipf        s3  pages=28 int=26 leaf=2  exact_native_plan  matches_frozen=True
+
+## pair-order structural balance (integrity only; NOT performance)
+portability | 2d | standalone : baseline_first=4 target_first=5
+portability | 2d | warm : baseline_first=3 target_first=6
+portability | 2e_K10 | standalone : baseline_first=16 target_first=20
+portability | 2e_K10 | warm : baseline_first=20 target_first=16
+portability | 2f_slru | standalone : baseline_first=23 target_first=13
+portability | 2f_slru | warm : baseline_first=20 target_first=16
+portability | 2f_top28 | standalone : baseline_first=4 target_first=5
+portability | 2f_top28 | warm : baseline_first=3 target_first=6
+portability | leaf_freq_K10 | standalone : baseline_first=4 target_first=5
+portability | leaf_freq_K10 | warm : baseline_first=4 target_first=5
+portability | leaf_rand_K10 | standalone : baseline_first=4 target_first=5
+portability | leaf_rand_K10 | warm : baseline_first=6 target_first=3
+portability | learned_markov_28 | standalone : baseline_first=4 target_first=5
+portability | learned_markov_28 | warm : baseline_first=3 target_first=6
+
+## fail-closed problems (0)
+(none — all gates passed)
+

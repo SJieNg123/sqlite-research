@@ -27,6 +27,8 @@ no_naive_warm_pair_speedup = true
 no_strategy_winner_claim = true
 openwhisk_role = "deployment_complement"
 order_effect_is_not_random_hardware_noise = true
+portability_and_strategy_space_campaigns_not_pooled = true
+portability_is_execution_binding_not_latency_ranking = true
 
 ## figure formats
 svg + figure-source csv emitted (deterministic, dependency-free).

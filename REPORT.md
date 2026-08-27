@@ -1024,6 +1024,25 @@ warm baseline-target pair 內，**先執行的那個 arm（position 1）的 `fir
 此限制**不**動搖 execution correctness、plan identity、footprint、delivery count/work 或部署可行性，
 只限制對受影響 warm paired first-query latency 的因果解讀。診斷圖與細表見 Appendix A.5。
 
+**跨 workload 部署可攜性（第二個 OpenWhisk 角色）。** 上述 3600-invocation campaign 只在
+canonical YC 一種 workload 上刻畫**策略空間**。為另外檢驗「同一套代表性策略機制能否**跨不同
+workload** 被部署、綁定並通過正確性 gate」，我們再跑了一個**單批 block-union** 的 portability
+campaign：**468 筆 formal invocation / 234 個 baseline-target pair**，涵蓋**五個 workload 家族**
+（YC `native_ycsb_c_read_zipf`、YCu `native_ycsb_c_read_uniform`、YCh01
+`native_ycsb_c_hot_hashed_01`、C `read_tail_mixed_20k`、C_hit `read_tail_hit_20k`），單一 live
+matrix fingerprint（`a3274bc9…`）、單一 run-config identity（`64f44c3e…`）、bundle
+`a7c9736c…`。**39 個被執行的 target plan** 各自對凍結 keyed contract 做過 page-set + offset
+parity 驗證，分為 **24 exact-native-plan / 12 semantic-2e-contract-reconstruction /
+3 structural-static**；全數通過與上文相同的 validity gate（cold reset、delivery、oracle、
+measured-valid）。這裡的 **portability 指的是「跨 workload 的部署執行 + 正確性 + workload/plan
+綁定」**——**不是** latency 比較、排序或 warm speedup，五個家族是**代表性覆蓋**而非窮舉；且
+**與 3600-invocation 的 strategy-space campaign 分屬兩個回答不同問題的角色，不得合併為單一效果
+估計**（合計 **4068 筆 formal invocation** = 3600 + 468）。上述同一個 order/state effect 也適用於
+此 campaign，故其 warm paired latency 同樣**不**作為受控效能證據。此 portability 證據的完整 gate 稽核
+見 [portability_audit.md](deployment/openwhisk/analysis/portability_audit.md)、描述性 CSV 見
+`analysis/descriptive/portability/`、兩角色合成見
+[openwhisk_thesis_notes.md](deployment/openwhisk/analysis/thesis/openwhisk_thesis_notes.md)。
+
 ---
 
 ## 6. Discussion
@@ -1344,11 +1363,18 @@ warm-process 不含」這兩層 trade-off，在既有 prefetch literature 中很
 | Figures | [figures/out/](https://github.com/wongzinc/sqlite-research-project-sharing/blob/main/figures/out/) |
 | OpenWhisk 部署補充（§5.6）：evidence / normalized / descriptive / thesis 合成產物 | [deployment/openwhisk/](https://github.com/wongzinc/sqlite-research-project-sharing/blob/main/deployment/openwhisk/) 下 `evidence/`、`analysis/normalized/`、`analysis/descriptive/`、`analysis/thesis/` |
 
-> **OpenWhisk provenance（reproducibility note）**：§5.6 的 formal 證據為**兩個 immutable、archived 的 matrix**
-> （primary 與 secondary run-config identity），其 bundle hash 與 execution identity 記於各自 manifest；正規化、
-> descriptive、thesis 合成產物在 `deployment/openwhisk/analysis/{normalized,descriptive,thesis}/`、原始 evidence
-> 在 `deployment/openwhisk/evidence/`（完整 SHA256 與 run-config identity 見該處 manifest，不列入本文正文）。已知一個
-> secondary bundle-manifest 的 run_config 摘要 mislabel 僅為 provenance-note 層級問題、不影響上述 identity 或任何 §5.6 量值。
+> **OpenWhisk provenance（reproducibility note）**：§5.6 的 formal 證據為**三個 immutable、archived 的 matrix**——
+> 兩個屬 3600-invocation 的 strategy-space campaign（primary run-config `022fbeb0…` 與 secondary `441609e6…`），第三個
+> 屬 468-invocation 的 cross-workload portability campaign（run-config `64f44c3e…`、bundle `a7c9736c…`、matrix
+> fingerprint `a3274bc9…`，archived 於 `deployment/openwhisk/evidence/portability/29e1585ce956/`）。三者的 bundle hash 與
+> execution identity 記於各自 manifest；正規化、descriptive、thesis 合成產物在
+> `deployment/openwhisk/analysis/{normalized,descriptive,thesis}/`（portability 另有平行的
+> `analysis/{normalized,descriptive}/portability/` 與 [portability_audit.md](deployment/openwhisk/analysis/portability_audit.md)）、
+> 原始 evidence 在 `deployment/openwhisk/evidence/`（完整 SHA256 與 run-config identity 見該處 manifest，不列入本文正文）。
+> **strategy-space（3600）與 portability（468）分屬兩個回答不同問題的 campaign、合計 4068 formal invocation，於本文中不被合併
+> 為單一效果估計。** 已知 secondary 與 portability 的 bundle-manifest run_config 摘要各有一個 mislabel（image 以 primary pin
+> `022fbeb0…` 作為 manifest default 烤入），**僅為 packaging-summary 層級的 provenance note**：每筆 response 逐一驗證的
+> authoritative run-config 分別為 `441609e6…` / `64f44c3e…`，不影響上述任何 identity 或 §5.6 量值。
 
 ### 9.2 External References
 

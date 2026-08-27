@@ -75,3 +75,10 @@ headline. This map is machine-checked by `test_synthesis.py`.
 | classification | claim | support | qualification | reason |
 |---|---|---|---|---|
 | **DO_NOT_CLAIM** | The first-arm (position-1) medians are a corrected / true-cold treatment effect. | first_arm_diagnostic.csv | -- | AB/BA are not exactly 50/50 and second-position observations are retained; the first-arm view is a diagnostic, not a deconfounded estimator -- medians must not be subtracted. |
+
+## L_cross_workload_portability
+
+| classification | claim | support | qualification | reason |
+|---|---|---|---|---|
+| **SAFE** | The representative strategy mechanisms were executed and validated across five workload families (YC, YCu, YCh01, C, C_hit) in a separate single-batch OpenWhisk campaign of 468 formal invocations / 234 baseline-target pairs, with per-plan page-set + offset parity (exact native, semantic 2e contract, or structural-static) proven against the frozen keyed contract. | normalized/portability/portability_normalization_manifest.json; descriptive/portability/portability_plan_parity.csv; portability_workload_summary.csv | Portability = deployment execution / correctness / workload + plan binding across workloads. It is NOT a latency, ranking, or warm-speedup result, and the five families are representative coverage, not exhaustive. | Demonstrated by the runs themselves (execution + SHA-bound plan parity), independent of any latency interpretation; native/WK1 remains the primary performance evidence. |
+| **DO_NOT_CLAIM** | The 468 portability invocations and the 3600 strategy-space invocations jointly estimate a single cross-workload performance effect (4068 pooled measurements of one quantity). | -- | -- | The two campaigns answer different questions (strategy-space cost structure on YC vs. cross-workload deployment portability) and are reported separately; they must never be pooled into one effect estimate, and neither is a warm-latency ranking. |
