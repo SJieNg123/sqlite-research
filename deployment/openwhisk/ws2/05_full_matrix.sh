@@ -87,12 +87,6 @@ import json, sys
 pin = json.load(open(sys.argv[1]))
 m = json.load(open(sys.argv[2]))
 
-required = ["schedule_seed", "workloads", "strategies", "seeds",
-            "handle_modes", "first_operation_ids", "repetitions_per_cell"]
-missing = [k for k in required if k not in m]
-if missing:
-    print("FAIL missing manifest keys:", missing); sys.exit(1)
-
 # Allowed sets come straight from the frozen runtime artifact pin.
 # The canonical YC id anchors the primary/secondary campaigns; the portability
 # matrix adds the authoritative workload_set (fail-closed, no implicit fallback).
@@ -111,21 +105,55 @@ def check(name, values, allowed):
     print("PASS %s: %s" % (name, values))
     return True
 
-ok = True
-ok &= check("workloads", m["workloads"], allowed_workloads)
-ok &= check("strategies", m["strategies"], allowed_strategies)
-ok &= check("seeds", m["seeds"], allowed_seeds)
-ok &= check("handle_modes", m["handle_modes"], allowed_handles)
-if "baseline" not in m["strategies"]:
-    print("FAIL strategies must include 'baseline' (paired arm)"); ok = False
-if int(m["repetitions_per_cell"]) < 1:
-    print("FAIL repetitions_per_cell must be >= 1"); ok = False
-if not ok:
-    sys.exit(1)
-combos = (len(m["workloads"]) * len(m["seeds"]) * len(m["handle_modes"])
-          * len(m["first_operation_ids"]) * (len(m["strategies"]) - 1)
-          * int(m["repetitions_per_cell"]))
-print("VALID matrix: %d paired cells" % combos)
+# A block-union CAMPAIGN matrix ('blocks') validates each block independently and
+# sums the pairs; a flat rectangular matrix keeps the original single-cell axes.
+# Neither shape is forced into a global Cartesian product across heterogeneous
+# per-workload target sets.
+def validate_cell(prefix, axes):
+    ok = True
+    ok &= check(prefix + "workloads", axes["workloads"], allowed_workloads)
+    ok &= check(prefix + "strategies", axes["strategies"], allowed_strategies)
+    ok &= check(prefix + "seeds", axes["seeds"], allowed_seeds)
+    ok &= check(prefix + "handle_modes", axes["handle_modes"], allowed_handles)
+    if "baseline" not in axes["strategies"]:
+        print("FAIL %sstrategies must include 'baseline' (paired arm)" % prefix); ok = False
+    if int(axes["repetitions_per_cell"]) < 1:
+        print("FAIL %srepetitions_per_cell must be >= 1" % prefix); ok = False
+    return ok
+
+per_block_keys = ["workloads", "strategies", "seeds", "handle_modes",
+                  "first_operation_ids", "repetitions_per_cell"]
+
+if "blocks" in m:
+    if "schedule_seed" not in m:
+        print("FAIL missing manifest key: schedule_seed"); sys.exit(1)
+    if not m["blocks"]:
+        print("FAIL campaign matrix has an empty 'blocks' list"); sys.exit(1)
+    ok = True
+    combos = 0
+    for i, b in enumerate(m["blocks"]):
+        bid = b.get("id", "block%d" % (i + 1))
+        missing = [k for k in per_block_keys if k not in b]
+        if missing:
+            print("FAIL %s missing keys: %s" % (bid, missing)); ok = False; continue
+        ok &= validate_cell(bid + " ", b)
+        combos += (len(b["workloads"]) * len(b["seeds"]) * len(b["handle_modes"])
+                   * len(b["first_operation_ids"]) * (len(b["strategies"]) - 1)
+                   * int(b["repetitions_per_cell"]))
+    if not ok:
+        sys.exit(1)
+    print("VALID campaign matrix: %d blocks, %d paired cells" % (len(m["blocks"]), combos))
+else:
+    required = ["schedule_seed"] + per_block_keys
+    missing = [k for k in required if k not in m]
+    if missing:
+        print("FAIL missing manifest keys:", missing); sys.exit(1)
+    if not validate_cell("", m):
+        sys.exit(1)
+    combos = (len(m["workloads"]) * len(m["seeds"]) * len(m["handle_modes"])
+              * len(m["first_operation_ids"]) * (len(m["strategies"]) - 1)
+              * int(m["repetitions_per_cell"]))
+    print("VALID matrix: %d paired cells" % combos)
 PY
   cat "$VALIDATION" >&2
   ws2_mark_status "$WS2_STAGEDIR" done FAIL
@@ -133,8 +161,14 @@ PY
 fi
 cat "$VALIDATION" >&2
 
-# Extract the flattened, validated fields for build_schedule.
-read -r SCHED_SEED WORKLOADS STRATEGIES SEEDS HANDLES FIRSTOPS REPS < <(python3 - "$MATRIX" <<'PY'
+# A CAMPAIGN matrix ('blocks') is the block-union single batch; a flat matrix is a
+# single rectangular cell. The flat build takes per-axis CLI flags; the campaign
+# build takes the whole matrix file (heterogeneous blocks, no global Cartesian).
+IS_BLOCKS="$(python3 -c 'import json,sys; print("1" if "blocks" in json.load(open(sys.argv[1])) else "0")' "$MATRIX")"
+
+if [ "$IS_BLOCKS" = 0 ]; then
+  # Extract the flattened, validated fields for the flat build_schedule.
+  read -r SCHED_SEED WORKLOADS STRATEGIES SEEDS HANDLES FIRSTOPS REPS < <(python3 - "$MATRIX" <<'PY'
 import json, sys
 m = json.load(open(sys.argv[1]))
 def csv(k): return ",".join(str(x) for x in m[k])
@@ -144,15 +178,20 @@ print(m["schedule_seed"], csv("workloads"), csv("strategies"),
 PY
 )
 
-# Targets for build_schedule are the non-baseline strategies (baseline is the
-# implicit paired arm).
-TARGETS="$(python3 - "$MATRIX" <<'PY'
+  # Targets for the flat build are the non-baseline strategies (baseline is the
+  # implicit paired arm).
+  TARGETS="$(python3 - "$MATRIX" <<'PY'
 import json, sys
 m = json.load(open(sys.argv[1]))
 t = [s for s in m["strategies"] if s != "baseline"]
 print(",".join(t) if t else "2d")
 PY
 )"
+else
+  # Campaign schedule_seed is a single top-level field; per-block axes and targets
+  # are consumed directly by build_schedule.py --matrix.
+  SCHED_SEED="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["schedule_seed"])' "$MATRIX")"
+fi
 
 # Select which run-config identity to stamp on every request. Defaults to the
 # primary `run_config_sha256`; a secondary matrix sets `run_config_key`
@@ -172,7 +211,13 @@ ip_key = key.replace("run_config_sha256", "invocation_plan")  # secondary_* -> s
 if ip_key not in pin:
     sys.exit("FAIL invocation-plan block %r absent from pin (for run_config_key %r)" % (ip_key, key))
 plan_strats = set(pin[ip_key]["strategies"])
-extra = sorted(set(m["strategies"]) - plan_strats)
+# The campaign's declared strategy set is the UNION across all blocks; a flat
+# matrix has a single top-level strategies list.
+if "blocks" in m:
+    matrix_strats = set().union(*(set(b["strategies"]) for b in m["blocks"]))
+else:
+    matrix_strats = set(m["strategies"])
+extra = sorted(matrix_strats - plan_strats)
 if extra:
     sys.exit("FAIL matrix strategies %s not declared by %s.strategies %s (wrong run_config_key?)"
              % (extra, ip_key, sorted(plan_strats)))
@@ -197,6 +242,16 @@ fi
 # --- deterministic schedule (built once; resume reuses it) ----------------- #
 if [ -f "$SCHED" ] && [ "${WS2_FORCE:-0}" != 1 ]; then
   ws2_log "reusing existing schedule (resume): $SCHED"
+elif [ "$IS_BLOCKS" = 1 ]; then
+  # ONE campaign build: the block union is flattened into a single ordered
+  # 468-invocation schedule with one campaign fingerprint. No per-matrix loop.
+  python3 "$WS2_OW_DIR/client/build_schedule.py" \
+    --out "$SCHED" \
+    --matrix "$MATRIX" \
+    --run-config-sha256 "$RUN_CONFIG_SHA" \
+    --artifact-manifest-sha256 "$MANIFEST_SHA" \
+    --action-image-digest "$IMAGE_DIGEST" >/dev/null
+  ws2_log "campaign schedule built -> $SCHED"
 else
   python3 "$WS2_OW_DIR/client/build_schedule.py" \
     --out "$SCHED" \
@@ -279,7 +334,13 @@ m = json.load(open(sys.argv[1]))
 impl = {"baseline", "2d", "layers_5", "2e_K10", "2f_slru",
         "2e_K500", "leaf_freq_K10", "leaf_rand_K10", "2f_top102", "learned_markov_102",
         "2f_top28", "learned_markov_28"}
-bad = [s for s in m["strategies"] if s not in impl]
+# The campaign's requested strategies are the union across all blocks; a flat
+# matrix carries a single top-level strategies list.
+if "blocks" in m:
+    strats = sorted(set().union(*(set(b["strategies"]) for b in m["blocks"])))
+else:
+    strats = m["strategies"]
+bad = [s for s in strats if s not in impl]
 print(",".join(bad))
 PY
 )"

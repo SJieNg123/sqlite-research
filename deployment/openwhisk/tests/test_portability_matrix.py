@@ -19,9 +19,13 @@ The 36 portability plans (source of truth: config/plans/keyed/portability_freeze
     leaf_freq_K10      mixed_20k                                       10     0 (leaf-only)
     leaf_rand_K10      mixed_20k                                       10     0 (leaf-only)
 
-4 rectangular sub-matrices -> 234 pairs -> 468 invocations, schedule_seed=20260826,
-run_config_key=portability_run_config_sha256 (distinct from the byte-frozen primary
-022fbeb0... and secondary 441609e6... identities).
+Formal execution is ONE single-batch campaign (ws2/matrix.portability.json): the
+UNION of four heterogeneous rectangular BLOCKS -> 234 pairs -> 468 invocations under
+ONE schedule_seed=20260826, ONE run_config_key=portability_run_config_sha256 (distinct
+from the byte-frozen primary 022fbeb0... and secondary 441609e6... identities), and ONE
+campaign fingerprint over the complete ordered 468-invocation schedule. The four
+matrix.portability.m1..m4.json files remain only as readable logical-block fragments;
+they are NOT units of formal execution and each flattens cell-for-cell into one block.
 """
 import csv
 import json
@@ -47,8 +51,15 @@ NATIVE_PIN = os.path.join(OW, "config/artifacts.native_ycsb.json")
 FREEZE = os.path.join(OW, "config/plans/keyed/portability_freeze_report.json")
 SKELETON = os.path.join(OW, "config/plans/interior_pages.csv")
 GATE_SCRIPT = os.path.join(OW, "ws2/05_full_matrix.sh")
+CAMPAIGN_MATRIX = os.path.join(OW, "ws2/matrix.portability.json")
+# Logical-block fragments (readability only; NOT formal execution units). Each maps
+# cell-for-cell onto exactly one block of the single-batch campaign.
 MATRIX_FILES = [os.path.join(OW, "ws2/matrix.portability.m%d.json" % i)
                 for i in (1, 2, 3, 4)]
+FLAT_MATRIX_FILES = [os.path.join(OW, "ws2/matrix.example.json"),
+                     os.path.join(OW, "ws2/matrix.secondary.json")]
+# Expected per-block pair counts of the single campaign (block1..block4).
+BLOCK_PAIRS = {"block1": 108, "block2": 72, "block3": 36, "block4": 18}
 
 # Independent identities (byte-frozen campaigns MUST remain these).
 PRIMARY_RC = "022fbeb0"
@@ -215,9 +226,11 @@ class PinParityAndIdentity(unittest.TestCase):
 
 # --------------------------------------------------------------------------- C
 class ScheduleBalance(unittest.TestCase):
-    """The four matrix manifests build into strictly rectangular, per-cell-balanced
-    schedules whose totals sum to EXACTLY 234 pairs / 468 invocations. Every
-    (workload, seed, target) has a keyed plan (2d excepted -- it is inline-static).
+    """The four LOGICAL-BLOCK fragments each build into a strictly rectangular,
+    per-cell-balanced schedule; their per-fragment pair counts are 108/72/36/18 and
+    sum to EXACTLY 234 pairs / 468 invocations. Every (workload, seed, target) has a
+    keyed plan (2d excepted -- it is inline-static). These fragments are readability
+    aids; formal execution is the single-batch campaign (see CampaignSingleBatch).
     No OpenWhisk is invoked."""
 
     @classmethod
@@ -245,6 +258,7 @@ class ScheduleBalance(unittest.TestCase):
     def test_each_matrix_balances_and_aggregate_is_234_468(self):
         total_pairs = total_inv = 0
         fingerprints = set()
+        per_fragment = []
         for mf in MATRIX_FILES:
             m, contract, wls, targets, sched = self._build(mf)
             problems = self.VS.validate_schedule(sched, contract)
@@ -253,10 +267,14 @@ class ScheduleBalance(unittest.TestCase):
             self.assertEqual(m["run_config_key"], "portability_run_config_sha256")
             total_pairs += sched["counts"]["pairs"]
             total_inv += sched["counts"]["invocations"]
+            per_fragment.append(sched["counts"]["pairs"])
             fingerprints.add(sched["matrix_fingerprint"])
         self.assertEqual(total_pairs, 234, "aggregate pairs must be exactly 234")
         self.assertEqual(total_inv, 468, "aggregate invocations must be exactly 468")
-        self.assertEqual(len(fingerprints), 4, "the four sub-matrices must be distinct")
+        self.assertEqual(len(fingerprints), 4, "the four fragments must be distinct")
+        # The per-block counts of the campaign are exactly these fragment counts.
+        self.assertEqual(sorted(per_fragment), sorted(BLOCK_PAIRS.values()),
+                         "logical-block fragment pair counts must be 108/72/36/18")
 
     def test_every_cell_maps_to_a_keyed_plan(self):
         ksp = self.pin["keyed_strategy_plans"]
@@ -269,6 +287,164 @@ class ScheduleBalance(unittest.TestCase):
                             continue  # inline-static, workload/seed independent
                         self.assertIn(t, ksp.get(wl, {}).get(str(seed), {}),
                                       "no keyed %s plan for %s/s%d" % (t, wl, seed))
+
+
+# -------------------------------------------------------------------------- C2
+class CampaignSingleBatch(unittest.TestCase):
+    """THE formal-execution unit: ws2/matrix.portability.json flattens the four
+    heterogeneous logical blocks into ONE ordered 468-invocation schedule under ONE
+    campaign fingerprint. Proves: single-batch counts (234/468, per-block 108/72/36/18),
+    exactly one fingerprint, cross-block disjoint union (no duplicate cell), no
+    unintended workload x strategy Cartesian cells, every target cell resolves a frozen
+    keyed plan, the four m1..m4 fragments flatten cell-for-cell into the campaign,
+    determinism, and that the OLD flat matrix path still builds unchanged. One
+    Stage-05 config drives the whole thing. No OpenWhisk is invoked."""
+
+    @classmethod
+    def setUpClass(cls):
+        sys.path.insert(0, os.path.join(OW, "client"))
+        sys.path.insert(0, os.path.join(REPO, "config"))
+        import build_schedule as BS
+        import validate_schedule as VS
+        cls.BS, cls.VS = BS, VS
+        cls.pin = _load_json(NATIVE_PIN)
+        cls.matrix = _load_json(CAMPAIGN_MATRIX)
+        cls.ids = {"run_config_sha256": cls.pin["portability_run_config_sha256"],
+                   "artifact_manifest_sha256": "0" * 64,
+                   "action_image_digest": "sha256:portability-test"}
+        cls.sched = cls.BS.build_campaign_schedule(cls.matrix, cls.ids)
+
+    def test_matrix_is_one_campaign_with_four_blocks(self):
+        m = self.matrix
+        self.assertIn("blocks", m, "campaign matrix must be block-union shaped")
+        self.assertEqual(m["schedule_seed"], 20260826)
+        self.assertEqual(m["run_config_key"], "portability_run_config_sha256")
+        self.assertEqual([b["id"] for b in m["blocks"]],
+                         ["block1", "block2", "block3", "block4"])
+        # block4 is the STRUCTURAL 2d check: its seed axis must stay [1], never 1,2,3.
+        b4 = m["blocks"][3]
+        self.assertEqual(b4["seeds"], [1], "structural 2d block must not expand seeds")
+        self.assertEqual([s for s in b4["strategies"] if s != "baseline"], ["2d"])
+
+    def test_campaign_self_validates_clean(self):
+        problems = self.VS.validate_campaign(self.sched, self.matrix)
+        self.assertEqual(problems, [], "campaign validation problems: %s" % problems)
+
+    def test_counts_are_exactly_234_468(self):
+        self.assertEqual(self.sched["counts"], {"pairs": 234, "invocations": 468})
+        self.assertEqual(len(self.sched["pairs"]), 234)
+        self.assertEqual(len(self.sched["invocations"]), 468)
+        exp = self.VS.campaign_expected_counts(self.matrix)
+        self.assertEqual(exp, {"pairs": 234, "invocations": 468})
+
+    def test_per_block_pair_counts_are_108_72_36_18(self):
+        from collections import Counter
+        got = Counter(p["block_id"] for p in self.sched["pairs"])
+        self.assertEqual(dict(got), BLOCK_PAIRS)
+
+    def test_exactly_one_campaign_fingerprint(self):
+        fp = self.sched["matrix_fingerprint"]
+        self.assertRegex(fp, r"^[0-9a-f]{64}$")
+        recomputed = self.VS.campaign_fingerprint(
+            self.matrix, self.ids, self.sched["invocations"])
+        self.assertEqual(fp, recomputed, "single fingerprint must recompute")
+
+    def test_positions_contiguous_and_pairs_are_baseline_plus_one_target(self):
+        inv = self.sched["invocations"]
+        positions = sorted(i["schedule_position"] for i in inv)
+        self.assertEqual(positions, list(range(1, 469)))
+        by_pair = {}
+        for i in inv:
+            by_pair.setdefault(i["pair_id"], []).append(i)
+        self.assertEqual(len(by_pair), 234)
+        for pid, arms in by_pair.items():
+            self.assertEqual(len(arms), 2, "pair %s must have exactly 2 arms" % pid)
+            strategies = sorted(a["strategy"] for a in arms)
+            self.assertEqual(strategies.count("baseline"), 1,
+                             "pair %s must have exactly one baseline arm" % pid)
+
+    def test_cross_block_union_is_disjoint(self):
+        blocks = self.VS.blocks_from_matrix(self.matrix)
+        seen = {}
+        for b in blocks:
+            for cell in self.VS.block_cells(b):
+                self.assertNotIn(cell, seen,
+                                 "cell %s appears in both %s and %s"
+                                 % (cell, seen.get(cell), b["id"]))
+                seen[cell] = b["id"]
+        self.assertEqual(len(seen), 234)
+
+    def test_no_unintended_cartesian_cells(self):
+        # The (target, workload) universe must be EXACTLY the union of each block's
+        # own targets x its own workloads -- never a global cross-product. E.g.
+        # 2f_top28 exists only on read_zipf; 2d only on its 3 structural workloads.
+        allowed = set()
+        for b in self.matrix["blocks"]:
+            targets = [s for s in b["strategies"] if s != "baseline"]
+            for wl in b["workloads"]:
+                for t in targets:
+                    allowed.add((t, wl))
+        got = {(p["target_strategy"], p["workload"]) for p in self.sched["pairs"]}
+        self.assertEqual(got, allowed, "unintended target x workload cells present")
+        # Concrete guards on the heterogeneity the union protects.
+        self.assertNotIn(("2f_top28", "read_tail_mixed_20k"), got)
+        self.assertNotIn(("2e_K10", "native_ycsb_c_read_zipf"), got)
+
+    def test_four_fragments_flatten_cell_for_cell_into_campaign(self):
+        campaign_blocks = {b["id"]: self.VS.block_cells(b)
+                           for b in self.VS.blocks_from_matrix(self.matrix)}
+        for i, bid in enumerate(("block1", "block2", "block3", "block4"), start=1):
+            frag = _load_json(MATRIX_FILES[i - 1])
+            self.assertEqual(frag["schedule_seed"], self.matrix["schedule_seed"])
+            wrapped = {"id": bid, "workloads": frag["workloads"],
+                       "strategies": frag["strategies"], "seeds": frag["seeds"],
+                       "handle_modes": frag["handle_modes"],
+                       "first_operation_ids": frag["first_operation_ids"],
+                       "repetitions_per_cell": frag["repetitions_per_cell"]}
+            nb = self.VS.normalize_block(wrapped, frag["schedule_seed"])
+            self.assertEqual(self.VS.block_cells(nb), campaign_blocks[bid],
+                             "fragment m%d != campaign %s" % (i, bid))
+
+    def test_every_target_cell_resolves_a_frozen_keyed_plan(self):
+        ksp = self.pin["keyed_strategy_plans"]
+        for p in self.sched["pairs"]:
+            t, wl, seed = p["target_strategy"], p["workload"], p["seed"]
+            if t == "2d":
+                continue  # inline-static, workload/seed independent
+            self.assertIn(t, ksp.get(wl, {}).get(str(seed), {}),
+                          "no frozen keyed %s plan for %s/s%d" % (t, wl, seed))
+
+    def test_schedule_is_deterministic(self):
+        again = self.BS.build_campaign_schedule(self.matrix, self.ids)
+        self.assertEqual(again["matrix_fingerprint"], self.sched["matrix_fingerprint"])
+        self.assertEqual(again["invocations"], self.sched["invocations"])
+
+    def test_flat_matrix_path_still_builds_unchanged(self):
+        # The OLD rectangular path (primary/secondary shape) must be untouched: a flat
+        # matrix has no 'blocks' and builds via contract_from_matrix + build_schedule.
+        for mf in FLAT_MATRIX_FILES:
+            m = _load_json(mf)
+            self.assertNotIn("blocks", m, "%s must stay flat" % os.path.basename(mf))
+            contract = self.VS.contract_from_matrix(m)
+            wls = [self.VS.normalize_workload_id(w) for w in m["workloads"]]
+            targets = [s for s in m["strategies"] if s != "baseline"]
+            key = m.get("run_config_key", "run_config_sha256")
+            ids = dict(self.ids, run_config_sha256=self.pin[key])
+            sched = self.BS.build_schedule(
+                wls, m["seeds"], m["first_operation_ids"], m["handle_modes"],
+                targets, m["repetitions_per_cell"], m["schedule_seed"], ids)
+            self.assertEqual(self.VS.validate_schedule(sched, contract), [],
+                             "flat matrix %s regressed" % os.path.basename(mf))
+
+    def test_one_stage05_config_drives_campaign(self):
+        # 05_full_matrix.sh must accept the single campaign file (one --matrix build
+        # branch), not require a per-fragment loop.
+        with open(GATE_SCRIPT) as f:
+            text = f.read()
+        self.assertIn("--matrix", text, "05 must support a --matrix campaign build")
+        with open(os.path.join(OW, "client/build_schedule.py")) as f:
+            builder = f.read()
+        self.assertIn("build_campaign_schedule", builder, "campaign builder must exist")
 
 
 # --------------------------------------------------------------------------- D

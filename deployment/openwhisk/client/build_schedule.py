@@ -30,7 +30,8 @@ sys.path.insert(0, str(_ROOT / "config"))
 from workload_registry import normalize_workload_id  # noqa: E402
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from validate_schedule import (  # noqa: E402
-    normalized_contract, matrix_fingerprint, validate_schedule)
+    normalized_contract, matrix_fingerprint, validate_schedule,
+    blocks_from_matrix, campaign_fingerprint, validate_campaign)
 
 
 def _order(schedule_seed, pair_id, target):
@@ -104,10 +105,78 @@ def build_schedule(workloads, seeds, first_ops, handle_modes, targets,
     return sched
 
 
+def build_campaign_schedule(matrix, ids):
+    """Flatten a block-union campaign matrix into ONE ordered schedule.
+
+    Emits every block's cells (a strict per-block Cartesian product) into a single
+    invocation list with globally contiguous schedule_positions and one campaign
+    fingerprint over the complete ordered schedule. The UNION of the explicit blocks
+    is the formal matrix -- no global cross-product is taken, so heterogeneous
+    per-workload target sets never fabricate unintended cells. Self-validates
+    fail-closed (per-block rectangularity, cross-block disjointness, exact totals)
+    before returning; a malformed union aborts here, before persistence."""
+    schedule_seed = int(matrix["schedule_seed"])
+    blocks = blocks_from_matrix(matrix)
+    pairs, invocations = [], []
+    pos = 0
+    for b in blocks:
+        for wl in b["workloads"]:
+            for seed in b["seeds"]:
+                for fop in b["first_operation_ids"]:
+                    for hm in b["handle_modes"]:
+                        for rep in range(int(b["repetitions"])):
+                            for target in b["targets"]:
+                                pair_id = "%s-s%d-f%d-%s-r%d-%s" % (
+                                    wl, seed, fop, hm, rep, target)
+                                order = _order(schedule_seed, pair_id, target)
+                                pairs.append({
+                                    "pair_id": pair_id, "workload": wl, "seed": seed,
+                                    "first_operation_id": fop, "handle_mode": hm,
+                                    "repetition_id": rep, "target_strategy": target,
+                                    "order": order, "block_id": b["id"]})
+                                combo = (wl, seed, fop, hm, rep)
+                                for arm in order:
+                                    pos += 1
+                                    strategy = ("baseline" if arm == "baseline"
+                                                else target)
+                                    invocations.append(_invocation(
+                                        pair_id, arm, strategy, pos, combo, ids,
+                                        schedule_seed))
+    first = blocks[0]
+    warmup = {"request_id": "warmup-0", "diagnostic_mode": True, "cold_reset": True,
+              "workload": first["workloads"][0], "strategy": "baseline",
+              "seed": first["seeds"][0], "first_operation_id": first["first_operation_ids"][0],
+              "handle_mode": first["handle_modes"][0], "pair_id": "",
+              "repetition_id": 0, "schedule_position": 0, "schedule_seed": schedule_seed,
+              "run_config_sha256": ids["run_config_sha256"],
+              "expected_artifact_manifest_hash": ids["artifact_manifest_sha256"],
+              "expected_action_image_digest": ids["action_image_digest"],
+              "note": "warmup-only; never measured; driver repeats on each new process_uuid"}
+    sched = {
+        "schema_version": 3, "campaign": matrix.get("campaign", "portability"),
+        "schedule_seed": schedule_seed, "identity": ids,
+        "matrix_fingerprint": campaign_fingerprint(matrix, ids, invocations),
+        "blocks": [{"id": b["id"], "workloads": b["workloads"], "seeds": b["seeds"],
+                    "first_operation_ids": b["first_operation_ids"],
+                    "handle_modes": b["handle_modes"], "targets": b["targets"],
+                    "repetitions": int(b["repetitions"])} for b in blocks],
+        "counts": {"pairs": len(pairs), "invocations": len(invocations)},
+        "warmup": warmup, "pairs": pairs, "invocations": invocations}
+    problems = validate_campaign(sched, matrix)
+    if problems:
+        raise ValueError("build_campaign_schedule produced an INVALID schedule:\n  "
+                         + "\n  ".join(problems))
+    return sched
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", required=True)
-    ap.add_argument("--schedule-seed", type=int, required=True)
+    ap.add_argument("--matrix", default=None,
+                    help="a block-union campaign matrix JSON (with a 'blocks' list). "
+                         "When given, the flat --workloads/--seeds/... axes are "
+                         "ignored and ONE campaign schedule is built from the blocks.")
+    ap.add_argument("--schedule-seed", type=int, required=False)
     ap.add_argument("--workloads", default="read_zipf_scattered_100k",
                     help="comma list of canonical workload IDs or legacy aliases (A/B/C ...); "
                          "normalized to canonical IDs via config/workload_registry.py")
@@ -123,11 +192,22 @@ def main():
     ids = {"run_config_sha256": a.run_config_sha256,
            "artifact_manifest_sha256": a.artifact_manifest_sha256,
            "action_image_digest": a.action_image_digest}
-    workloads = [normalize_workload_id(w) for w in a.workloads.split(",")]
-    sched = build_schedule(
-        workloads, [int(x) for x in a.seeds.split(",")],
-        [int(x) for x in a.first_ops.split(",")], a.handle_modes.split(","),
-        a.targets.split(","), a.repetitions, a.schedule_seed, ids)
+    if a.matrix:
+        # Block-union campaign: seed + axes come from the matrix file; the flat
+        # --workloads/--seeds/... arguments are ignored.
+        with open(a.matrix) as f:
+            matrix = json.load(f)
+        if "blocks" not in matrix:
+            sys.exit("--matrix %s has no 'blocks' list (not a campaign matrix)" % a.matrix)
+        sched = build_campaign_schedule(matrix, ids)
+    else:
+        if a.schedule_seed is None:
+            sys.exit("--schedule-seed is required for a flat (non-campaign) matrix")
+        workloads = [normalize_workload_id(w) for w in a.workloads.split(",")]
+        sched = build_schedule(
+            workloads, [int(x) for x in a.seeds.split(",")],
+            [int(x) for x in a.first_ops.split(",")], a.handle_modes.split(","),
+            a.targets.split(","), a.repetitions, a.schedule_seed, ids)
     with open(a.out, "w") as f:
         json.dump(sched, f, indent=2)
         f.write("\n")

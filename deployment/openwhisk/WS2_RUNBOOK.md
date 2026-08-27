@@ -128,9 +128,10 @@ bash 04_feasibility.sh
 
 # 5. Full matrix — validated + scheduled now; execution is behind an impl gate.
 bash 05_full_matrix.sh --matrix ./matrix.example.json     # copy+edit for the real matrix
-#    For the workstation→OpenWhisk portability matrix (234 pairs / 468 invocations
-#    across four sub-matrices, independent identity), run stage 05 once per
-#    matrix.portability.m{1..4}.json — see PORTABILITY_MATRIX.md.
+#    For the workstation→OpenWhisk portability campaign (234 pairs / 468 invocations,
+#    independent identity), run stage 05 EXACTLY ONCE on the single-batch matrix
+#    ./matrix.portability.json (a block-union of four logical blocks, one campaign
+#    fingerprint) — NOT once per fragment — see PORTABILITY_MATRIX.md.
 
 # 6. Package everything for transfer back to WS1.
 bash 06_collect.sh --openwhisk-sha "$(git -C /path/to/openwhisk rev-parse HEAD)"

@@ -237,9 +237,228 @@ def validate_schedule(schedule, contract):
     return sorted(problems)
 
 
+# --------------------------------------------------------------------------- #
+# Block-union campaign schedules (heterogeneous blocks, ONE flattened schedule).
+#
+# A single formal campaign may need several rectangular blocks with DIFFERENT
+# target-strategy sets and seed semantics per workload (a global Cartesian product
+# would fabricate scientifically unintended workload x strategy cells). A campaign
+# matrix therefore carries an explicit list of blocks; the UNION of the blocks'
+# cells is the formal matrix. Each block is internally rectangular; across blocks
+# the cell sets must be DISJOINT. The whole union flattens into one ordered
+# schedule with one fingerprint. build_schedule.build_campaign_schedule() emits it;
+# this module validates it fail-closed with exactly the same rigor as the single
+# rectangular validator, plus the cross-block disjointness the union requires.
+# --------------------------------------------------------------------------- #
+def normalize_block(block, schedule_seed):
+    """Canonicalize one heterogeneous block. `strategies` includes baseline (the
+    paired A-arm anchor); targets = the non-baseline strategies. baseline is
+    mandatory -- a block with no baseline cannot form pairs."""
+    strategies = list(block["strategies"])
+    if "baseline" not in strategies:
+        raise ValueError("block %r strategies must include 'baseline'"
+                         % block.get("id"))
+    return {
+        "id": block.get("id"),
+        "schedule_seed": int(schedule_seed),
+        "workloads": [normalize_workload_id(w) for w in block["workloads"]],
+        "seeds": [int(x) for x in block["seeds"]],
+        "first_operation_ids": [int(x) for x in block["first_operation_ids"]],
+        "handle_modes": list(block["handle_modes"]),
+        "targets": [s for s in strategies if s != "baseline"],
+        "repetitions": int(block["repetitions_per_cell"]),
+    }
+
+
+def blocks_from_matrix(matrix):
+    """Normalized block contracts, in the matrix's declared (execution) order."""
+    seed = matrix["schedule_seed"]
+    return [normalize_block(b, seed) for b in matrix["blocks"]]
+
+
+def block_expected_pairs(bc):
+    """Cartesian pair count for one block (product of its axis lengths)."""
+    return (len(bc["workloads"]) * len(bc["seeds"])
+            * len(bc["first_operation_ids"]) * len(bc["handle_modes"])
+            * int(bc["repetitions"]) * len(bc["targets"]))
+
+
+def block_cells(bc):
+    """The exact set of formal pair cells (target, wl, seed, fop, hm, rep) a block
+    contributes. A duplicated coordinate collapses here, so |cells| < product
+    reveals a malformed (non-rectangular) block."""
+    cells = set()
+    for wl in bc["workloads"]:
+        for seed in bc["seeds"]:
+            for fop in bc["first_operation_ids"]:
+                for hm in bc["handle_modes"]:
+                    for rep in range(int(bc["repetitions"])):
+                        for t in bc["targets"]:
+                            cells.add((t, wl, seed, fop, hm, rep))
+    return cells
+
+
+def campaign_fingerprint(matrix, ids, invocations):
+    """ONE sha256 binding the complete campaign: run-config/manifest/image identity,
+    schedule_seed, the normalized block structure, AND the complete ORDERED flattened
+    invocation schedule (schedule_position carries the order). Any reordering,
+    relabelling, added/removed cell, or identity change diverges the fingerprint."""
+    blocks = blocks_from_matrix(matrix)
+    block_payload = [{
+        "id": b["id"],
+        "workloads": sorted(b["workloads"]), "seeds": sorted(b["seeds"]),
+        "first_operation_ids": sorted(b["first_operation_ids"]),
+        "handle_modes": sorted(b["handle_modes"]), "targets": sorted(b["targets"]),
+        "repetitions": int(b["repetitions"]),
+    } for b in blocks]
+    ordered = [[i["schedule_position"], i["pair_id"], i["arm"], i["workload"],
+                i["strategy"], i["seed"], i["first_operation_id"],
+                i["handle_mode"], i["repetition_id"]] for i in invocations]
+    payload = {
+        "campaign": matrix.get("campaign", "portability"),
+        "schedule_seed": int(matrix["schedule_seed"]),
+        "identity": {k: ids.get(k) for k in _IDENTITY_KEYS},
+        "blocks": block_payload,
+        "schedule": ordered,
+    }
+    blob = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(blob.encode()).hexdigest()
+
+
+def campaign_expected_counts(matrix):
+    """Grand totals a valid campaign must hit (sum over disjoint blocks)."""
+    blocks = blocks_from_matrix(matrix)
+    pairs = sum(block_expected_pairs(b) for b in blocks)
+    return {"pairs": pairs, "invocations": 2 * pairs}
+
+
+def validate_campaign(schedule, matrix):
+    """Return a SORTED list of problems; empty == valid. Fail-closed checks:
+    per-block rectangularity, cross-block cell disjointness (no duplicate formal
+    cell), exact grand totals, pair integrity (exactly baseline + one target with
+    shared non-arm identity), every block cell present exactly once and no cell
+    outside any block (no unintended cross-product), and globally unique + contiguous
+    request_ids / schedule_positions."""
+    problems = []
+
+    def bad(m):
+        problems.append(m)
+
+    blocks = blocks_from_matrix(matrix)
+    seed = int(matrix["schedule_seed"])
+    inv = schedule.get("invocations", [])
+    pairs = schedule.get("pairs", [])
+
+    if int(schedule.get("schedule_seed", -1)) != seed:
+        bad("schedule_seed mismatch: schedule=%s matrix=%s"
+            % (schedule.get("schedule_seed"), seed))
+
+    # -- per-block rectangularity + cross-block disjoint union of formal cells ----
+    union = {}  # cell -> owning block id
+    for b in blocks:
+        cells = block_cells(b)
+        exp = block_expected_pairs(b)
+        if len(cells) != exp:
+            bad("block %s is not rectangular (%d distinct cells != %d product; "
+                "duplicate coordinate?)" % (b["id"], len(cells), exp))
+        for c in cells:
+            if c in union:
+                bad("duplicate formal cell across blocks %s and %s: %s"
+                    % (union[c], b["id"], c))
+            else:
+                union[c] = b["id"]
+    exp_pairs = sum(block_expected_pairs(b) for b in blocks)
+    exp_inv = 2 * exp_pairs
+
+    # -- grand totals -------------------------------------------------------------
+    if len(inv) != exp_inv:
+        bad("total invocations %d != expected %d" % (len(inv), exp_inv))
+    if len(pairs) != exp_pairs:
+        bad("total pairs %d != expected %d" % (len(pairs), exp_pairs))
+
+    # -- pair integrity + attribute each pair to exactly one block cell -----------
+    by_pair = {}
+    for i in inv:
+        by_pair.setdefault(i["pair_id"], []).append(i)
+    if len(by_pair) != exp_pairs:
+        bad("distinct pair_ids %d != expected %d" % (len(by_pair), exp_pairs))
+    consumed = {}  # cell -> pair_id
+    for pid, arms in sorted(by_pair.items()):
+        if len(arms) != 2:
+            bad("pair %s has %d arms, expected exactly 2" % (pid, len(arms)))
+            continue
+        base = [a for a in arms if a["strategy"] == "baseline"]
+        tgt = [a for a in arms if a["strategy"] != "baseline"]
+        if len(base) != 1 or len(tgt) != 1:
+            bad("pair %s must have exactly one baseline + one target arm (got "
+                "baseline=%d target=%d)" % (pid, len(base), len(tgt)))
+            continue
+        b_arm, t_arm = base[0], tgt[0]
+        if t_arm["arm"] != t_arm["strategy"]:
+            bad("pair %s target arm label %r != strategy %r"
+                % (pid, t_arm["arm"], t_arm["strategy"]))
+        for f in _CELL_FIELDS:
+            if b_arm.get(f) != t_arm.get(f):
+                bad("pair %s arms disagree on %s (baseline=%r target=%r)"
+                    % (pid, f, b_arm.get(f), t_arm.get(f)))
+        cell = (t_arm["strategy"],) + tuple(t_arm.get(f) for f in _CELL_FIELDS)
+        if cell not in union:
+            bad("pair %s cell %s belongs to no block (unintended cross-product?)"
+                % (pid, cell))
+        elif cell in consumed:
+            bad("duplicate Cartesian cell %s owned by pairs %s and %s"
+                % (cell, consumed[cell], pid))
+        else:
+            consumed[cell] = pid
+    missing = set(union) - set(consumed)
+    if missing:
+        bad("%d expected block cell(s) missing from schedule, e.g. %s"
+            % (len(missing), sorted(missing)[:3]))
+
+    # -- global request_id / schedule_position uniqueness + contiguity ------------
+    rids = [i["request_id"] for i in inv]
+    if len(set(rids)) != len(rids):
+        dup = [r for r, c in Counter(rids).items() if c > 1]
+        bad("duplicate request_id(s): %s" % sorted(dup)[:5])
+    positions = [i["schedule_position"] for i in inv]
+    if len(set(positions)) != len(positions):
+        dup = [p for p, c in Counter(positions).items() if c > 1]
+        bad("duplicate schedule_position(s): %s" % sorted(dup)[:5])
+    elif inv and set(positions) != set(range(1, len(inv) + 1)):
+        bad("schedule_positions are not the contiguous range 1..%d" % len(inv))
+
+    return sorted(problems)
+
+
 def _load(p):
     with open(p) as f:
         return json.load(f)
+
+
+def _validate_campaign_main(schedule, matrix, expect_fp):
+    """Validate a block-union campaign schedule + bind its single fingerprint."""
+    problems = validate_campaign(schedule, matrix)
+    ids = schedule.get("identity", {})
+    expected_fp = campaign_fingerprint(matrix, ids, schedule.get("invocations", []))
+    stored_fp = schedule.get("matrix_fingerprint")
+    if stored_fp is None:
+        problems.append("schedule has no matrix_fingerprint (cannot bind to matrix)")
+    elif stored_fp != expected_fp:
+        problems.append("matrix_fingerprint mismatch: schedule=%s expected=%s "
+                        "(schedule was built for a different campaign/identity)"
+                        % (stored_fp, expected_fp))
+    if expect_fp and stored_fp != expect_fp:
+        problems.append("stored fingerprint %s != --expect-fingerprint %s"
+                        % (stored_fp, expect_fp))
+    if problems:
+        print("SCHEDULE INVALID (%d problem(s)):" % len(problems))
+        for p in problems:
+            print("  FAIL", p)
+        sys.exit(1)
+    exp = campaign_expected_counts(matrix)
+    print("CAMPAIGN SCHEDULE VALID: %d invocations, %d pairs across %d blocks, "
+          "single fingerprint=%s"
+          % (exp["invocations"], exp["pairs"], len(matrix["blocks"]), stored_fp))
 
 
 def main():
@@ -253,6 +472,13 @@ def main():
     a = ap.parse_args()
     schedule = _load(a.schedule)
     matrix = _load(a.matrix)
+
+    # A block-union campaign matrix validates with the campaign checks + single
+    # fingerprint; a flat rectangular matrix keeps the original path untouched.
+    if "blocks" in matrix:
+        _validate_campaign_main(schedule, matrix, a.expect_fingerprint)
+        return
+
     contract = contract_from_matrix(matrix)
 
     problems = validate_schedule(schedule, contract)

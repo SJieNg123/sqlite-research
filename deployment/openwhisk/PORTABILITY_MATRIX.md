@@ -43,20 +43,32 @@ address; `session.py` refuses any keyed plan or trace outside it (no implicit YC
 fallback), and `ws2/05_full_matrix.sh` unions it with the canonical YC id for its
 workload gate.
 
-## The four rectangular sub-matrices (schedule_seed = 20260826)
+## One single-batch campaign = the union of four logical blocks (schedule_seed = 20260826)
 
-Each sub-matrix is a strict Cartesian product (required by
-`client/validate_schedule.py`). `baseline` is the paired A-arm anchor, not a
-target; pairs = |W|·|S|·|F|·|M|·|R|·|T|, invocations = 2·pairs. All use
-first_operation_ids `[0]`, handle_modes `{warm, standalone}`, repetitions 3.
+Formal execution is **one** matrix, `ws2/matrix.portability.json`: a block-union
+campaign whose `blocks` list holds four heterogeneous rectangular blocks. The UNION
+of the explicit blocks is the formal matrix — **no** global Cartesian product is
+taken across workloads and strategies (that would fabricate scientifically
+unintended workload×strategy cells). Each block is itself a strict Cartesian product;
+`baseline` is the paired A-arm anchor in every block, not a target; per-block pairs =
+|W|·|S|·|F|·|M|·|R|·|T|, invocations = 2·pairs. All blocks use first_operation_ids
+`[0]`, handle_modes `{warm, standalone}`, repetitions 3. The whole campaign runs under
+ONE `portability_run_config_sha256`, ONE `schedule_seed`, and ONE campaign fingerprint
+over the complete ordered 468-invocation schedule.
 
-| file | workloads | targets (non-baseline) | seeds | pairs | invocations |
+| logical block | workloads | targets (non-baseline) | seeds | pairs | invocations |
 |---|---|---|---|---:|---:|
-| `matrix.portability.m1.json` | read_uniform, hot_hashed_01, read_tail_hit_20k | `2e_K10`, `2f_slru` | 1,2,3 | 108 | 216 |
-| `matrix.portability.m2.json` | read_tail_mixed_20k | `2e_K10`, `2f_slru`, `leaf_freq_K10`, `leaf_rand_K10` | 1,2,3 | 72 | 144 |
-| `matrix.portability.m3.json` | read_zipf (YC) | `2f_top28`, `learned_markov_28` | 1,2,3 | 36 | 72 |
-| `matrix.portability.m4.json` | read_uniform, hot_hashed_01, read_tail_mixed_20k | `2d` | 1 | 18 | 36 |
-| **total** | | | | **234** | **468** |
+| block1 | read_uniform, hot_hashed_01, read_tail_hit_20k | `2e_K10`, `2f_slru` | 1,2,3 | 108 | 216 |
+| block2 | read_tail_mixed_20k | `2e_K10`, `2f_slru`, `leaf_freq_K10`, `leaf_rand_K10` | 1,2,3 | 72 | 144 |
+| block3 | read_zipf (YC) | `2f_top28`, `learned_markov_28` | 1,2,3 | 36 | 72 |
+| block4 | read_uniform, hot_hashed_01, read_tail_mixed_20k | `2d` | 1 (structural) | 18 | 36 |
+| **union (one campaign)** | | | | **234** | **468** |
+
+The four `matrix.portability.m{1..4}.json` files remain **only** as readable
+logical-block fragments and each flattens cell-for-cell into the block of the same
+number; they are **not** units of formal execution. block4 is the static-`2d`
+cross-workload deployment check on ONE structural seed identity — its seed axis stays
+`[1]` and must never expand to 1,2,3.
 
 Strategy semantics (frozen, source = `portability_freeze_report.json`):
 
@@ -82,42 +94,40 @@ Follow [`WS2_RUNBOOK.md`](WS2_RUNBOOK.md) Terminal B verbatim through stage 04
 delivery-plan CSVs (under `config/plans/keyed/`) and stages the 12 portability
 workload traces; the build-time self-check fails closed if any is absent.
 
-Then run stage 05 **once per sub-matrix** (each validates + schedules
-independently; execution stays behind the implementation gate until you set
-`WS2_MATRIX_IMPL_READY=1`):
+Then run stage 05 **exactly once** on the single campaign matrix (it validates the
+complete 468-invocation schedule, then execution stays behind the implementation gate
+until you set `WS2_MATRIX_IMPL_READY=1`):
 
 ```bash
 cd deployment/openwhisk/ws2
 
-# Validate + schedule all four (no invocation). Each prints its paired-cell count;
-# they must read 108, 72, 36, 18 -> 234 pairs / 468 invocations in total.
-for M in m1 m2 m3 m4; do
-  bash 05_full_matrix.sh --matrix ./matrix.portability.$M.json
-done
+# Validate + schedule the whole campaign (no invocation). Prints one paired-cell
+# count: 234 pairs / 468 invocations across 4 blocks, single fingerprint.
+bash 05_full_matrix.sh --matrix ./matrix.portability.json
 
-# Execute the matrix (each sub-matrix, in order). Requires a cooled diagnostic (03)
-# and the implementation gate opened. OW_ARTIFACT_MANIFEST_SHA256 is the sha256 of
-# the artifacts.json baked into the deployed image (same value used at stage 03).
+# Execute the ONE campaign. Requires a cooled diagnostic (03) and the implementation
+# gate opened. OW_ARTIFACT_MANIFEST_SHA256 is the sha256 of the artifacts.json baked
+# into the deployed image (same value used at stage 03). Resume-safe: re-run the same
+# command to continue from the last completed schedule position.
 export WS2_MATRIX_IMPL_READY=1
 export OW_ARTIFACT_MANIFEST_SHA256='<sha256 of the image-baked artifacts.json>'
-for M in m1 m2 m3 m4; do
-  bash 05_full_matrix.sh --matrix ./matrix.portability.$M.json
-done
+bash 05_full_matrix.sh --matrix ./matrix.portability.json
 
-# Collect (packages every sub-matrix run under this checkout).
+# Collect (packages the single campaign run under this checkout as ONE bundle).
 bash 06_collect.sh --openwhisk-sha "$(git -C /path/to/openwhisk rev-parse HEAD)"
 ```
 
-Each stage-05 run stamps `portability_run_config_sha256` on every request
+The single stage-05 run stamps `portability_run_config_sha256` on every request
 (selected via `run_config_key` in the matrix file) and refuses to run if any
-requested strategy is absent from `portability_invocation_plan.strategies` — so a
-portability strategy can never be recorded under the frozen primary/secondary
-identity.
+requested strategy — the UNION across all blocks — is absent from
+`portability_invocation_plan.strategies`, so a portability strategy can never be
+recorded under the frozen primary/secondary identity.
 
 ## What is committed vs machine-local
 
-Committed (shipped from WK1): the four `matrix.portability.m*.json`, the 36 frozen
-delivery-plan CSVs + `portability_freeze_report.json`, the extended pin
+Committed (shipped from WK1): the single-batch `matrix.portability.json` (the formal
+execution unit) plus the four `matrix.portability.m*.json` readable fragments, the 36
+frozen delivery-plan CSVs + `portability_freeze_report.json`, the extended pin
 `config/artifacts.native_ycsb.json`, the runtime/builder/WS2 changes, and this
 doc. Machine-local (git-ignored, regenerated on WK2): `config/artifacts.json`,
 `ws2/_image_stage/`, `ws2/_runs/**`.

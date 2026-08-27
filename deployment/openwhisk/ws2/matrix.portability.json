@@ -1,0 +1,49 @@
+{
+  "_comment": "SINGLE-BATCH PORTABILITY campaign for 05_full_matrix.sh. ONE formal execution matrix: the UNION of four heterogeneous rectangular blocks (the logical fragments formerly split across matrix.portability.m1..m4.json). Different workloads carry different target-strategy sets and seed semantics, so the campaign is expressed as explicit blocks -- NOT a global Cartesian product (which would fabricate scientifically unintended workload x strategy cells). The union recomputes to EXACTLY 234 baseline-target pairs / 468 formal invocations under ONE portability_run_config_sha256 (64f44c3e..., independent of the byte-frozen primary 022fbeb0... and secondary 441609e6... YC campaigns), ONE schedule_seed (20260826), and ONE campaign fingerprint over the complete ordered 468-invocation schedule. baseline is the paired A-arm anchor in every block (not a target). Deployment/feasibility + footprint evidence only; warm paired first-query latency is NOT a strategy-performance estimate (page-cache carryover falsified; positional/order effect). Every block field is validated against the frozen runtime artifact pin before anything runs; real invocation still requires WS2_MATRIX_IMPL_READY=1. Run this ONE matrix once: 05_full_matrix.sh --matrix ./matrix.portability.json. The m1..m4 files remain only as readable logical fragments; they are NOT units of formal execution.",
+  "schema_version": 3,
+  "campaign": "portability",
+  "run_config_key": "portability_run_config_sha256",
+  "schedule_seed": 20260826,
+  "blocks": [
+    {
+      "id": "block1",
+      "_note": "primary-mechanism triad {2e_K10 skeleton-union-hot-leaves, 2f_slru whole resident set} vs baseline on the three single-strategy-family portability workloads; 2 targets x 3 workloads x 3 seeds x 2 handle_modes x 3 reps = 108 pairs.",
+      "workloads": ["native_ycsb_c_read_uniform", "native_ycsb_c_hot_hashed_01", "read_tail_hit_20k"],
+      "strategies": ["baseline", "2e_K10", "2f_slru"],
+      "seeds": [1, 2, 3],
+      "handle_modes": ["warm", "standalone"],
+      "first_operation_ids": [0],
+      "repetitions_per_cell": 3
+    },
+    {
+      "id": "block2",
+      "_note": "read_tail_mixed_20k with the leaf-only frequency-vs-random ablation added to the mechanism pair; 4 targets x 1 workload x 3 seeds x 2 handle_modes x 3 reps = 72 pairs.",
+      "workloads": ["read_tail_mixed_20k"],
+      "strategies": ["baseline", "2e_K10", "2f_slru", "leaf_freq_K10", "leaf_rand_K10"],
+      "seeds": [1, 2, 3],
+      "handle_modes": ["warm", "standalone"],
+      "first_operation_ids": [0],
+      "repetitions_per_cell": 3
+    },
+    {
+      "id": "block3",
+      "_note": "canonical YC (native_ycsb_c_read_zipf): the two budget-matched ranked/learned competitors 2f_top28 + learned_markov_28 (LOSO) vs baseline; 2 targets x 1 workload x 3 seeds x 2 handle_modes x 3 reps = 36 pairs.",
+      "workloads": ["native_ycsb_c_read_zipf"],
+      "strategies": ["baseline", "2f_top28", "learned_markov_28"],
+      "seeds": [1, 2, 3],
+      "handle_modes": ["warm", "standalone"],
+      "first_operation_ids": [0],
+      "repetitions_per_cell": 3
+    },
+    {
+      "id": "block4",
+      "_note": "the static 2d interior skeleton (workload/seed-independent) as the cross-workload deployment check on ONE structural seed identity; 1 target x 3 workloads x 1 seed x 2 handle_modes x 3 reps = 18 pairs. Structural: seeds MUST stay [1] and never expand to 1,2,3.",
+      "workloads": ["native_ycsb_c_read_uniform", "native_ycsb_c_hot_hashed_01", "read_tail_mixed_20k"],
+      "strategies": ["baseline", "2d"],
+      "seeds": [1],
+      "handle_modes": ["warm", "standalone"],
+      "first_operation_ids": [0],
+      "repetitions_per_cell": 3
+    }
+  ]
+}

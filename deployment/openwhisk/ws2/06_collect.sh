@@ -64,10 +64,11 @@ fi
 # --- bundle manifest (identities) ------------------------------------------ #
 DEPLOY_META="$WS2_RUN_DIR/02_deploy/deploy_meta.json"
 BUILD_META="$WS2_RUN_DIR/01_build_image/build_meta.json"
+SCHED_JSON="$WS2_RUN_DIR/05_full_matrix/schedule.json"
 python3 - "$WS2_PIN_JSON" "$WS2_GIT_SHA" "${OW_REPO_SHA:-unknown}" \
-        "${BUILD_META:-}" "${DEPLOY_META:-}" "$WS2_EXPECTED_DB_SHA" > "$MANIFEST.tmp" <<'PY'
+        "${BUILD_META:-}" "${DEPLOY_META:-}" "$WS2_EXPECTED_DB_SHA" "${SCHED_JSON:-}" > "$MANIFEST.tmp" <<'PY'
 import json, os, sys
-pin_path, git_sha, ow_sha, build_meta, deploy_meta, db_sha = sys.argv[1:7]
+pin_path, git_sha, ow_sha, build_meta, deploy_meta, db_sha, sched_path = sys.argv[1:8]
 pin = json.load(open(pin_path))
 def load(p): return json.load(open(p)) if p and os.path.exists(p) else {}
 b, d = load(build_meta), load(deploy_meta)
@@ -88,6 +89,29 @@ out = {
                "memory_mb": d.get("memory_mb"), "timeout_ms": d.get("timeout_ms"),
                "concurrency": d.get("concurrency")},
 }
+# Self-describe the ONE Stage-05 schedule that this bundle packages: the single
+# campaign (or flat) fingerprint, the run_config identity ACTUALLY stamped on every
+# request (schedule.identity, not necessarily the pin's primary run_config_sha256),
+# and the paired counts. A block-union campaign also records its per-block summary.
+# This is what binds the raw evidence tree to one fingerprint in one bundle.
+s = load(sched_path)
+if s:
+    sch = {
+        "schema_version": s.get("schema_version"),
+        "campaign": s.get("campaign"),
+        "schedule_seed": s.get("schedule_seed"),
+        "matrix_fingerprint": s.get("matrix_fingerprint"),
+        "run_config_sha256": (s.get("identity") or {}).get("run_config_sha256"),
+        "counts": s.get("counts"),
+    }
+    if "blocks" in s:
+        sch["blocks"] = [{"id": bl.get("id"),
+                          "pairs": (len(bl.get("workloads", [])) * len(bl.get("seeds", []))
+                                    * len(bl.get("first_operation_ids", []))
+                                    * len(bl.get("handle_modes", []))
+                                    * len(bl.get("targets", [])) * int(bl.get("repetitions", 0)))}
+                         for bl in s["blocks"]]
+    out["schedule"] = sch
 print(json.dumps(out, indent=2, sort_keys=True))
 PY
 mv -f "$MANIFEST.tmp" "$MANIFEST"
