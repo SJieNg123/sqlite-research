@@ -1,11 +1,12 @@
 {
   "N_YC": 102,
   "claim_map_counts": {
-    "DO_NOT_CLAIM": 6,
-    "QUALIFIED": 3,
-    "SAFE": 7
+    "DO_NOT_CLAIM": 7,
+    "QUALIFIED": 4,
+    "SAFE": 8
   },
   "claim_restrictions": {
+    "effectiveness_comparison_is_descriptive_not_causal_equivalence": true,
     "exact_order_effect_source_unresolved": true,
     "first_query_us_is_query_phase_not_total_cold_start": true,
     "native_is_primary_performance_evidence": true,
@@ -15,6 +16,7 @@
     "openwhisk_role": "deployment_complement",
     "order_effect_is_not_random_hardware_noise": true,
     "portability_and_strategy_space_campaigns_not_pooled": true,
+    "portability_ext_extends_workload_coverage_not_pooled": true,
     "portability_is_execution_binding_not_latency_ranking": true
   },
   "cost_vector_legend": {
@@ -33,12 +35,12 @@
     "figure_order_effect_diagnostic.svg": "figure_source_order_effect.csv",
     "figure_query_vs_delivery.svg": "figure_source_query_vs_delivery.csv"
   },
-  "generated_utc": "2026-08-27T15:06:54Z",
+  "generated_utc": "2026-08-28T08:55:58Z",
   "ok": true,
   "openwhisk_role": "deployment complement to the primary native/WK1 controlled performance and mechanism evidence.",
   "outputs": {
     "claim_map.md": {
-      "sha256": "e6cab27e3cf4b3963af24d66fc4ad517a5c0c3ea38b3e944e6f81dee3df9f467"
+      "sha256": "b2a2cce6dbf248f87ba9942e7c33b642622bee8fc21daf55a0a0af219ec89d50"
     },
     "figure_footprint_vs_delivery.svg": {
       "sha256": "ae4537b1d6706238173b98cfd4ad1cdc353554b5c34e3e7660d4c3dc08c34669"
@@ -71,16 +73,30 @@
       "sha256": "cd156c6bc40579129fc32d86009c280127232b53983005039c7d01c9820dd7ce"
     },
     "openwhisk_thesis_notes.md": {
-      "sha256": "e964306d3bdf0cf0e7cc1260cc29e4e3efc2a6d4640ed94985acd6c1addde9cf"
+      "sha256": "fa91168b5243d19170a3c8c6a4637ad384a8c852355836b446a199c145c239f6"
     },
     "synthesis_validation.txt": {
-      "sha256": "fb520c9ac8e8dbef20a259bd4ce7551d86ed346740e96b79781852f5272a6d00"
+      "sha256": "1ef1573970324176f4291db8377560f3357a51b06330c037498c0b0736062f43"
     },
     "threats_to_validity.md": {
-      "sha256": "f8d4a67d0124cba6e9e2c89cb1b0b9965d0ac1c29a7b4cd4608bf669bab9c214"
+      "sha256": "9e8da3628dc5b24cdde57c50097cf54166cb9da50b8aad472b2668a1c831ce9d"
     }
   },
   "png_pdf_not_produced_reason": "matplotlib/numpy unavailable in analysis host; SVG is vector, publication-usable, and byte-deterministic.",
+  "portability_ext_source": {
+    "descriptive_inputs": {
+      "portability_ext_coverage.csv": "2e4673a38da3d9786e865df2bfe4a483ee3ac4184ca5fea64a1cb0c90c50405c",
+      "portability_ext_plan_parity.csv": "72080003350e102a8134f1476727e9f22b81e0e1a68d0e4b634c87921b2aa339",
+      "portability_ext_workload_summary.csv": "f327510d3f75f6f86746d74629e47283bc9f32693447c44b38501f6953c9d071"
+    },
+    "descriptive_manifest_sha256": "4bdd254de4f78ca3a97bdfe9bc9e21b60d26a930808b03a27b916b2f3c112499",
+    "matrix_fingerprint": "5ba26fe952104792a9b6803e581627c331884fe1b39b41adb6ebeddb245fe300",
+    "normalization_manifest_sha256": "2186c2a1f686138bfdfa6517aac68052174664b975086c6a78c6c2e0f6819861",
+    "portability_ext_present": true,
+    "run_config_sha256": "bf504a28fb0ac3cec3b189a4de1f7b8968a35bbd9866c2ae1d5784ccc3bf77da",
+    "source_bundle_filename": "ws2_bundle_d2614e8aacf9_20260828T055854Z.tar.gz",
+    "source_bundle_sha256": "9fd7b9f69030c6ffa71532504b8a928c00de442ddc3d0f0d2cd6fa511f84c40f"
+  },
   "portability_source": {
     "descriptive_inputs": {
       "portability_coverage.csv": "0eb011117ca5683ba4b5037afdfc7778dc235c296944ecb52561303c2a586f36",
@@ -120,12 +136,14 @@
     "2f_top102",
     "learned_markov_102"
   ],
-  "synthesis_script_git_sha": "d04cea8730f9c92cd8911aa86ad4c26ae8c4a9b9",
+  "synthesis_script_git_sha": "ab016fdaffc5b774d0697800c0c7457b35b41d68",
   "two_role_summary": {
-    "note": "3600 strategy-space + 468 portability = 4068 formal invocations across two campaigns answering different questions; NOT pooled into a single effect estimate.",
+    "campaigns": 4,
+    "note": "3600 strategy-space (primary 1600 + secondary 2000) + 468 portability + 852 portability-ext = 4920 formal invocations across four byte-frozen campaigns answering different questions (two roles: strategy-space cost structure, and cross-workload deployment portability + its coverage extension); NOT pooled into a single effect estimate.",
     "pooled": false,
+    "portability_ext_formal_invocations": 852,
     "portability_formal_invocations": 468,
     "strategy_space_formal_invocations": 3600,
-    "total_formal_invocations": 4068
+    "total_formal_invocations": 4920
   }
 }

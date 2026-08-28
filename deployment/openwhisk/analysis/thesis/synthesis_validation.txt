@@ -19,6 +19,7 @@ figure_source_query_vs_delivery.csv: 9
 figure_source_order_effect.csv: 16
 
 ## machine-readable claim restrictions
+effectiveness_comparison_is_descriptive_not_causal_equivalence = true
 exact_order_effect_source_unresolved = true
 first_query_us_is_query_phase_not_total_cold_start = true
 native_is_primary_performance_evidence = true
@@ -28,6 +29,7 @@ no_strategy_winner_claim = true
 openwhisk_role = "deployment_complement"
 order_effect_is_not_random_hardware_noise = true
 portability_and_strategy_space_campaigns_not_pooled = true
+portability_ext_extends_workload_coverage_not_pooled = true
 portability_is_execution_binding_not_latency_ranking = true
 
 ## figure formats

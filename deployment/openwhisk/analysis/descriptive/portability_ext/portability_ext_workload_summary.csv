@@ -1,0 +1,6 @@
+workload_id,workload_family,n_pairs,n_invocations,n_baseline_invocations,n_target_invocations,target_strategies,n_target_strategies,seeds,handle_modes,blocks
+read_tail_mixed_20k,C,78,156,78,78,2e_K500;2f_top14;2f_top28;layers_5;learned_markov_28,5,1;2;3,standalone;warm,block10;block8
+read_tail_hit_20k,C_hit,102,204,102,102,2d;2e_K500;2f_top14;2f_top28;layers_92;learned_markov_14;learned_markov_28,7,1;2;3,standalone;warm,block11;block7;block9
+native_ycsb_c_read_zipf,YC,42,84,42,42,2f_top14;layers_92;learned_markov_14,3,1;2;3,standalone;warm,block5;block9
+native_ycsb_c_hot_hashed_01,YCh01,102,204,102,102,2e_K500;2f_top14;2f_top28;layers_5;layers_92;learned_markov_14;learned_markov_28,7,1;2;3,standalone;warm,block10;block6;block9
+native_ycsb_c_read_uniform,YCu,102,204,102,102,2e_K500;2f_top14;2f_top28;layers_5;layers_92;learned_markov_14;learned_markov_28,7,1;2;3,standalone;warm,block10;block6;block9

@@ -1,0 +1,42 @@
+{
+  "campaign": "portability_ext",
+  "campaign_role": "cross_workload_deployment_portability_extension_complement",
+  "coverage_cells": 142,
+  "descriptive_only": true,
+  "distinct_target_plans": 71,
+  "generated_utc": "2026-08-28T06:16:51Z",
+  "generator_git_sha": "ab016fdaffc5b774d0697800c0c7457b35b41d68",
+  "inputs": {
+    "portability_ext_normalized_invocations.csv": 852,
+    "portability_ext_normalized_pairs.csv": 426
+  },
+  "not_a_performance_ranking": true,
+  "outputs": {
+    "portability_ext_coverage.csv": {
+      "rows": 142,
+      "sha256": "2e4673a38da3d9786e865df2bfe4a483ee3ac4184ca5fea64a1cb0c90c50405c"
+    },
+    "portability_ext_plan_parity.csv": {
+      "rows": 71,
+      "sha256": "72080003350e102a8134f1476727e9f22b81e0e1a68d0e4b634c87921b2aa339"
+    },
+    "portability_ext_workload_summary.csv": {
+      "rows": 5,
+      "sha256": "f327510d3f75f6f86746d74629e47283bc9f32693447c44b38501f6953c9d071"
+    }
+  },
+  "parity_type_counts": {
+    "exact_native_plan": 51,
+    "semantic_contract_reconstruction": 12,
+    "structural_static": 8
+  },
+  "schema_version": 1,
+  "workload_families": {
+    "native_ycsb_c_hot_hashed_01": "YCh01",
+    "native_ycsb_c_read_uniform": "YCu",
+    "native_ycsb_c_read_zipf": "YC",
+    "read_tail_hit_20k": "C_hit",
+    "read_tail_mixed_20k": "C"
+  },
+  "workloads": 5
+}

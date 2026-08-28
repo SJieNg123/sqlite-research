@@ -11,15 +11,18 @@ observe the deployment-side cost structure (footprint, page-delivery work, and t
 instrumented query phase) that the strategies imply. It is a **deployment
 complement** to the controlled native/WK1 experiments, not a replacement for them.
 
-## Two OpenWhisk campaigns (do not pool)
+## Four OpenWhisk campaigns (do not pool)
 
-Across the completed OpenWhisk evaluation, **4068 formal invocations** were
-executed: **3600** in the **YC deployment / strategy-space campaign** and **468**
-in the **cross-workload portability campaign**. These are two DIFFERENT roles that
-answer two DIFFERENT questions -- the strategy-space cost structure on one canonical
-workload, and cross-workload deployment portability of representative mechanisms.
-They are reported separately and **must not be pooled into a single effect
-estimate**, and neither is a warm-latency ranking.
+Across the completed OpenWhisk evaluation, **4920 formal invocations** were
+executed across **four byte-frozen campaigns**: **3600** in the **YC deployment /
+strategy-space campaign** (primary 1600 + secondary 2000), **468** in the
+**cross-workload portability campaign**, and **852** in the additive
+**cross-workload portability-extension campaign** (which completes the
+workstation-coverage effectiveness matrix). These span two ROLES answering DIFFERENT
+questions -- the strategy-space cost structure on one canonical workload, and
+cross-workload deployment portability of representative mechanisms. They are reported
+separately and **must not be pooled into a single effect estimate**, and none is a
+warm-latency ranking.
 
 ## Experimental coverage (Role A -- YC strategy-space campaign)
 
@@ -46,6 +49,26 @@ estimate**, and neither is a warm-latency ranking.
 - Portability here means **deployment execution + correctness + workload/plan
   binding across workloads** -- NOT a latency comparison, ranking, or warm
   speedup. The five families are **representative** coverage, not exhaustive.
+
+## Cross-workload portability extension (Role B -- fourth campaign)
+
+- An additive single-batch, block-union campaign completing the
+  workstation-coverage matrix: **852 formal invocations /
+  426 baseline-target pairs** (7 blocks), one live matrix
+  fingerprint (`5ba26fe9...`), its OWN run-config identity
+  (`bf504a28...`), bundle `9fd7b9f69030...` -- distinct from the three
+  prior campaigns, which are byte-unchanged.
+- 71 distinct executed target plans across the same 5
+  families, each with proven page-set + offset parity against the frozen keyed
+  contract: 51 exact-native-plan, 12
+  semantic-2e-contract-reconstruction, 8 structural-static.
+- It runs the 29 previously-uncovered (strategy, workload) cells, taking the
+  workstation-vs-OpenWhisk comparable-cell coverage from 20 to **49 cells**. The
+  effectiveness comparison over those 49 cells is a **descriptive cross-platform
+  consistency** check of relative first-query reductions (standalone handles),
+  **not** an absolute-latency, causal-equivalence, or ranking-reproduction claim.
+- Like the other three campaigns it passed the same frozen validity gates and is
+  **never pooled** into a single effect estimate.
 
 ## Deployment feasibility
 

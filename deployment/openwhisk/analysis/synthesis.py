@@ -57,10 +57,12 @@ DESC_INPUTS = [
 # cross-workload PORTABILITY campaign (SECOND OpenWhisk role; additive).
 # These outputs are produced by the separate portability pipeline
 # (normalize_portability.py -> descriptive_portability.py). They are SHA-gated
-# here so the thesis two-role framing (3600 strategy-space + 468 portability =
-# 4068 formal invocations) is machine-checked, NOT prose the writer can drift.
-# The primary/secondary strategy-space synthesis above is entirely unaffected:
-# the portability chain has its OWN manifests and its own descriptive CSVs.
+# here so the thesis campaign framing (3600 strategy-space + 468 portability +
+# 852 portability-extension = 4920 formal invocations across four byte-frozen
+# campaigns) is machine-checked, NOT prose the writer can drift. The
+# primary/secondary strategy-space synthesis above is entirely unaffected: the
+# portability chain has its OWN manifests and its own descriptive CSVs, and the
+# portability-EXTENSION campaign (below) has yet another separate chain.
 # ---------------------------------------------------------------------------
 PORT_DESC_DIR = _ANALYSIS_DIR / "descriptive" / "portability"
 PORT_NORM_DIR = _ANALYSIS_DIR / "normalized" / "portability"
@@ -78,6 +80,34 @@ PORT_EXPECTED = {
         "a3274bc9632ab7aa393f015c00829373a33312d15ff8e6521759255f01eac10e",
     "run_config_sha256":
         "64f44c3e06be421a026aa523ded93010d3a7d3ab8e2cf773e033ec30c0657947",
+}
+
+# ---------------------------------------------------------------------------
+# cross-workload PORTABILITY-EXTENSION campaign (FOURTH OpenWhisk campaign;
+# additive to primary + secondary + portability). It completes the
+# workstation-coverage effectiveness matrix (20 -> 49 comparable cells) by
+# running the 29 uncovered (strategy, workload) cells under its OWN byte-frozen
+# identity (run_config bf504a28..., schedule_seed 20260828). SHA-gated here so
+# the 4920 four-campaign framing is machine-checked, never free prose. The three
+# prior campaigns' manifests/identities are untouched.
+# ---------------------------------------------------------------------------
+PORT_EXT_DESC_DIR = _ANALYSIS_DIR / "descriptive" / "portability_ext"
+PORT_EXT_NORM_DIR = _ANALYSIS_DIR / "normalized" / "portability_ext"
+PORT_EXT_DESC_INPUTS = [
+    "portability_ext_coverage.csv",
+    "portability_ext_plan_parity.csv",
+    "portability_ext_workload_summary.csv",
+]
+# fail-closed shape of the completed single-batch portability-extension campaign
+PORT_EXT_EXPECTED = {
+    "invocations": 852, "pairs": 426,
+    "block_pairs": {"block5": 36, "block6": 180, "block7": 90, "block8": 72,
+                    "block9": 24, "block10": 18, "block11": 6},
+    "workloads": 5,
+    "matrix_fingerprint":
+        "5ba26fe952104792a9b6803e581627c331884fe1b39b41adb6ebeddb245fe300",
+    "run_config_sha256":
+        "bf504a28fb0ac3cec3b189a4de1f7b8968a35bbd9866c2ae1d5784ccc3bf77da",
 }
 
 # neutral deployment-role labels (from repo provenance / comparison scaffolding);
@@ -106,6 +136,8 @@ CLAIM_RESTRICTIONS = {
     "order_effect_is_not_random_hardware_noise": True,
     "portability_is_execution_binding_not_latency_ranking": True,
     "portability_and_strategy_space_campaigns_not_pooled": True,
+    "portability_ext_extends_workload_coverage_not_pooled": True,
+    "effectiveness_comparison_is_descriptive_not_causal_equivalence": True,
 }
 
 # cost-vector column legend (§5: clearly mark the phases)
@@ -293,16 +325,64 @@ CLAIM_MAP = [
                "parity), independent of any latency interpretation; native/WK1 "
                "remains the primary performance evidence."},
     {"category": "L_cross_workload_portability",
-     "claim": "The 468 portability invocations and the 3600 strategy-space "
-              "invocations jointly estimate a single cross-workload performance "
-              "effect (4068 pooled measurements of one quantity).",
+     "claim": "The 468 portability, 852 portability-extension, and 3600 "
+              "strategy-space invocations jointly estimate a single cross-workload "
+              "performance effect (4920 pooled measurements of one quantity).",
      "classification": "DO_NOT_CLAIM",
      "support": "",
      "qualification": "",
-     "reason": "The two campaigns answer different questions (strategy-space cost "
-               "structure on YC vs. cross-workload deployment portability) and are "
-               "reported separately; they must never be pooled into one effect "
-               "estimate, and neither is a warm-latency ranking."},
+     "reason": "The four campaigns answer different questions (strategy-space cost "
+               "structure on YC vs. cross-workload deployment portability and its "
+               "coverage extension) and are reported separately; they must never be "
+               "pooled into one effect estimate, and none is a warm-latency "
+               "ranking."},
+    # L (fourth campaign): the additive portability-extension campaign
+    {"category": "L_cross_workload_portability",
+     "claim": "A fourth additive OpenWhisk campaign (portability_ext, run_config "
+              "bf504a28...) executed the 29 remaining (strategy, workload) cells as "
+              "852 formal invocations / 426 baseline-target pairs under its own "
+              "byte-frozen identity, with per-plan page-set + offset parity proven "
+              "against the frozen keyed contract, completing the workstation-"
+              "coverage matrix to 49 comparable cells.",
+     "classification": "SAFE",
+     "support": "normalized/portability_ext/portability_ext_normalization_manifest.json; "
+                "descriptive/portability_ext/portability_ext_plan_parity.csv",
+     "qualification": "Execution / correctness / workload+plan binding only, under a "
+                      "distinct frozen identity; NOT a latency, ranking, or warm-"
+                      "speedup result, and NOT pooled with the other three campaigns.",
+     "reason": "Demonstrated by the runs themselves (execution + SHA-bound plan "
+               "parity), independent of any latency interpretation; a fourth "
+               "byte-frozen campaign, additive like primary->secondary."},
+    # M. effectiveness-portability comparison (descriptive cross-platform)
+    {"category": "M_effectiveness_portability",
+     "claim": "Across the 49 comparable (strategy, workload) cells, prefetch "
+              "strategies that are effective on the workstation stay effective on "
+              "OpenWhisk in the DESCRIPTIVE sense of relative first-query reduction "
+              "vs each platform's own same-condition baseline (strong strategies "
+              "34/35 effective on both; clean-cell rank correlation preserved).",
+     "classification": "QUALIFIED",
+     "support": "comparison/VERDICT_effectiveness_portability.md; "
+                "comparison/effectiveness_ow_vs_workstation.csv; "
+                "comparison/ws_provenance.csv",
+     "qualification": "Descriptive cross-platform CONSISTENCY of relative reductions "
+                      "only (standalone handles; same-batch R). It is NOT a claim of "
+                      "equal absolute latency, equal effect size, causal equivalence, "
+                      "hardware-independent speedup, or reproduction of the "
+                      "workstation performance ranking.",
+     "reason": "Relative reductions are the only cross-machine-comparable quantity; "
+               "absolute microseconds are not, and OpenWhisk warm latency carries "
+               "the order/state effect. Native/WK1 remains the primary controlled "
+               "evidence."},
+    {"category": "M_effectiveness_portability",
+     "claim": "The OpenWhisk and workstation first-query latencies are equal / "
+              "OpenWhisk reproduces the workstation absolute speedup for each "
+              "strategy.",
+     "classification": "DO_NOT_CLAIM",
+     "support": "",
+     "qualification": "",
+     "reason": "Only relative-reduction direction/consistency is comparable across "
+               "machines; absolute latency and effect size differ by platform and "
+               "are never asserted equal."},
 ]
 
 
@@ -440,6 +520,94 @@ def load_portability(port_desc_dir=PORT_DESC_DIR, port_norm_dir=PORT_NORM_DIR):
         "desc_manifest_sha256": D.sha256_file(dm_path),
         "norm_manifest_sha256": D.sha256_file(nm_path),
         "desc_shas": {n: D.sha256_file(port_desc_dir / n) for n in PORT_DESC_INPUTS},
+    }
+    return facts, problems
+
+
+def load_portability_ext(port_desc_dir=PORT_EXT_DESC_DIR,
+                         port_norm_dir=PORT_EXT_NORM_DIR):
+    """Load + SHA-gate the cross-workload portability-EXTENSION campaign (fourth
+    campaign; §19). Mirror of load_portability with the ext filenames/shape.
+
+    Fail-closed: the ext descriptive CSVs must match their descriptive manifest
+    SHAs; the descriptive manifest's recorded normalized invocation count must
+    match the ext normalization manifest's own count; and the campaign shape
+    (852/426, 7 block counts, 5 workloads, live fingerprint 5ba26fe9..., run
+    config bf504a28...) must be exactly the completed single-batch ext campaign.
+    Returns (facts, problems)."""
+    port_desc_dir = Path(port_desc_dir)
+    port_norm_dir = Path(port_norm_dir)
+    problems = []
+
+    dm_path = port_desc_dir / "portability_ext_descriptive_manifest.json"
+    nm_path = port_norm_dir / "portability_ext_normalization_manifest.json"
+    if not dm_path.exists() or not nm_path.exists():
+        problems.append("portability_ext manifests missing (run "
+                        "normalize_portability_ext.py then "
+                        "descriptive_portability_ext.py before synthesis)")
+        return None, problems
+    desc_m = json.loads(dm_path.read_text())
+    norm_m = json.loads(nm_path.read_text())
+
+    # (1) descriptive CSV SHAs
+    for name in PORT_EXT_DESC_INPUTS:
+        actual = D.sha256_file(port_desc_dir / name)
+        expected = desc_m["outputs"].get(name, {}).get("sha256")
+        if expected is None:
+            problems.append("portability_ext descriptive manifest has no sha for %s"
+                            % name)
+        elif actual != expected:
+            problems.append("portability_ext %s sha %s != manifest %s"
+                            % (name, actual, expected))
+
+    # (2) chain: descriptive inputs count must match the normalization outputs
+    if desc_m.get("inputs", {}).get("portability_ext_normalized_invocations.csv") \
+            != norm_m.get("counts", {}).get("invocations"):
+        problems.append("portability_ext chain mismatch on invocation count")
+
+    # (3) campaign shape + identity (fail-closed vs the frozen single batch)
+    counts = norm_m.get("counts", {})
+    if counts.get("invocations") != PORT_EXT_EXPECTED["invocations"]:
+        problems.append("portability_ext invocations %s != %d"
+                        % (counts.get("invocations"),
+                           PORT_EXT_EXPECTED["invocations"]))
+    if counts.get("pairs") != PORT_EXT_EXPECTED["pairs"]:
+        problems.append("portability_ext pairs %s != %d"
+                        % (counts.get("pairs"), PORT_EXT_EXPECTED["pairs"]))
+    if norm_m.get("block_pairs") != PORT_EXT_EXPECTED["block_pairs"]:
+        problems.append("portability_ext block_pairs %s != %s"
+                        % (norm_m.get("block_pairs"),
+                           PORT_EXT_EXPECTED["block_pairs"]))
+    if norm_m.get("matrix_fingerprint") != PORT_EXT_EXPECTED["matrix_fingerprint"]:
+        problems.append("portability_ext matrix_fingerprint != frozen 5ba26fe9...")
+    if norm_m.get("authoritative_run_config_sha256") \
+            != PORT_EXT_EXPECTED["run_config_sha256"]:
+        problems.append("portability_ext run_config != frozen bf504a28...")
+    if not norm_m.get("ok"):
+        problems.append("portability_ext normalization manifest ok=false")
+    if desc_m.get("workloads") != PORT_EXT_EXPECTED["workloads"]:
+        problems.append("portability_ext workloads %s != %d"
+                        % (desc_m.get("workloads"), PORT_EXT_EXPECTED["workloads"]))
+
+    facts = {
+        "invocations": counts.get("invocations"),
+        "pairs": counts.get("pairs"),
+        "block_pairs": norm_m.get("block_pairs"),
+        "workloads": desc_m.get("workloads"),
+        "workload_families": norm_m.get("workload_families", {}),
+        "distinct_target_plans": desc_m.get("distinct_target_plans"),
+        "parity_type_counts": desc_m.get("parity_type_counts", {}),
+        "matrix_fingerprint": norm_m.get("matrix_fingerprint"),
+        "run_config_sha256": norm_m.get("authoritative_run_config_sha256"),
+        "artifact_manifest_sha256": norm_m.get("artifact_manifest_sha256"),
+        "action_image_digest": norm_m.get("action_image_digest"),
+        "source_bundle_sha256": norm_m.get("source_bundle_sha256"),
+        "source_bundle_filename": norm_m.get("source_bundle_filename"),
+        "sqlite_research_git_sha": norm_m.get("sqlite_research_git_sha"),
+        "desc_manifest_sha256": D.sha256_file(dm_path),
+        "norm_manifest_sha256": D.sha256_file(nm_path),
+        "desc_shas": {n: D.sha256_file(port_desc_dir / n)
+                      for n in PORT_EXT_DESC_INPUTS},
     }
     return facts, problems
 
@@ -944,17 +1112,22 @@ def _md_cell(s):
     return str(s).replace("|", "\\|").replace("\n", " ")
 
 
-def render_thesis_notes_md(port):
-    """Two-role thesis notes (§13). Role A = the YC strategy-space campaign
-    (3600 inv). Role B = the cross-workload portability campaign (`port` facts,
-    468 inv). Counts come from the SHA-gated portability manifests so the 4068
-    two-role total is machine-checked, never free prose."""
+def render_thesis_notes_md(port, port_ext):
+    """Four-campaign thesis notes (§13/§19). Role A = the YC strategy-space
+    campaign (3600 inv = primary 1600 + secondary 2000). Role B = cross-workload
+    portability, spanning TWO byte-frozen campaigns: `port` (468 inv) and its
+    additive coverage extension `port_ext` (852 inv). Counts come from the
+    SHA-gated portability + portability_ext manifests so the 4920 four-campaign
+    total is machine-checked, never free prose."""
     fam = port["workload_families"]
     fam_line = ", ".join("%s (%s)" % (code, wl) for wl, code in sorted(
         fam.items(), key=lambda kv: kv[1])) if fam else \
         "YC, YCu, YCh01, C, C_hit"
     pt = port["parity_type_counts"]
+    pte = port_ext["parity_type_counts"]
+    total_inv = 3600 + (port["invocations"] or 0) + (port_ext["invocations"] or 0)
     return THESIS_NOTES_TMPL.format(
+        total_inv=total_inv,
         port_inv=port["invocations"], port_pairs=port["pairs"],
         n_workloads=port["workloads"], fam_line=fam_line,
         n_plans=port["distinct_target_plans"],
@@ -964,6 +1137,14 @@ def render_thesis_notes_md(port):
         port_fp=port["matrix_fingerprint"][:8],
         port_rc=port["run_config_sha256"][:8],
         bundle_sha=port["source_bundle_sha256"][:12],
+        port_ext_inv=port_ext["invocations"], port_ext_pairs=port_ext["pairs"],
+        n_plans_ext=port_ext["distinct_target_plans"],
+        exact_ext=pte.get("exact_native_plan", 0),
+        semantic_ext=pte.get("semantic_contract_reconstruction", 0),
+        static_ext=pte.get("structural_static", 0),
+        port_ext_fp=port_ext["matrix_fingerprint"][:8],
+        port_ext_rc=port_ext["run_config_sha256"][:8],
+        bundle_ext_sha=(port_ext["source_bundle_sha256"] or "0" * 64)[:12],
         tail=THESIS_NOTES_TAIL)
 
 
@@ -980,15 +1161,18 @@ observe the deployment-side cost structure (footprint, page-delivery work, and t
 instrumented query phase) that the strategies imply. It is a **deployment
 complement** to the controlled native/WK1 experiments, not a replacement for them.
 
-## Two OpenWhisk campaigns (do not pool)
+## Four OpenWhisk campaigns (do not pool)
 
-Across the completed OpenWhisk evaluation, **4068 formal invocations** were
-executed: **3600** in the **YC deployment / strategy-space campaign** and **{port_inv}**
-in the **cross-workload portability campaign**. These are two DIFFERENT roles that
-answer two DIFFERENT questions -- the strategy-space cost structure on one canonical
-workload, and cross-workload deployment portability of representative mechanisms.
-They are reported separately and **must not be pooled into a single effect
-estimate**, and neither is a warm-latency ranking.
+Across the completed OpenWhisk evaluation, **{total_inv} formal invocations** were
+executed across **four byte-frozen campaigns**: **3600** in the **YC deployment /
+strategy-space campaign** (primary 1600 + secondary 2000), **{port_inv}** in the
+**cross-workload portability campaign**, and **{port_ext_inv}** in the additive
+**cross-workload portability-extension campaign** (which completes the
+workstation-coverage effectiveness matrix). These span two ROLES answering DIFFERENT
+questions -- the strategy-space cost structure on one canonical workload, and
+cross-workload deployment portability of representative mechanisms. They are reported
+separately and **must not be pooled into a single effect estimate**, and none is a
+warm-latency ranking.
 
 ## Experimental coverage (Role A -- YC strategy-space campaign)
 
@@ -1015,6 +1199,26 @@ estimate**, and neither is a warm-latency ranking.
 - Portability here means **deployment execution + correctness + workload/plan
   binding across workloads** -- NOT a latency comparison, ranking, or warm
   speedup. The five families are **representative** coverage, not exhaustive.
+
+## Cross-workload portability extension (Role B -- fourth campaign)
+
+- An additive single-batch, block-union campaign completing the
+  workstation-coverage matrix: **{port_ext_inv} formal invocations /
+  {port_ext_pairs} baseline-target pairs** (7 blocks), one live matrix
+  fingerprint (`{port_ext_fp}...`), its OWN run-config identity
+  (`{port_ext_rc}...`), bundle `{bundle_ext_sha}...` -- distinct from the three
+  prior campaigns, which are byte-unchanged.
+- {n_plans_ext} distinct executed target plans across the same {n_workloads}
+  families, each with proven page-set + offset parity against the frozen keyed
+  contract: {exact_ext} exact-native-plan, {semantic_ext}
+  semantic-2e-contract-reconstruction, {static_ext} structural-static.
+- It runs the 29 previously-uncovered (strategy, workload) cells, taking the
+  workstation-vs-OpenWhisk comparable-cell coverage from 20 to **49 cells**. The
+  effectiveness comparison over those 49 cells is a **descriptive cross-platform
+  consistency** check of relative first-query reductions (standalone handles),
+  **not** an absolute-latency, causal-equivalence, or ranking-reproduction claim.
+- Like the other three campaigns it passed the same frozen validity gates and is
+  **never pooled** into a single effect estimate.
 
 ## Deployment feasibility
 {tail}"""
@@ -1085,11 +1289,13 @@ diagnostic only.
 """
 
 
-def render_threats_md(port):
-    """Threats note with the portability paragraph filled from gated facts (§16)."""
+def render_threats_md(port, port_ext):
+    """Threats note with the portability paragraphs filled from gated facts (§16/
+    §19). Covers both the portability campaign and its additive extension."""
     return THREATS_MD_TMPL.format(
         port_inv=port["invocations"], port_pairs=port["pairs"],
-        n_workloads=port["workloads"])
+        n_workloads=port["workloads"],
+        port_ext_inv=port_ext["invocations"], port_ext_pairs=port_ext["pairs"])
 
 
 THREATS_MD_TMPL = """# OpenWhisk threats to validity (deployment complement)
@@ -1139,9 +1345,19 @@ frozen validity gates. Two threats bound its interpretation:
   these families**, not proven for every possible workload. Per-plan page-set +
   offset parity against the frozen keyed contract is what is established.
 
-The portability campaign and the strategy-space campaign answer different questions
-and are **never pooled** into a single effect. Native/WK1 remains the primary
-controlled performance evidence for both.
+An additive **portability-extension campaign** ({port_ext_inv} formal invocations /
+{port_ext_pairs} baseline-target pairs, its own byte-frozen identity) completed the
+workstation-coverage matrix by running the remaining (strategy, workload) cells. It
+shares the same two threats above (order/state effect; representative families) and
+the same interpretation bounds. The effectiveness comparison built on top of it
+(workstation vs OpenWhisk over 49 comparable cells) reports **relative** first-query
+reductions only -- a descriptive cross-platform consistency check, **not** a claim of
+equal absolute latency, equal effect size, causal equivalence, or reproduction of the
+workstation ranking.
+
+The strategy-space, portability, and portability-extension campaigns answer different
+questions and are **never pooled** into a single effect. Native/WK1 remains the
+primary controlled performance evidence for all of them.
 """
 
 
@@ -1236,6 +1452,20 @@ def run(desc_dir=_DESC_DIR, norm_dir=_NORM_DIR, out_dir=None):
         if CLAIM_RESTRICTIONS.get(k) != v:
             problems.append("restriction %s != %r" % (k, v))
 
+    # ---- FOURTH campaign: portability-extension facts (SHA-gated, §19) ------
+    port_ext, ppe = load_portability_ext()
+    problems += ppe
+    # the four-campaign framing must carry the fourth-campaign SAFE row and the
+    # descriptive effectiveness-portability category (QUALIFIED + DO_NOT_CLAIM)
+    if ("M_effectiveness_portability", "QUALIFIED") not in cls_index:
+        problems.append("claim_map missing QUALIFIED effectiveness-portability")
+    if ("M_effectiveness_portability", "DO_NOT_CLAIM") not in cls_index:
+        problems.append("claim_map missing DO_NOT_CLAIM effectiveness-equivalence guard")
+    for k, v in (("portability_ext_extends_workload_coverage_not_pooled", True),
+                 ("effectiveness_comparison_is_descriptive_not_causal_equivalence", True)):
+        if CLAIM_RESTRICTIONS.get(k) != v:
+            problems.append("restriction %s != %r" % (k, v))
+
     ok = not problems
 
     # ---- write tables ------------------------------------------------------
@@ -1301,11 +1531,23 @@ def run(desc_dir=_DESC_DIR, norm_dir=_NORM_DIR, out_dir=None):
         "run_config_sha256": PORT_EXPECTED["run_config_sha256"],
         "source_bundle_sha256": "0" * 64,
     }
+    port_ext_facts = port_ext if port_ext is not None else {
+        "invocations": PORT_EXT_EXPECTED["invocations"],
+        "pairs": PORT_EXT_EXPECTED["pairs"],
+        "block_pairs": PORT_EXT_EXPECTED["block_pairs"],
+        "workloads": PORT_EXT_EXPECTED["workloads"],
+        "workload_families": {}, "distinct_target_plans": 0,
+        "parity_type_counts": {},
+        "matrix_fingerprint": PORT_EXT_EXPECTED["matrix_fingerprint"],
+        "run_config_sha256": PORT_EXT_EXPECTED["run_config_sha256"],
+        "source_bundle_sha256": "0" * 64,
+    }
     (out_dir / "openwhisk_thesis_notes.md").write_text(
-        render_thesis_notes_md(port_facts))
+        render_thesis_notes_md(port_facts, port_ext_facts))
     out_shas["openwhisk_thesis_notes.md"] = D.sha256_file(
         out_dir / "openwhisk_thesis_notes.md")
-    (out_dir / "threats_to_validity.md").write_text(render_threats_md(port_facts))
+    (out_dir / "threats_to_validity.md").write_text(
+        render_threats_md(port_facts, port_ext_facts))
     out_shas["threats_to_validity.md"] = D.sha256_file(
         out_dir / "threats_to_validity.md")
 
@@ -1380,14 +1622,36 @@ def run(desc_dir=_DESC_DIR, norm_dir=_NORM_DIR, out_dir=None):
             "run_config_sha256": port_facts.get("run_config_sha256"),
             "descriptive_inputs": port_facts.get("desc_shas", {}),
         },
+        "portability_ext_source": {
+            # §19 fourth campaign: the additive portability-extension chain feeds
+            # the four-campaign thesis notes + threats docs; provenance recorded
+            # here (SHA-gated in load_portability_ext, fail-closed).
+            "portability_ext_present": port_ext is not None,
+            "normalization_manifest_sha256":
+                port_ext_facts.get("norm_manifest_sha256"),
+            "descriptive_manifest_sha256":
+                port_ext_facts.get("desc_manifest_sha256"),
+            "source_bundle_sha256": port_ext_facts.get("source_bundle_sha256"),
+            "source_bundle_filename": port_ext_facts.get("source_bundle_filename"),
+            "matrix_fingerprint": port_ext_facts.get("matrix_fingerprint"),
+            "run_config_sha256": port_ext_facts.get("run_config_sha256"),
+            "descriptive_inputs": port_ext_facts.get("desc_shas", {}),
+        },
         "two_role_summary": {
             "strategy_space_formal_invocations": 3600,
             "portability_formal_invocations": port_facts.get("invocations"),
-            "total_formal_invocations": 3600 + (port_facts.get("invocations") or 0),
+            "portability_ext_formal_invocations": port_ext_facts.get("invocations"),
+            "total_formal_invocations": 3600
+                + (port_facts.get("invocations") or 0)
+                + (port_ext_facts.get("invocations") or 0),
+            "campaigns": 4,
             "pooled": False,
-            "note": "3600 strategy-space + 468 portability = 4068 formal "
-                    "invocations across two campaigns answering different "
-                    "questions; NOT pooled into a single effect estimate.",
+            "note": "3600 strategy-space (primary 1600 + secondary 2000) + 468 "
+                    "portability + 852 portability-ext = 4920 formal invocations "
+                    "across four byte-frozen campaigns answering different "
+                    "questions (two roles: strategy-space cost structure, and "
+                    "cross-workload deployment portability + its coverage "
+                    "extension); NOT pooled into a single effect estimate.",
         },
         "outputs": {k: {"sha256": v} for k, v in sorted(out_shas.items())},
         "figures": {

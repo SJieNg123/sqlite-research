@@ -1,0 +1,117 @@
+# OpenWhisk WK1 PORTABILITY-EXT normalization — validation report
+
+overall: PASS
+role: cross-workload deployment portability EXTENSION complement (NOT a performance ranking; native/WK1 remains primary)
+
+## totals
+invocations: 852 (expected 852)
+pairs: 426 (expected 426)
+block_pairs: {"block10": 18, "block11": 6, "block5": 36, "block6": 180, "block7": 90, "block8": 72, "block9": 24} (expected {block5:36, block6:180, block7:90, block8:72, block9:24, block10:18, block11:6})
+
+## identity
+bundle_sha256: 9fd7b9f69030c6ffa71532504b8a928c00de442ddc3d0f0d2cd6fa511f84c40f (sidecar=9fd7b9f69030c6ffa71532504b8a928c00de442ddc3d0f0d2cd6fa511f84c40f, match=True)
+matrix_fingerprint: 5ba26fe952104792a9b6803e581627c331884fe1b39b41adb6ebeddb245fe300 (recomputed=5ba26fe952104792a9b6803e581627c331884fe1b39b41adb6ebeddb245fe300, match=True)
+run_config_sha256: bf504a28fb0ac3cec3b189a4de1f7b8968a35bbd9866c2ae1d5784ccc3bf77da
+artifact_manifest_sha256: a50354afdb3c1569bbf9a8bfe4c20242a7c186d58d8e1f407f7a3e53d495de99
+action_image_digest: localhost:5000/sqlite-coldstart@sha256:6580fe57d62a04d3ca60c29580cf047835e52a0746ebfc0d0a17f8c1e411afff
+bundle_manifest_run_config_sha256: 022fbeb01a8d9d45686e56823eca1e1ef30712f2a13c4a878cb5f7ef0097b5b7
+status.status=done
+status.result=PASS
+status.git_sha=d2614e8aacf9c0a170115bb01f6cfc7aa0cc1041
+status.run_id=20260827T221417Z-d2614e8aacf9
+status.utc=2026-08-27T22:30:50Z
+
+## plan parity (per executed target plan; parity_type per §8)
+2d                read_tail_hit_20k              s1  pages=92 int=92 leaf=0  structural_static  matches_frozen=static
+2e_K500           native_ycsb_c_hot_hashed_01    s1  pages=592 int=92 leaf=500  semantic_contract_reconstruction  matches_frozen=True
+2e_K500           native_ycsb_c_hot_hashed_01    s2  pages=592 int=92 leaf=500  semantic_contract_reconstruction  matches_frozen=True
+2e_K500           native_ycsb_c_hot_hashed_01    s3  pages=592 int=92 leaf=500  semantic_contract_reconstruction  matches_frozen=True
+2e_K500           native_ycsb_c_read_uniform     s1  pages=592 int=92 leaf=500  semantic_contract_reconstruction  matches_frozen=True
+2e_K500           native_ycsb_c_read_uniform     s2  pages=592 int=92 leaf=500  semantic_contract_reconstruction  matches_frozen=True
+2e_K500           native_ycsb_c_read_uniform     s3  pages=592 int=92 leaf=500  semantic_contract_reconstruction  matches_frozen=True
+2e_K500           read_tail_hit_20k              s1  pages=592 int=92 leaf=500  semantic_contract_reconstruction  matches_frozen=True
+2e_K500           read_tail_hit_20k              s2  pages=592 int=92 leaf=500  semantic_contract_reconstruction  matches_frozen=True
+2e_K500           read_tail_hit_20k              s3  pages=592 int=92 leaf=500  semantic_contract_reconstruction  matches_frozen=True
+2e_K500           read_tail_mixed_20k            s1  pages=426 int=92 leaf=334  semantic_contract_reconstruction  matches_frozen=True
+2e_K500           read_tail_mixed_20k            s2  pages=426 int=92 leaf=334  semantic_contract_reconstruction  matches_frozen=True
+2e_K500           read_tail_mixed_20k            s3  pages=426 int=92 leaf=334  semantic_contract_reconstruction  matches_frozen=True
+2f_top14          native_ycsb_c_hot_hashed_01    s1  pages=14 int=14 leaf=0  exact_native_plan  matches_frozen=True
+2f_top14          native_ycsb_c_hot_hashed_01    s2  pages=14 int=14 leaf=0  exact_native_plan  matches_frozen=True
+2f_top14          native_ycsb_c_hot_hashed_01    s3  pages=14 int=14 leaf=0  exact_native_plan  matches_frozen=True
+2f_top14          native_ycsb_c_read_uniform     s1  pages=14 int=14 leaf=0  exact_native_plan  matches_frozen=True
+2f_top14          native_ycsb_c_read_uniform     s2  pages=14 int=14 leaf=0  exact_native_plan  matches_frozen=True
+2f_top14          native_ycsb_c_read_uniform     s3  pages=14 int=14 leaf=0  exact_native_plan  matches_frozen=True
+2f_top14          native_ycsb_c_read_zipf        s1  pages=14 int=13 leaf=1  exact_native_plan  matches_frozen=True
+2f_top14          native_ycsb_c_read_zipf        s2  pages=14 int=13 leaf=1  exact_native_plan  matches_frozen=True
+2f_top14          native_ycsb_c_read_zipf        s3  pages=14 int=13 leaf=1  exact_native_plan  matches_frozen=True
+2f_top14          read_tail_hit_20k              s1  pages=14 int=3 leaf=11  exact_native_plan  matches_frozen=True
+2f_top14          read_tail_hit_20k              s2  pages=14 int=3 leaf=11  exact_native_plan  matches_frozen=True
+2f_top14          read_tail_hit_20k              s3  pages=14 int=3 leaf=11  exact_native_plan  matches_frozen=True
+2f_top14          read_tail_mixed_20k            s1  pages=14 int=2 leaf=12  exact_native_plan  matches_frozen=True
+2f_top14          read_tail_mixed_20k            s2  pages=14 int=2 leaf=12  exact_native_plan  matches_frozen=True
+2f_top14          read_tail_mixed_20k            s3  pages=14 int=2 leaf=12  exact_native_plan  matches_frozen=True
+2f_top28          native_ycsb_c_hot_hashed_01    s1  pages=28 int=28 leaf=0  exact_native_plan  matches_frozen=True
+2f_top28          native_ycsb_c_hot_hashed_01    s2  pages=28 int=28 leaf=0  exact_native_plan  matches_frozen=True
+2f_top28          native_ycsb_c_hot_hashed_01    s3  pages=28 int=28 leaf=0  exact_native_plan  matches_frozen=True
+2f_top28          native_ycsb_c_read_uniform     s1  pages=28 int=28 leaf=0  exact_native_plan  matches_frozen=True
+2f_top28          native_ycsb_c_read_uniform     s2  pages=28 int=28 leaf=0  exact_native_plan  matches_frozen=True
+2f_top28          native_ycsb_c_read_uniform     s3  pages=28 int=28 leaf=0  exact_native_plan  matches_frozen=True
+2f_top28          read_tail_hit_20k              s1  pages=28 int=3 leaf=25  exact_native_plan  matches_frozen=True
+2f_top28          read_tail_hit_20k              s2  pages=28 int=3 leaf=25  exact_native_plan  matches_frozen=True
+2f_top28          read_tail_hit_20k              s3  pages=28 int=3 leaf=25  exact_native_plan  matches_frozen=True
+2f_top28          read_tail_mixed_20k            s1  pages=28 int=2 leaf=26  exact_native_plan  matches_frozen=True
+2f_top28          read_tail_mixed_20k            s2  pages=28 int=2 leaf=26  exact_native_plan  matches_frozen=True
+2f_top28          read_tail_mixed_20k            s3  pages=28 int=2 leaf=26  exact_native_plan  matches_frozen=True
+layers_5          native_ycsb_c_hot_hashed_01    s1  pages=5 int=5 leaf=0  structural_static  matches_frozen=static
+layers_5          native_ycsb_c_read_uniform     s1  pages=5 int=5 leaf=0  structural_static  matches_frozen=static
+layers_5          read_tail_mixed_20k            s1  pages=5 int=5 leaf=0  structural_static  matches_frozen=static
+layers_92         native_ycsb_c_hot_hashed_01    s1  pages=92 int=92 leaf=0  structural_static  matches_frozen=static
+layers_92         native_ycsb_c_read_uniform     s1  pages=92 int=92 leaf=0  structural_static  matches_frozen=static
+layers_92         native_ycsb_c_read_zipf        s1  pages=92 int=92 leaf=0  structural_static  matches_frozen=static
+layers_92         read_tail_hit_20k              s1  pages=92 int=92 leaf=0  structural_static  matches_frozen=static
+learned_markov_14 native_ycsb_c_hot_hashed_01    s1  pages=14 int=14 leaf=0  exact_native_plan  matches_frozen=True
+learned_markov_14 native_ycsb_c_hot_hashed_01    s2  pages=14 int=14 leaf=0  exact_native_plan  matches_frozen=True
+learned_markov_14 native_ycsb_c_hot_hashed_01    s3  pages=14 int=14 leaf=0  exact_native_plan  matches_frozen=True
+learned_markov_14 native_ycsb_c_read_uniform     s1  pages=14 int=14 leaf=0  exact_native_plan  matches_frozen=True
+learned_markov_14 native_ycsb_c_read_uniform     s2  pages=14 int=14 leaf=0  exact_native_plan  matches_frozen=True
+learned_markov_14 native_ycsb_c_read_uniform     s3  pages=14 int=14 leaf=0  exact_native_plan  matches_frozen=True
+learned_markov_14 native_ycsb_c_read_zipf        s1  pages=14 int=13 leaf=1  exact_native_plan  matches_frozen=True
+learned_markov_14 native_ycsb_c_read_zipf        s2  pages=14 int=13 leaf=1  exact_native_plan  matches_frozen=True
+learned_markov_14 native_ycsb_c_read_zipf        s3  pages=14 int=13 leaf=1  exact_native_plan  matches_frozen=True
+learned_markov_14 read_tail_hit_20k              s1  pages=14 int=3 leaf=11  exact_native_plan  matches_frozen=True
+learned_markov_14 read_tail_hit_20k              s2  pages=14 int=3 leaf=11  exact_native_plan  matches_frozen=True
+learned_markov_14 read_tail_hit_20k              s3  pages=14 int=3 leaf=11  exact_native_plan  matches_frozen=True
+learned_markov_28 native_ycsb_c_hot_hashed_01    s1  pages=28 int=28 leaf=0  exact_native_plan  matches_frozen=True
+learned_markov_28 native_ycsb_c_hot_hashed_01    s2  pages=28 int=28 leaf=0  exact_native_plan  matches_frozen=True
+learned_markov_28 native_ycsb_c_hot_hashed_01    s3  pages=28 int=28 leaf=0  exact_native_plan  matches_frozen=True
+learned_markov_28 native_ycsb_c_read_uniform     s1  pages=28 int=28 leaf=0  exact_native_plan  matches_frozen=True
+learned_markov_28 native_ycsb_c_read_uniform     s2  pages=28 int=28 leaf=0  exact_native_plan  matches_frozen=True
+learned_markov_28 native_ycsb_c_read_uniform     s3  pages=28 int=28 leaf=0  exact_native_plan  matches_frozen=True
+learned_markov_28 read_tail_hit_20k              s1  pages=28 int=3 leaf=25  exact_native_plan  matches_frozen=True
+learned_markov_28 read_tail_hit_20k              s2  pages=28 int=3 leaf=25  exact_native_plan  matches_frozen=True
+learned_markov_28 read_tail_hit_20k              s3  pages=28 int=3 leaf=25  exact_native_plan  matches_frozen=True
+learned_markov_28 read_tail_mixed_20k            s1  pages=28 int=2 leaf=26  exact_native_plan  matches_frozen=True
+learned_markov_28 read_tail_mixed_20k            s2  pages=28 int=2 leaf=26  exact_native_plan  matches_frozen=True
+learned_markov_28 read_tail_mixed_20k            s3  pages=28 int=2 leaf=26  exact_native_plan  matches_frozen=True
+
+## pair-order structural balance (integrity only; NOT performance)
+portability_ext | 2d | standalone : baseline_first=1 target_first=2
+portability_ext | 2d | warm : baseline_first=1 target_first=2
+portability_ext | 2e_K500 | standalone : baseline_first=18 target_first=18
+portability_ext | 2e_K500 | warm : baseline_first=17 target_first=19
+portability_ext | 2f_top14 | standalone : baseline_first=20 target_first=25
+portability_ext | 2f_top14 | warm : baseline_first=24 target_first=21
+portability_ext | 2f_top28 | standalone : baseline_first=17 target_first=19
+portability_ext | 2f_top28 | warm : baseline_first=19 target_first=17
+portability_ext | layers_5 | standalone : baseline_first=7 target_first=2
+portability_ext | layers_5 | warm : baseline_first=3 target_first=6
+portability_ext | layers_92 | standalone : baseline_first=7 target_first=5
+portability_ext | layers_92 | warm : baseline_first=5 target_first=7
+portability_ext | learned_markov_14 | standalone : baseline_first=18 target_first=18
+portability_ext | learned_markov_14 | warm : baseline_first=20 target_first=16
+portability_ext | learned_markov_28 | standalone : baseline_first=16 target_first=20
+portability_ext | learned_markov_28 | warm : baseline_first=18 target_first=18
+
+## fail-closed problems (0)
+(none — all gates passed)
+

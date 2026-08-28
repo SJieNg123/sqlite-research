@@ -45,6 +45,16 @@ frozen validity gates. Two threats bound its interpretation:
   these families**, not proven for every possible workload. Per-plan page-set +
   offset parity against the frozen keyed contract is what is established.
 
-The portability campaign and the strategy-space campaign answer different questions
-and are **never pooled** into a single effect. Native/WK1 remains the primary
-controlled performance evidence for both.
+An additive **portability-extension campaign** (852 formal invocations /
+426 baseline-target pairs, its own byte-frozen identity) completed the
+workstation-coverage matrix by running the remaining (strategy, workload) cells. It
+shares the same two threats above (order/state effect; representative families) and
+the same interpretation bounds. The effectiveness comparison built on top of it
+(workstation vs OpenWhisk over 49 comparable cells) reports **relative** first-query
+reductions only -- a descriptive cross-platform consistency check, **not** a claim of
+equal absolute latency, equal effect size, causal equivalence, or reproduction of the
+workstation ranking.
+
+The strategy-space, portability, and portability-extension campaigns answer different
+questions and are **never pooled** into a single effect. Native/WK1 remains the
+primary controlled performance evidence for all of them.
