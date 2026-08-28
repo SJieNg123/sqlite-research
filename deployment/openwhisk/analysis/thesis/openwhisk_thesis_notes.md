@@ -11,14 +11,16 @@ observe the deployment-side cost structure (footprint, page-delivery work, and t
 instrumented query phase) that the strategies imply. It is a **deployment
 complement** to the controlled native/WK1 experiments, not a replacement for them.
 
-## Four OpenWhisk campaigns (do not pool)
+## Five OpenWhisk campaigns (do not pool)
 
-Across the completed OpenWhisk evaluation, **4920 formal invocations** were
-executed across **four byte-frozen campaigns**: **3600** in the **YC deployment /
+Across the completed OpenWhisk evaluation, **5376 formal invocations** were
+executed across **five byte-frozen campaigns**: **3600** in the **YC deployment /
 strategy-space campaign** (primary 1600 + secondary 2000), **468** in the
-**cross-workload portability campaign**, and **852** in the additive
-**cross-workload portability-extension campaign** (which completes the
-workstation-coverage effectiveness matrix). These span two ROLES answering DIFFERENT
+**cross-workload portability campaign**, **852** in the additive
+**cross-workload portability-extension campaign**, and **456** in the
+additive **cross-workload portability-full-closure campaign** (which closes the
+final uncovered cells so all 65 canonical retained workstation cells at orig layout
+have OpenWhisk execution coverage). These span two ROLES answering DIFFERENT
 questions -- the strategy-space cost structure on one canonical workload, and
 cross-workload deployment portability of representative mechanisms. They are reported
 separately and **must not be pooled into a single effect estimate**, and none is a
@@ -68,6 +70,29 @@ warm-latency ranking.
   consistency** check of relative first-query reductions (standalone handles),
   **not** an absolute-latency, causal-equivalence, or ranking-reproduction claim.
 - Like the other three campaigns it passed the same frozen validity gates and is
+  **never pooled** into a single effect estimate.
+
+## Cross-workload portability full closure (Role B -- fifth campaign)
+
+- The final additive single-batch, block-union campaign closing the last uncovered
+  cells: **456 formal invocations / 228 baseline-target
+  pairs** (6 blocks, B12-B17), one live matrix fingerprint (`d35708b7...`), its
+  OWN run-config identity (`a5be8f15...`), bundle `c8ef0cbe16c3...` --
+  distinct from the four prior campaigns, which are byte-unchanged.
+- 38 distinct executed target plans across the same 5
+  families, each with proven page-set + offset parity against the frozen keyed
+  contract: 29 exact-native-plan, 8
+  semantic-2e-contract-reconstruction, 1 structural-static. The two
+  libprefetch delivery-order variants (lp_sorted, lp_shuf) deliver the same
+  canonical resident page set via `pread_ordered`; their cost lever is delivery
+  order (`deliver_us`), analysed separately, not first-query.
+- It runs the final 16 previously-uncovered (strategy, workload) cells, so **all 65
+  canonical retained workstation cells at orig layout have OpenWhisk execution
+  coverage** (BOTH=65, WS_ONLY=0; 4 OpenWhisk-only YC cells remain, never counted
+  as workstation coverage). This is **CELL coverage** -- execution / correctness /
+  workload+plan binding -- **not** protocol, layout, or performance equivalence,
+  and **not** a latency or ranking claim. Native/WK1 remains the primary evidence.
+- Like the other four campaigns it passed the same frozen validity gates and is
   **never pooled** into a single effect estimate.
 
 ## Deployment feasibility

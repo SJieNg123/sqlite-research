@@ -46,15 +46,24 @@ frozen validity gates. Two threats bound its interpretation:
   offset parity against the frozen keyed contract is what is established.
 
 An additive **portability-extension campaign** (852 formal invocations /
-426 baseline-target pairs, its own byte-frozen identity) completed the
-workstation-coverage matrix by running the remaining (strategy, workload) cells. It
-shares the same two threats above (order/state effect; representative families) and
-the same interpretation bounds. The effectiveness comparison built on top of it
-(workstation vs OpenWhisk over 49 comparable cells) reports **relative** first-query
-reductions only -- a descriptive cross-platform consistency check, **not** a claim of
-equal absolute latency, equal effect size, causal equivalence, or reproduction of the
-workstation ranking.
+426 baseline-target pairs, its own byte-frozen identity) extended the
+workstation-coverage matrix by running 29 further (strategy, workload) cells. A final
+additive **portability-full-closure campaign** (456 formal invocations /
+228 baseline-target pairs, its own byte-frozen identity) closed the last
+16 uncovered cells, so **all 65 canonical retained workstation cells at orig layout
+have OpenWhisk execution coverage** (4 OpenWhisk-only YC cells remain and are never
+counted as workstation coverage). Both share the same two threats above (order/state
+effect; representative families) and the same interpretation bounds; the closure's
+**cell coverage is not protocol, layout, or performance equivalence**. The two
+libprefetch delivery-order variants in the closure are analysed by delivery order
+(`deliver_us`), not first-query, because both arms deliver the same page set and warm
+post-delivery first-query is not an order-effect estimate. The effectiveness
+comparison built across these cells (workstation vs OpenWhisk, 55 by relative
+first-query reduction + 10 lp by delivery order) reports **relative** quantities only
+-- a descriptive cross-platform consistency check, **not** a claim of equal absolute
+latency, equal effect size, causal equivalence, or reproduction of the workstation
+ranking.
 
-The strategy-space, portability, and portability-extension campaigns answer different
-questions and are **never pooled** into a single effect. Native/WK1 remains the
-primary controlled performance evidence for all of them.
+The strategy-space, portability, portability-extension, and portability-full-closure
+campaigns answer different questions and are **never pooled** into a single effect.
+Native/WK1 remains the primary controlled performance evidence for all of them.

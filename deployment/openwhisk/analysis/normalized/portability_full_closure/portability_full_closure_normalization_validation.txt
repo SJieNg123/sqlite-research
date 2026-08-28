@@ -1,0 +1,80 @@
+# OpenWhisk WK1 PORTABILITY-FULL-CLOSURE normalization — validation report
+
+overall: PASS
+role: final 16-cell workstation-matrix closure complement (CELL coverage only; NOT a performance ranking; native/WK1 remains primary)
+
+## totals
+invocations: 456 (expected 456)
+pairs: 228 (expected 228)
+block_pairs: {"block12": 12, "block13": 36, "block14": 18, "block15": 6, "block16": 144, "block17": 12} (expected {block12:12, block13:36, block14:18, block15:6, block16:144, block17:12})
+
+## identity
+bundle_sha256: c8ef0cbe16c3b8e09aa501d90991fc7197c6014119b6b880d087b498e0011dd1 (sidecar=c8ef0cbe16c3b8e09aa501d90991fc7197c6014119b6b880d087b498e0011dd1, match=True)
+matrix_fingerprint: d35708b781f29c0609da6f702b5e11599e10aff5d16a0c5fa1aa0253d079f0ec (recomputed=d35708b781f29c0609da6f702b5e11599e10aff5d16a0c5fa1aa0253d079f0ec, match=True)
+run_config_sha256: a5be8f150bc87182d3a158ff580b83a04073a84ff258cde07d78a73e35f60faf
+artifact_manifest_sha256: 12afebf0f766c27d28ceb0f0213a2d34db4a2adcc9c5c5bbb2ca037a1a576d0b
+action_image_digest: localhost:5000/sqlite-coldstart@sha256:c003ff2c9801dd14c48a4272d9c41d3b83ec31e63ed5873c53f6fd47d4609eaf
+bundle_manifest_run_config_sha256: 022fbeb01a8d9d45686e56823eca1e1ef30712f2a13c4a878cb5f7ef0097b5b7
+status.status=done
+status.result=PASS
+status.git_sha=956cd15b5db31529ecef96cf1e5733f566c4d455
+status.run_id=20260828T135936Z-956cd15b5db3
+status.utc=2026-08-28T14:09:24Z
+
+## plan parity (per executed target plan; parity_type per taxonomy)
+2e_K40            read_tail_hit_20k              s1  pages=132 int=92 leaf=40  deliver=madvise_willneed  semantic_contract_reconstruction  matches_frozen=True
+2e_K40            read_tail_hit_20k              s2  pages=132 int=92 leaf=40  deliver=madvise_willneed  semantic_contract_reconstruction  matches_frozen=True
+2e_K40            read_tail_hit_20k              s3  pages=132 int=92 leaf=40  deliver=madvise_willneed  semantic_contract_reconstruction  matches_frozen=True
+2e_K40            read_tail_mixed_20k            s1  pages=132 int=92 leaf=40  deliver=madvise_willneed  semantic_contract_reconstruction  matches_frozen=True
+2e_K92            read_tail_hit_20k              s1  pages=184 int=92 leaf=92  deliver=madvise_willneed  semantic_contract_reconstruction  matches_frozen=True
+2e_K92            read_tail_hit_20k              s2  pages=184 int=92 leaf=92  deliver=madvise_willneed  semantic_contract_reconstruction  matches_frozen=True
+2e_K92            read_tail_hit_20k              s3  pages=184 int=92 leaf=92  deliver=madvise_willneed  semantic_contract_reconstruction  matches_frozen=True
+2e_K92            read_tail_mixed_20k            s1  pages=184 int=92 leaf=92  deliver=madvise_willneed  semantic_contract_reconstruction  matches_frozen=True
+layers_92         read_tail_mixed_20k            s1  pages=92 int=92 leaf=0  deliver=madvise_willneed  structural_static  matches_frozen=static
+learned_markov_14 read_tail_mixed_20k            s1  pages=14 int=2 leaf=12  deliver=madvise_willneed  exact_native_plan  matches_frozen=True
+learned_markov_14 read_tail_mixed_20k            s2  pages=14 int=2 leaf=12  deliver=madvise_willneed  exact_native_plan  matches_frozen=True
+learned_markov_14 read_tail_mixed_20k            s3  pages=14 int=2 leaf=12  deliver=madvise_willneed  exact_native_plan  matches_frozen=True
+lp_shuf           native_ycsb_c_hot_hashed_01    s1  pages=26295 int=92 leaf=26203  deliver=pread_ordered  exact_native_plan  matches_frozen=True
+lp_shuf           native_ycsb_c_hot_hashed_01    s2  pages=26295 int=92 leaf=26203  deliver=pread_ordered  exact_native_plan  matches_frozen=True
+lp_shuf           native_ycsb_c_hot_hashed_01    s3  pages=26295 int=92 leaf=26203  deliver=pread_ordered  exact_native_plan  matches_frozen=True
+lp_shuf           native_ycsb_c_read_uniform     s1  pages=26330 int=92 leaf=26238  deliver=pread_ordered  exact_native_plan  matches_frozen=True
+lp_shuf           native_ycsb_c_read_uniform     s2  pages=26330 int=92 leaf=26238  deliver=pread_ordered  exact_native_plan  matches_frozen=True
+lp_shuf           native_ycsb_c_read_uniform     s3  pages=26330 int=92 leaf=26238  deliver=pread_ordered  exact_native_plan  matches_frozen=True
+lp_shuf           native_ycsb_c_read_zipf        s1  pages=26331 int=92 leaf=26239  deliver=pread_ordered  exact_native_plan  matches_frozen=True
+lp_shuf           native_ycsb_c_read_zipf        s2  pages=26331 int=92 leaf=26239  deliver=pread_ordered  exact_native_plan  matches_frozen=True
+lp_shuf           native_ycsb_c_read_zipf        s3  pages=26331 int=92 leaf=26239  deliver=pread_ordered  exact_native_plan  matches_frozen=True
+lp_shuf           read_tail_hit_20k              s1  pages=916 int=5 leaf=911  deliver=pread_ordered  exact_native_plan  matches_frozen=True
+lp_shuf           read_tail_hit_20k              s2  pages=921 int=5 leaf=916  deliver=pread_ordered  exact_native_plan  matches_frozen=True
+lp_shuf           read_tail_hit_20k              s3  pages=918 int=5 leaf=913  deliver=pread_ordered  exact_native_plan  matches_frozen=True
+lp_shuf           read_tail_mixed_20k            s1  pages=483 int=4 leaf=479  deliver=pread_ordered  exact_native_plan  matches_frozen=True
+lp_sorted         native_ycsb_c_hot_hashed_01    s1  pages=26295 int=92 leaf=26203  deliver=pread_ordered  exact_native_plan  matches_frozen=True
+lp_sorted         native_ycsb_c_hot_hashed_01    s2  pages=26295 int=92 leaf=26203  deliver=pread_ordered  exact_native_plan  matches_frozen=True
+lp_sorted         native_ycsb_c_hot_hashed_01    s3  pages=26295 int=92 leaf=26203  deliver=pread_ordered  exact_native_plan  matches_frozen=True
+lp_sorted         native_ycsb_c_read_uniform     s1  pages=26330 int=92 leaf=26238  deliver=pread_ordered  exact_native_plan  matches_frozen=True
+lp_sorted         native_ycsb_c_read_uniform     s2  pages=26330 int=92 leaf=26238  deliver=pread_ordered  exact_native_plan  matches_frozen=True
+lp_sorted         native_ycsb_c_read_uniform     s3  pages=26330 int=92 leaf=26238  deliver=pread_ordered  exact_native_plan  matches_frozen=True
+lp_sorted         native_ycsb_c_read_zipf        s1  pages=26331 int=92 leaf=26239  deliver=pread_ordered  exact_native_plan  matches_frozen=True
+lp_sorted         native_ycsb_c_read_zipf        s2  pages=26331 int=92 leaf=26239  deliver=pread_ordered  exact_native_plan  matches_frozen=True
+lp_sorted         native_ycsb_c_read_zipf        s3  pages=26331 int=92 leaf=26239  deliver=pread_ordered  exact_native_plan  matches_frozen=True
+lp_sorted         read_tail_hit_20k              s1  pages=916 int=5 leaf=911  deliver=pread_ordered  exact_native_plan  matches_frozen=True
+lp_sorted         read_tail_hit_20k              s2  pages=921 int=5 leaf=916  deliver=pread_ordered  exact_native_plan  matches_frozen=True
+lp_sorted         read_tail_hit_20k              s3  pages=918 int=5 leaf=913  deliver=pread_ordered  exact_native_plan  matches_frozen=True
+lp_sorted         read_tail_mixed_20k            s1  pages=483 int=4 leaf=479  deliver=pread_ordered  exact_native_plan  matches_frozen=True
+
+## pair-order structural balance (integrity only; NOT performance)
+portability_full_closure | 2e_K40 | standalone : baseline_first=9 target_first=3
+portability_full_closure | 2e_K40 | warm : baseline_first=6 target_first=6
+portability_full_closure | 2e_K92 | standalone : baseline_first=5 target_first=7
+portability_full_closure | 2e_K92 | warm : baseline_first=9 target_first=3
+portability_full_closure | layers_92 | standalone : baseline_first=2 target_first=1
+portability_full_closure | layers_92 | warm : baseline_first=3 target_first=0
+portability_full_closure | learned_markov_14 | standalone : baseline_first=3 target_first=6
+portability_full_closure | learned_markov_14 | warm : baseline_first=3 target_first=6
+portability_full_closure | lp_shuf | standalone : baseline_first=18 target_first=21
+portability_full_closure | lp_shuf | warm : baseline_first=20 target_first=19
+portability_full_closure | lp_sorted | standalone : baseline_first=28 target_first=11
+portability_full_closure | lp_sorted | warm : baseline_first=20 target_first=19
+
+## fail-closed problems (0)
+(none — all gates passed)
+

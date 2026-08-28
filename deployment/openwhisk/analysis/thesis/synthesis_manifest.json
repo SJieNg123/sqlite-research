@@ -3,9 +3,10 @@
   "claim_map_counts": {
     "DO_NOT_CLAIM": 7,
     "QUALIFIED": 4,
-    "SAFE": 8
+    "SAFE": 9
   },
   "claim_restrictions": {
+    "cell_coverage_is_not_protocol_layout_or_performance_equivalence": true,
     "effectiveness_comparison_is_descriptive_not_causal_equivalence": true,
     "exact_order_effect_source_unresolved": true,
     "first_query_us_is_query_phase_not_total_cold_start": true,
@@ -17,6 +18,7 @@
     "order_effect_is_not_random_hardware_noise": true,
     "portability_and_strategy_space_campaigns_not_pooled": true,
     "portability_ext_extends_workload_coverage_not_pooled": true,
+    "portability_full_closure_completes_cell_coverage_not_pooled": true,
     "portability_is_execution_binding_not_latency_ranking": true
   },
   "cost_vector_legend": {
@@ -35,12 +37,12 @@
     "figure_order_effect_diagnostic.svg": "figure_source_order_effect.csv",
     "figure_query_vs_delivery.svg": "figure_source_query_vs_delivery.csv"
   },
-  "generated_utc": "2026-08-28T08:55:58Z",
+  "generated_utc": "2026-08-28T16:24:53Z",
   "ok": true,
   "openwhisk_role": "deployment complement to the primary native/WK1 controlled performance and mechanism evidence.",
   "outputs": {
     "claim_map.md": {
-      "sha256": "b2a2cce6dbf248f87ba9942e7c33b642622bee8fc21daf55a0a0af219ec89d50"
+      "sha256": "dcaf826efe0c4d25358aa9f027179b506bd8dce5b3459c5bbe14d9b7a15b4ea9"
     },
     "figure_footprint_vs_delivery.svg": {
       "sha256": "ae4537b1d6706238173b98cfd4ad1cdc353554b5c34e3e7660d4c3dc08c34669"
@@ -73,13 +75,13 @@
       "sha256": "cd156c6bc40579129fc32d86009c280127232b53983005039c7d01c9820dd7ce"
     },
     "openwhisk_thesis_notes.md": {
-      "sha256": "fa91168b5243d19170a3c8c6a4637ad384a8c852355836b446a199c145c239f6"
+      "sha256": "0babde32154935a323bfd8cc9702e3e1e4680d6bfab03f886bcbceafbbbb790c"
     },
     "synthesis_validation.txt": {
-      "sha256": "1ef1573970324176f4291db8377560f3357a51b06330c037498c0b0736062f43"
+      "sha256": "a60385a444765162c1dceb2e7af750edac5a4d1d9b6b866c9801875fcdfbe1c6"
     },
     "threats_to_validity.md": {
-      "sha256": "9e8da3628dc5b24cdde57c50097cf54166cb9da50b8aad472b2668a1c831ce9d"
+      "sha256": "47306c56d0c1fdb05a8e1adad4389068c077b37cc19a6b4001a5430117de26ea"
     }
   },
   "png_pdf_not_produced_reason": "matplotlib/numpy unavailable in analysis host; SVG is vector, publication-usable, and byte-deterministic.",
@@ -96,6 +98,20 @@
     "run_config_sha256": "bf504a28fb0ac3cec3b189a4de1f7b8968a35bbd9866c2ae1d5784ccc3bf77da",
     "source_bundle_filename": "ws2_bundle_d2614e8aacf9_20260828T055854Z.tar.gz",
     "source_bundle_sha256": "9fd7b9f69030c6ffa71532504b8a928c00de442ddc3d0f0d2cd6fa511f84c40f"
+  },
+  "portability_full_closure_source": {
+    "descriptive_inputs": {
+      "portability_full_closure_coverage.csv": "1020cd836295b33a161dc88846cd9c1d35ee2d367a3efeba6acc783baaf69a26",
+      "portability_full_closure_plan_parity.csv": "458905610667da1f7adf0c81af412f4e1fc645d355f9b1cb1769bd58b14fa455",
+      "portability_full_closure_workload_summary.csv": "ee13265b61abe0a5b0be598b77e74f057a10cbef271b372f48ef70e0274701ec"
+    },
+    "descriptive_manifest_sha256": "5aaeefd7bedd9cc324bd626da3ae83e2cfcdda6497ed7616086436d502c29832",
+    "matrix_fingerprint": "d35708b781f29c0609da6f702b5e11599e10aff5d16a0c5fa1aa0253d079f0ec",
+    "normalization_manifest_sha256": "5af1e1c25a76e8b02628f3f67d6f41e962b1b1341f9ddc6dea0ef2228a379889",
+    "portability_full_closure_present": true,
+    "run_config_sha256": "a5be8f150bc87182d3a158ff580b83a04073a84ff258cde07d78a73e35f60faf",
+    "source_bundle_filename": "ws2_bundle_956cd15b5db3_20260828T141110Z.tar.gz",
+    "source_bundle_sha256": "c8ef0cbe16c3b8e09aa501d90991fc7197c6014119b6b880d087b498e0011dd1"
   },
   "portability_source": {
     "descriptive_inputs": {
@@ -136,14 +152,16 @@
     "2f_top102",
     "learned_markov_102"
   ],
-  "synthesis_script_git_sha": "ab016fdaffc5b774d0697800c0c7457b35b41d68",
+  "synthesis_script_git_sha": "a84694c601b027d7c26bac169ce62a20a1dea3a4",
   "two_role_summary": {
-    "campaigns": 4,
-    "note": "3600 strategy-space (primary 1600 + secondary 2000) + 468 portability + 852 portability-ext = 4920 formal invocations across four byte-frozen campaigns answering different questions (two roles: strategy-space cost structure, and cross-workload deployment portability + its coverage extension); NOT pooled into a single effect estimate.",
+    "campaigns": 5,
+    "note": "3600 strategy-space (primary 1600 + secondary 2000) + 468 portability + 852 portability-ext + 456 portability-full-closure = 5376 formal invocations across five byte-frozen campaigns answering different questions (two roles: strategy-space cost structure, and cross-workload deployment portability + its coverage extension + its final cell closure); NOT pooled into a single effect estimate.",
     "pooled": false,
     "portability_ext_formal_invocations": 852,
     "portability_formal_invocations": 468,
+    "portability_full_closure_formal_invocations": 456,
     "strategy_space_formal_invocations": 3600,
-    "total_formal_invocations": 4920
+    "total_formal_invocations": 5376,
+    "total_formal_pairs": 2688
   }
 }

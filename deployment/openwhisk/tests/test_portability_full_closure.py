@@ -595,11 +595,12 @@ class ClosureActionDispatch(unittest.TestCase):
 
 # --------------------------------------------------------------------------- F
 class ClosureCoverageAudit(unittest.TestCase):
-    """The WS-denominator coverage audit: 65 canonical cells, 49 executed BOTH, exactly
-    16 WS_ONLY gaps, exactly 4 OW_ONLY; the closure campaign PLANS exactly those 16 gaps
-    and BOTH u planned == 65. Executed BOTH stays 49 until WK2 (claim boundary: this is
-    cell coverage, NOT protocol replication). Also pins C/2e_K500's canonical source to
-    unified_v2 (the corrected §4.4 provenance, unchanged by this closure)."""
+    """The WS-denominator coverage audit AFTER the closure executed: 65 canonical cells,
+    ALL 65 now executed BOTH, zero WS_ONLY gaps, exactly 4 OW_ONLY; the closure campaign
+    targeted exactly the 16 formerly-WS_ONLY cells and they are all now in BOTH. Claim
+    boundary: this is CELL coverage, NOT protocol/layout/performance replication. Also
+    pins C/2e_K500's canonical source to unified_v2 (corrected §4.4 provenance,
+    unchanged by this closure)."""
 
     @classmethod
     def setUpClass(cls):
@@ -607,24 +608,28 @@ class ClosureCoverageAudit(unittest.TestCase):
         cls.GAP = GAP
 
     def test_denominator_and_partition(self):
+        # closure executed: BOTH is now the full matrix, no WS_ONLY gap remains
+        self.assertTrue(self.GAP.CLOSURE_EXECUTED)
         self.assertEqual(len(self.GAP.WS_CELLS), 65)
-        self.assertEqual(len(self.GAP.BOTH), 49)
-        self.assertEqual(len(self.GAP.WS_ONLY), 16)
+        self.assertEqual(len(self.GAP.BOTH), 65)
+        self.assertEqual(len(self.GAP.WS_ONLY), 0)
         self.assertEqual(len(self.GAP.OW_ONLY), 4)
 
     def test_planned_closure_covers_exactly_the_gap(self):
-        self.assertEqual(self.GAP.PLANNED_CLOSURE, self.GAP.WS_ONLY,
-                         "planned closure must target EXACTLY the 16 WS_ONLY gaps")
-        self.assertEqual(self.GAP.BOTH | self.GAP.PLANNED_CLOSURE, self.GAP.WS_CELLS,
-                         "BOTH union planned-closure must span the full 65-cell matrix")
-        self.assertEqual(self.GAP.WS_ONLY - self.GAP.PLANNED_CLOSURE, set(),
-                         "no planned WS_ONLY gap may remain")
+        # the closure targeted 16 cells; post-execution every one is in BOTH
+        self.assertEqual(len(self.GAP.PLANNED_CLOSURE), 16)
+        self.assertTrue(self.GAP.PLANNED_CLOSURE <= self.GAP.BOTH,
+                        "every planned closure cell must now be executed BOTH")
+        self.assertEqual(self.GAP.BOTH, self.GAP.WS_CELLS,
+                         "executed BOTH must span the full 65-cell matrix")
+        self.assertEqual(self.GAP.WS_ONLY, set(),
+                         "no WS_ONLY gap may remain after closure")
 
-    def test_executed_both_unchanged_until_wk2(self):
-        # Claim boundary: executed coverage is 49/65 now; it becomes 65 only AFTER WK2
-        # evidence is archived. This test guards against prematurely flipping it.
-        self.assertEqual(len(self.GAP.BOTH), 49)
-        self.assertNotEqual(len(self.GAP.BOTH), 65)
+    def test_executed_both_is_full_65(self):
+        # Claim boundary: executed coverage is now 65/65 (cell coverage only). This test
+        # guards against silently regressing the executed count below the full matrix.
+        self.assertEqual(len(self.GAP.BOTH), 65)
+        self.assertEqual(len(self.GAP.WS_CELLS), 65)
 
     def test_c_2e_k500_sourced_from_unified_v2(self):
         self.assertEqual(self.GAP.WS[("C", "2e_K500")]["source_batch"], "unified_v2/matrix")
@@ -642,6 +647,77 @@ class PriorFreezeReportsUntouched(unittest.TestCase):
     def test_portability_ext_freeze_still_63(self):
         fr = _load_json(os.path.join(OW, "config/plans/keyed/portability_ext_freeze_report.json"))
         self.assertEqual(len(fr["plans"]), 63)
+
+
+# --------------------------------------------------------------------------- H
+class ClosureExecutedEvidenceGates(unittest.TestCase):
+    """The ARCHIVED, EXECUTED closure evidence (normalized + descriptive) must gate to
+    the frozen single-batch identity: bundle SHA == sidecar; 456/228; B12-B17; the LIVE
+    schedule fingerprint d35708b7...; run_config a5be8f15...; and run-config isolation
+    from all four prior campaigns. Descriptive parity: 38 target plans (37 keyed +
+    layers_92 static), lp delivered via pread_ordered only. Fail-closed: any drift here
+    means the evidence and the framing have diverged."""
+
+    NORM_DIR = os.path.join(OW, "analysis/normalized/portability_full_closure")
+    DESC_DIR = os.path.join(OW, "analysis/descriptive/portability_full_closure")
+    LIVE_FINGERPRINT = \
+        "d35708b781f29c0609da6f702b5e11599e10aff5d16a0c5fa1aa0253d079f0ec"
+    RUN_CONFIG = \
+        "a5be8f150bc87182d3a158ff580b83a04073a84ff258cde07d78a73e35f60faf"
+    BUNDLE_SHA = \
+        "c8ef0cbe16c3b8e09aa501d90991fc7197c6014119b6b880d087b498e0011dd1"
+
+    @classmethod
+    def setUpClass(cls):
+        cls.norm = _load_json(os.path.join(
+            cls.NORM_DIR, "portability_full_closure_normalization_manifest.json"))
+        cls.desc = _load_json(os.path.join(
+            cls.DESC_DIR, "portability_full_closure_descriptive_manifest.json"))
+
+    def test_normalization_ok_and_counts(self):
+        self.assertTrue(self.norm["ok"])
+        self.assertEqual(self.norm["counts"]["invocations"], EXPECTED_TOTAL_INVOCATIONS)
+        self.assertEqual(self.norm["counts"]["pairs"], EXPECTED_TOTAL_PAIRS)
+        self.assertEqual(self.norm["counts"]["baseline"], EXPECTED_TOTAL_PAIRS)
+        self.assertEqual(self.norm["counts"]["target"], EXPECTED_TOTAL_PAIRS)
+
+    def test_block_pairs_are_B12_to_B17(self):
+        self.assertEqual(self.norm["block_pairs"], BLOCK_PAIRS)
+
+    def test_live_fingerprint_and_run_config(self):
+        self.assertEqual(self.norm["matrix_fingerprint"], self.LIVE_FINGERPRINT)
+        self.assertEqual(self.norm["authoritative_run_config_sha256"], self.RUN_CONFIG)
+
+    def test_bundle_sha_matches_sidecar(self):
+        self.assertEqual(self.norm["source_bundle_sha256"], self.BUNDLE_SHA)
+        self.assertEqual(self.norm["source_bundle_sha256_sidecar"], self.BUNDLE_SHA)
+
+    def test_run_config_isolated_from_all_prior_campaigns(self):
+        rc = self.norm["authoritative_run_config_sha256"]
+        for prior in (PRIMARY_RC, SECONDARY_RC, PORTABILITY_RC, EXT_RC):
+            self.assertFalse(rc.startswith(prior),
+                             "closure run_config must not collide with %s" % prior)
+        self.assertTrue(rc.startswith(CLOSURE_RC))
+
+    def test_descriptive_plan_taxonomy(self):
+        # 38 = 37 keyed + layers_92 static; lp (26) via pread_ordered, rest willneed
+        self.assertEqual(self.desc["distinct_target_plans"], 38)
+        self.assertEqual(self.desc["workloads"], 5)
+        self.assertEqual(self.desc["parity_type_counts"],
+                         {"exact_native_plan": 29,
+                          "semantic_contract_reconstruction": 8,
+                          "structural_static": 1})
+        self.assertEqual(self.desc["delivery_method_counts"],
+                         {"pread_ordered": 26, "madvise_willneed": 12})
+
+    def test_synthesis_loader_gates_clean(self):
+        import synthesis as S
+        facts, problems = S.load_portability_full_closure()
+        self.assertIsNotNone(facts, "closure facts must load")
+        self.assertEqual(problems, [], "SHA/chain/shape gates must be clean")
+        self.assertEqual(facts["invocations"], EXPECTED_TOTAL_INVOCATIONS)
+        self.assertEqual(facts["pairs"], EXPECTED_TOTAL_PAIRS)
+        self.assertEqual(facts["run_config_sha256"], self.RUN_CONFIG)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,50 @@
+{
+  "campaign": "portability_full_closure",
+  "campaign_role": "final_16_cell_workstation_matrix_closure_complement",
+  "coverage_cells": 76,
+  "delivery_method_counts": {
+    "madvise_willneed": 12,
+    "pread_ordered": 26
+  },
+  "descriptive_only": true,
+  "distinct_target_plans": 38,
+  "generated_utc": "2026-08-28T15:56:03Z",
+  "generator_git_sha": "a84694c601b027d7c26bac169ce62a20a1dea3a4",
+  "inputs": {
+    "portability_full_closure_normalized_invocations.csv": 456,
+    "portability_full_closure_normalized_pairs.csv": 228
+  },
+  "lp_strategies_delivery_mechanism_only": [
+    "lp_shuf",
+    "lp_sorted"
+  ],
+  "not_a_performance_ranking": true,
+  "outputs": {
+    "portability_full_closure_coverage.csv": {
+      "rows": 76,
+      "sha256": "1020cd836295b33a161dc88846cd9c1d35ee2d367a3efeba6acc783baaf69a26"
+    },
+    "portability_full_closure_plan_parity.csv": {
+      "rows": 38,
+      "sha256": "458905610667da1f7adf0c81af412f4e1fc645d355f9b1cb1769bd58b14fa455"
+    },
+    "portability_full_closure_workload_summary.csv": {
+      "rows": 5,
+      "sha256": "ee13265b61abe0a5b0be598b77e74f057a10cbef271b372f48ef70e0274701ec"
+    }
+  },
+  "parity_type_counts": {
+    "exact_native_plan": 29,
+    "semantic_contract_reconstruction": 8,
+    "structural_static": 1
+  },
+  "schema_version": 1,
+  "workload_families": {
+    "native_ycsb_c_hot_hashed_01": "YCh01",
+    "native_ycsb_c_read_uniform": "YCu",
+    "native_ycsb_c_read_zipf": "YC",
+    "read_tail_hit_20k": "C_hit",
+    "read_tail_mixed_20k": "C"
+  },
+  "workloads": 5
+}

@@ -75,6 +75,14 @@ ABLATION_SCOPE = {"2d", "leaf_rand_K10", "leaf_freq_K10", "2e_K10",
 DB_CANON = "orig"       # OW is pinned to the orig-layout test.db; compare like-for-like
 NEUTRAL_BAND = 0.10     # |R| < this => "neutral" (no meaningful effect)
 
+# libprefetch strategies. Their primary effectiveness lever is DELIVERY COST (deliver_us/
+# e2e), not first_query -- lp delivers the whole resident working set, so post-delivery
+# first_query is warm for BOTH sorted and shuf and cannot distinguish delivery ORDER. Per
+# directive, lp is analysed in the SEPARATE delivery-order summary (lp_delivery_order.py),
+# NOT mixed into the first_query effectiveness rho. They still count toward the 65-cell
+# coverage union (they ARE executed on OW) -- only excluded from the first_query TABLE.
+LP_STRATEGIES = {"lp_sorted", "lp_shuf"}
+
 
 def category(R):
     if R >= NEUTRAL_BAND:
@@ -112,6 +120,19 @@ def ws_source_spec(ws, strat):
             "reason": f"native head-to-head is the canonical per-seed batch for {ws}",
         }
     if ws == "C_hit":
+        if strat in ("2e_K40", "2e_K92"):
+            # 2e_K40/2e_K92 were NEWLY measured in c_hit_v2 (RP 4.2 row35); chit_headtohead
+            # never remeasured them. Same per-seed batch (async arm + same-fold baseline).
+            return {
+                "mode": "dir_series",
+                "tmpl": "c_hit_v2/seed{n:02d}/summary.csv", "ns": range(1, 11),
+                "wl": "C_hit", "db": DB_CANON,
+                "source": "results/c_hit_v2/seed{01..10}/summary.csv",
+                "scope": "C_hit 2e_K40/2e_K92 newly measured in c_hit_v2 (RP 4.2 row35)",
+                "agg": "seed",
+                "reason": ("c_hit_v2 is the canonical per-seed batch for C_hit 2e_K40/2e_K92; "
+                           "chit_headtohead never remeasured these budgets"),
+            }
         return {
             "mode": "seed_col", "paths": [RES / "chit_headtohead" / "summary.csv"],
             "wl": "C_hit", "db": DB_CANON, "source": "results/chit_headtohead/summary.csv",
@@ -167,6 +188,50 @@ def ws_source_spec(ws, strat):
                 "reason": ("learned_10fold: per test-seed model trained on the other 9, "
                            "no-prefetch baseline measured in the SAME fold; supersedes "
                            "single-fold baselines_v2 for the learned comparison"),
+            }
+        if strat == "learned_markov_14":
+            return {
+                "mode": "dir_series",
+                "tmpl": "learned_10fold/seed{n}/summary.csv", "ns": range(1, 11),
+                "wl": "C", "db": DB_CANON,
+                "source": "results/learned_10fold/seed{1..10}/summary.csv",
+                "scope": "full 10-fold LOSO closure (N=14 budget)",
+                "agg": "LOSO_fold",
+                "reason": ("learned_10fold carries the N=14 LOSO fold too; per test-seed "
+                           "model trained on the other 9, baseline in the SAME fold"),
+            }
+        if strat == "layers_92":
+            return {
+                "mode": "dir_series",
+                "tmpl": "seeds/seed{n:02d}/summary.csv", "ns": range(1, 11),
+                "wl": "C", "db": DB_CANON,
+                "source": "results/seeds/seed{01..10}/summary.csv",
+                "scope": ("cross-seed robustness (RESULT_PROVENANCE §4.8: 2d/layers_5/"
+                          "layers_92 are tie-break-unaffected)"),
+                "agg": "seed(db=orig)",
+                "reason": ("layers_92 is a structural skeleton with no leaf tie-break; §4.8 "
+                           "admits cross-seed robustness for it (same batch as layers_5)"),
+            }
+        if strat in ("2e_K40", "2e_K92"):
+            # PROVENANCE CAVEAT (surfaced, not hidden): C 2e_K40/2e_K92 are in the corrected
+            # tie-break set {2e_K10,2e_K40,2e_K92}, but no post-tie-break-fix single-inst
+            # first_query summary exists on disk (tiebreak_fix/seeds carries only K10/K500/
+            # 2f_slru; the cited tiebreak_fix/master aggregate does not exist). unified_v2/
+            # matrix is the only single-inst n=10 first_query batch for these cells. It is used
+            # ONLY for the DIRECTION/effectiveness-portability check (both strongly effective),
+            # NOT as an absolute-latency or selection-identity claim; the leaf tie-break may
+            # differ from the closure's corrected SoR selection. Flagged in provenance + verdict.
+            return {
+                "mode": "single_file", "paths": [RES / "unified_v2/matrix/summary.csv"],
+                "wl": "C", "db": DB_CANON,
+                "source": "results/unified_v2/matrix/summary.csv",
+                "scope": ("single-inst main-matrix first_query; TIE-BREAK-SELECTION CAVEAT: "
+                          "pre-fix leaf tie-break may differ from corrected SoR (effectiveness "
+                          "direction only, not absolute/selection-identity)"),
+                "agg": "single_batch(db=orig)",
+                "reason": ("no post-tie-break-fix single-inst first_query summary exists for "
+                           "C 2e_K40/2e_K92; unified_v2/matrix is the only single-inst batch; "
+                           "used for effectiveness-direction portability only, flagged"),
             }
     return None
 
@@ -248,6 +313,7 @@ def load_ow():
         OW / "normalized_pairs.csv",                              # primary + secondary
         OW / "portability/portability_normalized_pairs.csv",      # portability
         OW / "portability_ext/portability_ext_normalized_pairs.csv",  # portability_ext
+        OW / "portability_full_closure/portability_full_closure_normalized_pairs.csv",  # closure
     ]
     per_cell = defaultdict(lambda: {"R": [], "tgt_first": 0, "base_first": 0, "seeds": set()})
     for pf in pair_files:
@@ -324,9 +390,14 @@ def main():
 
     # Mechanically resolve the intersection: every OW standalone cell that also has a
     # canonical workstation measurement. No target count is assumed.
-    resolved, ow_only = [], []
+    resolved, ow_only, lp_cells = [], [], []
     prov_rows = []
     for (ws, strat) in sorted(ow.keys()):
+        if strat in LP_STRATEGIES:
+            # lp is compared on deliver_us in the separate delivery-order summary (§7),
+            # not in the first_query effectiveness table. Recorded for the coverage union.
+            lp_cells.append((ws, strat))
+            continue
         wsr = load_ws_cell(ws, strat)
         if wsr is None:
             ow_only.append((ws, strat))
@@ -397,7 +468,9 @@ def main():
     print("Effectiveness-portability: OpenWhisk (standalone) vs workstation")
     print("=" * 74)
     print(f"OW standalone cells total           : {len(ow)}")
-    print(f"  resolved (OW ∩ workstation canon) : {n_resolved}")
+    print(f"  first_query resolved (non-lp)      : {n_resolved}")
+    print(f"  lp cells -> delivery-order summary : {len(lp_cells)}  -> {sorted(lp_cells)}")
+    print(f"  matched-cell UNION (first_q + lp)  : {n_resolved + len(lp_cells)}")
     print(f"  OW-only (no workstation cell)      : {len(ow_only)}  -> {ow_only}")
     print(f"same-batch (strat_source==base_source) for every resolved cell: "
           f"{'YES' if same_batch_all else 'NO'}")

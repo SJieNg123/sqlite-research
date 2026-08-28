@@ -1037,26 +1037,36 @@ parity 驗證，分為 **24 exact-native-plan / 12 semantic-2e-contract-reconstr
 measured-valid）。這裡的 **portability 指的是「跨 workload 的部署執行 + 正確性 + workload/plan
 綁定」**——**不是** latency 比較、排序或 warm speedup，五個家族是**代表性覆蓋**而非窮舉；且
 **與 3600-invocation 的 strategy-space campaign 分屬回答不同問題的獨立 campaign，不得合併為單一
-效果估計**（連同下述覆蓋擴充 campaign，OpenWhisk 四個 byte-frozen campaign 合計 **4920 筆 formal
-invocation** = 3600 + 468 + 852，皆不合併）。上述同一個 order/state effect 也適用於
+效果估計**（連同下述覆蓋擴充與收尾 campaign，OpenWhisk 五個 byte-frozen campaign 合計 **5376 筆 formal
+invocation** = 3600 + 468 + 852 + 456，皆不合併）。上述同一個 order/state effect 也適用於
 此 campaign，故其 warm paired latency 同樣**不**作為受控效能證據。此 portability 證據的完整 gate 稽核
 見 [portability_audit.md](deployment/openwhisk/analysis/portability_audit.md)、描述性 CSV 見
-`analysis/descriptive/portability/`、四-campaign 合成見
+`analysis/descriptive/portability/`、五-campaign 合成見
 [openwhisk_thesis_notes.md](deployment/openwhisk/analysis/thesis/openwhisk_thesis_notes.md)。
 
-**部署效益可攜性（49-cell 描述性一致性）。** 為把「策略在 workstation 有效，是否在模擬
-serverless 平台（OpenWhisk）同樣有效」講清楚，我們追加第四個 campaign（portability_ext，
-run-config `bf504a28…`、852 筆 formal invocation / 426 pair），補齊 workstation 曾跑但 OpenWhisk
-尚未覆蓋的 29 個 (策略, workload) cell，使兩平台可比 cell 由 20 補到 **49**。比較採**相對**首次
-查詢降幅 `R =（baseline_fq − strategy_fq）/ baseline_fq`（>0 = 較快 = 有效；只有相對量可跨機比較，
-絕對微秒不可），且僅用 standalone handle（warm 有 position/order 效應）。**結果：workstation 上
-強效（R≥0.30）的 35 個 cell，有 34 個在 OpenWhisk 同樣有效**；乾淨 cell 的 Spearman 秩相關
-ρ≈0.78、方向一致 38/49、|R 差| 中位數 0.115。唯一例外 C/2d 是 3-pair、完全 position-imbalanced 的
-低信心 static cell，其 OpenWhisk「有害」讀數是排序假影而非退化。這是一個**描述性的跨平台一致性**
-結果——**不**主張絕對延遲相等、效果量相等、因果等價、或硬體無關的加速倍率；native/WK1 仍是主要
-受控效能證據。逐 cell 表與稽核見
-[VERDICT_effectiveness_portability.md](deployment/openwhisk/analysis/comparison/VERDICT_effectiveness_portability.md)
-與 [portability_ext_audit.md](deployment/openwhisk/analysis/portability_ext_audit.md)。
+**部署效益可攜性（65-cell 描述性一致性）。** 為把「策略在 workstation 有效，是否在模擬
+serverless 平台（OpenWhisk）同樣有效」講清楚，我們先追加第四個 campaign（portability_ext，
+run-config `bf504a28…`、852 筆 formal invocation / 426 pair）補齊 29 個 cell，再以第五個
+campaign（portability_full_closure，run-config `a5be8f15…`、live fingerprint `d35708b7…`、
+**456 筆 formal invocation / 228 pair**、6 個 block B12–B17）收尾最後 16 個 cell，使
+**workstation orig layout 上全部 65 個 canonical 保留 (策略, workload) cell 都有 OpenWhisk 執行覆蓋**
+（BOTH=65、WS_ONLY=0；另有 4 個 YC 專屬的 OpenWhisk-only cell 不計入 workstation 覆蓋）。這是
+**cell 覆蓋**（執行 + 正確性 + workload/plan 綁定），**不是**協定、layout 或效能等價，也不是延遲或
+排序主張；native/WK1 仍是主要受控效能證據。
+
+比較採**相對**首次查詢降幅 `R =（baseline_fq − strategy_fq）/ baseline_fq`（>0 = 較快 = 有效；只有
+相對量可跨機比較，絕對微秒不可），且僅用 standalone handle（warm 有 position/order 效應）。65 個
+matched cell 中，**55 個以首次查詢降幅比較**，另 **10 個 libprefetch(lp) cell 以「交付順序」(deliver_us)
+另表比較**——因為 lp_sorted 與 lp_shuf 交付同一組 page、差別只在順序，交付後首次查詢對兩臂皆為 warm。
+**結果：workstation 上強效（R≥0.30）的 41 個 cell，有 38 個在 OpenWhisk 同樣有效**；Spearman 秩相關
+ρ≈0.67（全）/ 0.75（高信心）、方向一致 42/55、|R 差| 中位數 0.114。3 個例外都已如實標示：C/2d 與
+C/layers_92 是低信心 single-instance 的符號翻轉，C_hit/2e_K40 是 position-imbalanced(2/7) 的 cell。
+lp 那側：shuffle 交付在**兩個平台**都比 sorted 慢（order_ratio 均 >1），而交付後首次查詢維持在數微秒內
+（對照組），顯示交付順序這個機制與其成本結構同樣可攜。這是一個**描述性的跨平台一致性**結果——**不**
+主張絕對延遲相等、效果量相等、因果等價、或硬體無關的加速倍率。逐 cell 表與稽核見
+[VERDICT_effectiveness_portability.md](deployment/openwhisk/analysis/comparison/VERDICT_effectiveness_portability.md)、
+[portability_ext_audit.md](deployment/openwhisk/analysis/portability_ext_audit.md) 與 lp 交付順序
+另表 `analysis/comparison/lp_delivery_order.csv`。
 
 ---
 
@@ -1378,22 +1388,28 @@ warm-process 不含」這兩層 trade-off，在既有 prefetch literature 中很
 | Figures | [figures/out/](https://github.com/wongzinc/sqlite-research-project-sharing/blob/main/figures/out/) |
 | OpenWhisk 部署補充（§5.6）：evidence / normalized / descriptive / thesis 合成產物 | [deployment/openwhisk/](https://github.com/wongzinc/sqlite-research-project-sharing/blob/main/deployment/openwhisk/) 下 `evidence/`、`analysis/normalized/`、`analysis/descriptive/`、`analysis/thesis/` |
 
-> **OpenWhisk provenance（reproducibility note）**：§5.6 的 formal 證據為**四個 immutable、archived 的 matrix**——
+> **OpenWhisk provenance（reproducibility note）**：§5.6 的 formal 證據為**五個 immutable、archived 的 matrix**——
 > 兩個屬 3600-invocation 的 strategy-space campaign（primary run-config `022fbeb0…` 與 secondary `441609e6…`），第三個
 > 屬 468-invocation 的 cross-workload portability campaign（run-config `64f44c3e…`、bundle `a7c9736c…`、matrix
 > fingerprint `a3274bc9…`，archived 於 `deployment/openwhisk/evidence/portability/29e1585ce956/`），第四個屬
 > 852-invocation 的 portability-extension campaign（run-config `bf504a28…`、bundle `9fd7b9f6…`、matrix fingerprint
-> `5ba26fe9…`、schedule_seed 20260828，補齊 workstation-coverage 至 49 個可比 cell）。四者的 bundle hash 與
+> `5ba26fe9…`、schedule_seed 20260828，補齊 workstation-coverage 至 49 個可比 cell），第五個屬 456-invocation 的
+> portability-full-closure campaign（run-config `a5be8f15…`、matrix fingerprint `d35708b7…`、blocks B12–B17，
+> archived 於 `deployment/openwhisk/evidence/portability_full_closure/956cd15b5db3/`，補齊最後 16 個 workstation-only
+> cell 使全部 65 個 canonical 保留 cell 皆有 OpenWhisk 執行覆蓋——BOTH=65、WS_ONLY=0，另有 4 個 YC 專屬 OpenWhisk-only
+> cell；此為 **cell 覆蓋**，不是協定、layout 或效能等價）。五者的 bundle hash 與
 > execution identity 記於各自 manifest；正規化、descriptive、thesis 合成產物在
-> `deployment/openwhisk/analysis/{normalized,descriptive,thesis}/`（portability 與 portability_ext 另有平行的
-> `analysis/{normalized,descriptive}/portability{,_ext}/`、[portability_audit.md](deployment/openwhisk/analysis/portability_audit.md)
+> `deployment/openwhisk/analysis/{normalized,descriptive,thesis}/`（portability、portability_ext 與
+> portability_full_closure 另有平行的
+> `analysis/{normalized,descriptive}/portability{,_ext,_full_closure}/`、[portability_audit.md](deployment/openwhisk/analysis/portability_audit.md)
 > 與 [portability_ext_audit.md](deployment/openwhisk/analysis/portability_ext_audit.md)）、
 > 原始 evidence 在 `deployment/openwhisk/evidence/`（完整 SHA256 與 run-config identity 見該處 manifest，不列入本文正文）。
-> **strategy-space（3600）、portability（468）與 portability-extension（852）分屬回答不同問題的 campaign、合計 4920 formal
-> invocation = 3600 + 468 + 852，於本文中不被合併為單一效果估計。** 已知 secondary、portability 與 portability_ext 的
+> **strategy-space（3600）、portability（468）、portability-extension（852）與 portability-full-closure（456）分屬回答不同
+> 問題的 campaign、合計 5376 formal invocation = 3600 + 468 + 852 + 456，於本文中不被合併為單一效果估計。** 已知
+> secondary、portability、portability_ext 與 portability_full_closure 的
 > bundle-manifest run_config 摘要各有一個 mislabel（image 以 primary pin `022fbeb0…` 作為 manifest default 烤入），
 > **僅為 packaging-summary 層級的 provenance note**：每筆 response 逐一驗證的 authoritative run-config 分別為
-> `441609e6…` / `64f44c3e…` / `bf504a28…`，不影響上述任何 identity 或 §5.6 量值。
+> `441609e6…` / `64f44c3e…` / `bf504a28…` / `a5be8f15…`，不影響上述任何 identity 或 §5.6 量值。
 
 ### 9.2 External References
 

@@ -58,11 +58,12 @@ DESC_INPUTS = [
 # These outputs are produced by the separate portability pipeline
 # (normalize_portability.py -> descriptive_portability.py). They are SHA-gated
 # here so the thesis campaign framing (3600 strategy-space + 468 portability +
-# 852 portability-extension = 4920 formal invocations across four byte-frozen
-# campaigns) is machine-checked, NOT prose the writer can drift. The
-# primary/secondary strategy-space synthesis above is entirely unaffected: the
-# portability chain has its OWN manifests and its own descriptive CSVs, and the
-# portability-EXTENSION campaign (below) has yet another separate chain.
+# 852 portability-extension + 456 portability-full-closure = 5376 formal
+# invocations across five byte-frozen campaigns) is machine-checked, NOT prose
+# the writer can drift. The primary/secondary strategy-space synthesis above is
+# entirely unaffected: the portability chain has its OWN manifests and its own
+# descriptive CSVs, and the portability-EXTENSION and portability-FULL-CLOSURE
+# campaigns (below) each have yet another separate chain.
 # ---------------------------------------------------------------------------
 PORT_DESC_DIR = _ANALYSIS_DIR / "descriptive" / "portability"
 PORT_NORM_DIR = _ANALYSIS_DIR / "normalized" / "portability"
@@ -88,7 +89,7 @@ PORT_EXPECTED = {
 # workstation-coverage effectiveness matrix (20 -> 49 comparable cells) by
 # running the 29 uncovered (strategy, workload) cells under its OWN byte-frozen
 # identity (run_config bf504a28..., schedule_seed 20260828). SHA-gated here so
-# the 4920 four-campaign framing is machine-checked, never free prose. The three
+# the 5376 five-campaign framing is machine-checked, never free prose. The three
 # prior campaigns' manifests/identities are untouched.
 # ---------------------------------------------------------------------------
 PORT_EXT_DESC_DIR = _ANALYSIS_DIR / "descriptive" / "portability_ext"
@@ -108,6 +109,35 @@ PORT_EXT_EXPECTED = {
         "5ba26fe952104792a9b6803e581627c331884fe1b39b41adb6ebeddb245fe300",
     "run_config_sha256":
         "bf504a28fb0ac3cec3b189a4de1f7b8968a35bbd9866c2ae1d5784ccc3bf77da",
+}
+
+# ---------------------------------------------------------------------------
+# cross-workload PORTABILITY-FULL-CLOSURE campaign (FIFTH OpenWhisk campaign;
+# additive to primary + secondary + portability + portability_ext). It closes
+# the final 16 WS_ONLY (strategy, workload) cells so all 65 canonical retained
+# workstation cells at orig layout have OpenWhisk execution coverage. It runs
+# under its OWN byte-frozen identity (run_config a5be8f15..., live schedule
+# fingerprint d35708b7...). SHA-gated here so the 5376 five-campaign framing is
+# machine-checked, never free prose. The four prior campaigns' manifests /
+# identities are untouched.
+# ---------------------------------------------------------------------------
+PORT_CLOSURE_DESC_DIR = _ANALYSIS_DIR / "descriptive" / "portability_full_closure"
+PORT_CLOSURE_NORM_DIR = _ANALYSIS_DIR / "normalized" / "portability_full_closure"
+PORT_CLOSURE_DESC_INPUTS = [
+    "portability_full_closure_coverage.csv",
+    "portability_full_closure_plan_parity.csv",
+    "portability_full_closure_workload_summary.csv",
+]
+# fail-closed shape of the completed single-batch portability-full-closure campaign
+PORT_CLOSURE_EXPECTED = {
+    "invocations": 456, "pairs": 228,
+    "block_pairs": {"block12": 12, "block13": 36, "block14": 18,
+                    "block15": 6, "block16": 144, "block17": 12},
+    "workloads": 5,
+    "matrix_fingerprint":
+        "d35708b781f29c0609da6f702b5e11599e10aff5d16a0c5fa1aa0253d079f0ec",
+    "run_config_sha256":
+        "a5be8f150bc87182d3a158ff580b83a04073a84ff258cde07d78a73e35f60faf",
 }
 
 # neutral deployment-role labels (from repo provenance / comparison scaffolding);
@@ -138,6 +168,8 @@ CLAIM_RESTRICTIONS = {
     "portability_and_strategy_space_campaigns_not_pooled": True,
     "portability_ext_extends_workload_coverage_not_pooled": True,
     "effectiveness_comparison_is_descriptive_not_causal_equivalence": True,
+    "portability_full_closure_completes_cell_coverage_not_pooled": True,
+    "cell_coverage_is_not_protocol_layout_or_performance_equivalence": True,
 }
 
 # cost-vector column legend (§5: clearly mark the phases)
@@ -325,17 +357,18 @@ CLAIM_MAP = [
                "parity), independent of any latency interpretation; native/WK1 "
                "remains the primary performance evidence."},
     {"category": "L_cross_workload_portability",
-     "claim": "The 468 portability, 852 portability-extension, and 3600 "
-              "strategy-space invocations jointly estimate a single cross-workload "
-              "performance effect (4920 pooled measurements of one quantity).",
+     "claim": "The 468 portability, 852 portability-extension, 456 "
+              "portability-full-closure, and 3600 strategy-space invocations "
+              "jointly estimate a single cross-workload performance effect (5376 "
+              "pooled measurements of one quantity).",
      "classification": "DO_NOT_CLAIM",
      "support": "",
      "qualification": "",
-     "reason": "The four campaigns answer different questions (strategy-space cost "
-               "structure on YC vs. cross-workload deployment portability and its "
-               "coverage extension) and are reported separately; they must never be "
-               "pooled into one effect estimate, and none is a warm-latency "
-               "ranking."},
+     "reason": "The five campaigns answer different questions (strategy-space cost "
+               "structure on YC vs. cross-workload deployment portability, its "
+               "coverage extension, and its final cell closure) and are reported "
+               "separately; they must never be pooled into one effect estimate, "
+               "and none is a warm-latency ranking."},
     # L (fourth campaign): the additive portability-extension campaign
     {"category": "L_cross_workload_portability",
      "claim": "A fourth additive OpenWhisk campaign (portability_ext, run_config "
@@ -353,13 +386,38 @@ CLAIM_MAP = [
      "reason": "Demonstrated by the runs themselves (execution + SHA-bound plan "
                "parity), independent of any latency interpretation; a fourth "
                "byte-frozen campaign, additive like primary->secondary."},
+    # L (fifth campaign): the additive portability-full-closure campaign
+    {"category": "L_cross_workload_portability",
+     "claim": "A fifth additive OpenWhisk campaign (portability_full_closure, "
+              "run_config a5be8f15...) executed the final 16 uncovered (strategy, "
+              "workload) cells as 456 formal invocations / 228 baseline-target "
+              "pairs under its own byte-frozen identity, with per-plan page-set + "
+              "offset parity proven against the frozen keyed contract, so all 65 "
+              "canonical retained workstation cells at orig layout have OpenWhisk "
+              "execution coverage.",
+     "classification": "SAFE",
+     "support": "normalized/portability_full_closure/"
+                "portability_full_closure_normalization_manifest.json; "
+                "descriptive/portability_full_closure/"
+                "portability_full_closure_plan_parity.csv",
+     "qualification": "CELL coverage (execution / correctness / workload+plan "
+                      "binding) only, under a distinct frozen identity. It is NOT "
+                      "protocol, layout, or performance equivalence, NOT a latency, "
+                      "ranking, or warm-speedup result, and NOT pooled with the "
+                      "other four campaigns. Native/WK1 remains primary.",
+     "reason": "Demonstrated by the runs themselves (execution + SHA-bound plan "
+               "parity), independent of any latency interpretation; a fifth "
+               "byte-frozen campaign, additive like the prior four."},
     # M. effectiveness-portability comparison (descriptive cross-platform)
     {"category": "M_effectiveness_portability",
-     "claim": "Across the 49 comparable (strategy, workload) cells, prefetch "
-              "strategies that are effective on the workstation stay effective on "
-              "OpenWhisk in the DESCRIPTIVE sense of relative first-query reduction "
-              "vs each platform's own same-condition baseline (strong strategies "
-              "34/35 effective on both; clean-cell rank correlation preserved).",
+     "claim": "Across the 65 comparable (strategy, workload) cells (55 compared by "
+              "relative first-query reduction; 10 lp cells compared by delivery "
+              "order, reported separately), prefetch strategies that are effective "
+              "on the workstation stay effective on OpenWhisk in the DESCRIPTIVE "
+              "sense of relative first-query reduction vs each platform's own "
+              "same-condition baseline (high-confidence workstation-effective "
+              "strategies 32/37 effective on both; Spearman rho 0.67 all / 0.75 "
+              "high-confidence).",
      "classification": "QUALIFIED",
      "support": "comparison/VERDICT_effectiveness_portability.md; "
                 "comparison/effectiveness_ow_vs_workstation.csv; "
@@ -608,6 +666,96 @@ def load_portability_ext(port_desc_dir=PORT_EXT_DESC_DIR,
         "norm_manifest_sha256": D.sha256_file(nm_path),
         "desc_shas": {n: D.sha256_file(port_desc_dir / n)
                       for n in PORT_EXT_DESC_INPUTS},
+    }
+    return facts, problems
+
+
+def load_portability_full_closure(port_desc_dir=PORT_CLOSURE_DESC_DIR,
+                                  port_norm_dir=PORT_CLOSURE_NORM_DIR):
+    """Load + SHA-gate the cross-workload portability-FULL-CLOSURE campaign (fifth
+    campaign; §20). Mirror of load_portability_ext with the closure filenames/shape.
+
+    Fail-closed: the closure descriptive CSVs must match their descriptive manifest
+    SHAs; the descriptive manifest's recorded normalized invocation count must
+    match the closure normalization manifest's own count; and the campaign shape
+    (456/228, 6 block counts B12-B17, 5 workloads, live fingerprint d35708b7...,
+    run config a5be8f15...) must be exactly the completed single-batch closure
+    campaign. Returns (facts, problems)."""
+    port_desc_dir = Path(port_desc_dir)
+    port_norm_dir = Path(port_norm_dir)
+    problems = []
+
+    dm_path = port_desc_dir / "portability_full_closure_descriptive_manifest.json"
+    nm_path = port_norm_dir / "portability_full_closure_normalization_manifest.json"
+    if not dm_path.exists() or not nm_path.exists():
+        problems.append("portability_full_closure manifests missing (run "
+                        "normalize_portability_full_closure.py then "
+                        "descriptive_portability_full_closure.py before synthesis)")
+        return None, problems
+    desc_m = json.loads(dm_path.read_text())
+    norm_m = json.loads(nm_path.read_text())
+
+    # (1) descriptive CSV SHAs
+    for name in PORT_CLOSURE_DESC_INPUTS:
+        actual = D.sha256_file(port_desc_dir / name)
+        expected = desc_m["outputs"].get(name, {}).get("sha256")
+        if expected is None:
+            problems.append("portability_full_closure descriptive manifest has no "
+                            "sha for %s" % name)
+        elif actual != expected:
+            problems.append("portability_full_closure %s sha %s != manifest %s"
+                            % (name, actual, expected))
+
+    # (2) chain: descriptive inputs count must match the normalization outputs
+    if desc_m.get("inputs", {}).get("portability_full_closure_normalized_invocations.csv") \
+            != norm_m.get("counts", {}).get("invocations"):
+        problems.append("portability_full_closure chain mismatch on invocation count")
+
+    # (3) campaign shape + identity (fail-closed vs the frozen single batch)
+    counts = norm_m.get("counts", {})
+    if counts.get("invocations") != PORT_CLOSURE_EXPECTED["invocations"]:
+        problems.append("portability_full_closure invocations %s != %d"
+                        % (counts.get("invocations"),
+                           PORT_CLOSURE_EXPECTED["invocations"]))
+    if counts.get("pairs") != PORT_CLOSURE_EXPECTED["pairs"]:
+        problems.append("portability_full_closure pairs %s != %d"
+                        % (counts.get("pairs"), PORT_CLOSURE_EXPECTED["pairs"]))
+    if norm_m.get("block_pairs") != PORT_CLOSURE_EXPECTED["block_pairs"]:
+        problems.append("portability_full_closure block_pairs %s != %s"
+                        % (norm_m.get("block_pairs"),
+                           PORT_CLOSURE_EXPECTED["block_pairs"]))
+    if norm_m.get("matrix_fingerprint") != PORT_CLOSURE_EXPECTED["matrix_fingerprint"]:
+        problems.append("portability_full_closure matrix_fingerprint != frozen "
+                        "d35708b7...")
+    if norm_m.get("authoritative_run_config_sha256") \
+            != PORT_CLOSURE_EXPECTED["run_config_sha256"]:
+        problems.append("portability_full_closure run_config != frozen a5be8f15...")
+    if not norm_m.get("ok"):
+        problems.append("portability_full_closure normalization manifest ok=false")
+    if desc_m.get("workloads") != PORT_CLOSURE_EXPECTED["workloads"]:
+        problems.append("portability_full_closure workloads %s != %d"
+                        % (desc_m.get("workloads"),
+                           PORT_CLOSURE_EXPECTED["workloads"]))
+
+    facts = {
+        "invocations": counts.get("invocations"),
+        "pairs": counts.get("pairs"),
+        "block_pairs": norm_m.get("block_pairs"),
+        "workloads": desc_m.get("workloads"),
+        "workload_families": norm_m.get("workload_families", {}),
+        "distinct_target_plans": desc_m.get("distinct_target_plans"),
+        "parity_type_counts": desc_m.get("parity_type_counts", {}),
+        "matrix_fingerprint": norm_m.get("matrix_fingerprint"),
+        "run_config_sha256": norm_m.get("authoritative_run_config_sha256"),
+        "artifact_manifest_sha256": norm_m.get("artifact_manifest_sha256"),
+        "action_image_digest": norm_m.get("action_image_digest"),
+        "source_bundle_sha256": norm_m.get("source_bundle_sha256"),
+        "source_bundle_filename": norm_m.get("source_bundle_filename"),
+        "sqlite_research_git_sha": norm_m.get("sqlite_research_git_sha"),
+        "desc_manifest_sha256": D.sha256_file(dm_path),
+        "norm_manifest_sha256": D.sha256_file(nm_path),
+        "desc_shas": {n: D.sha256_file(port_desc_dir / n)
+                      for n in PORT_CLOSURE_DESC_INPUTS},
     }
     return facts, problems
 
@@ -1112,12 +1260,13 @@ def _md_cell(s):
     return str(s).replace("|", "\\|").replace("\n", " ")
 
 
-def render_thesis_notes_md(port, port_ext):
-    """Four-campaign thesis notes (§13/§19). Role A = the YC strategy-space
+def render_thesis_notes_md(port, port_ext, port_closure):
+    """Five-campaign thesis notes (§13/§19/§20). Role A = the YC strategy-space
     campaign (3600 inv = primary 1600 + secondary 2000). Role B = cross-workload
-    portability, spanning TWO byte-frozen campaigns: `port` (468 inv) and its
-    additive coverage extension `port_ext` (852 inv). Counts come from the
-    SHA-gated portability + portability_ext manifests so the 4920 four-campaign
+    portability, spanning THREE byte-frozen campaigns: `port` (468 inv), its
+    additive coverage extension `port_ext` (852 inv), and its final cell closure
+    `port_closure` (456 inv). Counts come from the SHA-gated portability +
+    portability_ext + portability_full_closure manifests so the 5376 five-campaign
     total is machine-checked, never free prose."""
     fam = port["workload_families"]
     fam_line = ", ".join("%s (%s)" % (code, wl) for wl, code in sorted(
@@ -1125,7 +1274,10 @@ def render_thesis_notes_md(port, port_ext):
         "YC, YCu, YCh01, C, C_hit"
     pt = port["parity_type_counts"]
     pte = port_ext["parity_type_counts"]
-    total_inv = 3600 + (port["invocations"] or 0) + (port_ext["invocations"] or 0)
+    ptc = port_closure["parity_type_counts"]
+    total_inv = (3600 + (port["invocations"] or 0)
+                 + (port_ext["invocations"] or 0)
+                 + (port_closure["invocations"] or 0))
     return THESIS_NOTES_TMPL.format(
         total_inv=total_inv,
         port_inv=port["invocations"], port_pairs=port["pairs"],
@@ -1145,6 +1297,15 @@ def render_thesis_notes_md(port, port_ext):
         port_ext_fp=port_ext["matrix_fingerprint"][:8],
         port_ext_rc=port_ext["run_config_sha256"][:8],
         bundle_ext_sha=(port_ext["source_bundle_sha256"] or "0" * 64)[:12],
+        port_cl_inv=port_closure["invocations"],
+        port_cl_pairs=port_closure["pairs"],
+        n_plans_cl=port_closure["distinct_target_plans"],
+        exact_cl=ptc.get("exact_native_plan", 0),
+        semantic_cl=ptc.get("semantic_contract_reconstruction", 0),
+        static_cl=ptc.get("structural_static", 0),
+        port_cl_fp=port_closure["matrix_fingerprint"][:8],
+        port_cl_rc=port_closure["run_config_sha256"][:8],
+        bundle_cl_sha=(port_closure["source_bundle_sha256"] or "0" * 64)[:12],
         tail=THESIS_NOTES_TAIL)
 
 
@@ -1161,14 +1322,16 @@ observe the deployment-side cost structure (footprint, page-delivery work, and t
 instrumented query phase) that the strategies imply. It is a **deployment
 complement** to the controlled native/WK1 experiments, not a replacement for them.
 
-## Four OpenWhisk campaigns (do not pool)
+## Five OpenWhisk campaigns (do not pool)
 
 Across the completed OpenWhisk evaluation, **{total_inv} formal invocations** were
-executed across **four byte-frozen campaigns**: **3600** in the **YC deployment /
+executed across **five byte-frozen campaigns**: **3600** in the **YC deployment /
 strategy-space campaign** (primary 1600 + secondary 2000), **{port_inv}** in the
-**cross-workload portability campaign**, and **{port_ext_inv}** in the additive
-**cross-workload portability-extension campaign** (which completes the
-workstation-coverage effectiveness matrix). These span two ROLES answering DIFFERENT
+**cross-workload portability campaign**, **{port_ext_inv}** in the additive
+**cross-workload portability-extension campaign**, and **{port_cl_inv}** in the
+additive **cross-workload portability-full-closure campaign** (which closes the
+final uncovered cells so all 65 canonical retained workstation cells at orig layout
+have OpenWhisk execution coverage). These span two ROLES answering DIFFERENT
 questions -- the strategy-space cost structure on one canonical workload, and
 cross-workload deployment portability of representative mechanisms. They are reported
 separately and **must not be pooled into a single effect estimate**, and none is a
@@ -1218,6 +1381,29 @@ warm-latency ranking.
   consistency** check of relative first-query reductions (standalone handles),
   **not** an absolute-latency, causal-equivalence, or ranking-reproduction claim.
 - Like the other three campaigns it passed the same frozen validity gates and is
+  **never pooled** into a single effect estimate.
+
+## Cross-workload portability full closure (Role B -- fifth campaign)
+
+- The final additive single-batch, block-union campaign closing the last uncovered
+  cells: **{port_cl_inv} formal invocations / {port_cl_pairs} baseline-target
+  pairs** (6 blocks, B12-B17), one live matrix fingerprint (`{port_cl_fp}...`), its
+  OWN run-config identity (`{port_cl_rc}...`), bundle `{bundle_cl_sha}...` --
+  distinct from the four prior campaigns, which are byte-unchanged.
+- {n_plans_cl} distinct executed target plans across the same {n_workloads}
+  families, each with proven page-set + offset parity against the frozen keyed
+  contract: {exact_cl} exact-native-plan, {semantic_cl}
+  semantic-2e-contract-reconstruction, {static_cl} structural-static. The two
+  libprefetch delivery-order variants (lp_sorted, lp_shuf) deliver the same
+  canonical resident page set via `pread_ordered`; their cost lever is delivery
+  order (`deliver_us`), analysed separately, not first-query.
+- It runs the final 16 previously-uncovered (strategy, workload) cells, so **all 65
+  canonical retained workstation cells at orig layout have OpenWhisk execution
+  coverage** (BOTH=65, WS_ONLY=0; 4 OpenWhisk-only YC cells remain, never counted
+  as workstation coverage). This is **CELL coverage** -- execution / correctness /
+  workload+plan binding -- **not** protocol, layout, or performance equivalence,
+  and **not** a latency or ranking claim. Native/WK1 remains the primary evidence.
+- Like the other four campaigns it passed the same frozen validity gates and is
   **never pooled** into a single effect estimate.
 
 ## Deployment feasibility
@@ -1289,13 +1475,16 @@ diagnostic only.
 """
 
 
-def render_threats_md(port, port_ext):
+def render_threats_md(port, port_ext, port_closure):
     """Threats note with the portability paragraphs filled from gated facts (§16/
-    §19). Covers both the portability campaign and its additive extension."""
+    §19/§20). Covers the portability campaign, its additive extension, and its
+    final cell closure."""
     return THREATS_MD_TMPL.format(
         port_inv=port["invocations"], port_pairs=port["pairs"],
         n_workloads=port["workloads"],
-        port_ext_inv=port_ext["invocations"], port_ext_pairs=port_ext["pairs"])
+        port_ext_inv=port_ext["invocations"], port_ext_pairs=port_ext["pairs"],
+        port_cl_inv=port_closure["invocations"],
+        port_cl_pairs=port_closure["pairs"])
 
 
 THREATS_MD_TMPL = """# OpenWhisk threats to validity (deployment complement)
@@ -1346,18 +1535,27 @@ frozen validity gates. Two threats bound its interpretation:
   offset parity against the frozen keyed contract is what is established.
 
 An additive **portability-extension campaign** ({port_ext_inv} formal invocations /
-{port_ext_pairs} baseline-target pairs, its own byte-frozen identity) completed the
-workstation-coverage matrix by running the remaining (strategy, workload) cells. It
-shares the same two threats above (order/state effect; representative families) and
-the same interpretation bounds. The effectiveness comparison built on top of it
-(workstation vs OpenWhisk over 49 comparable cells) reports **relative** first-query
-reductions only -- a descriptive cross-platform consistency check, **not** a claim of
-equal absolute latency, equal effect size, causal equivalence, or reproduction of the
-workstation ranking.
+{port_ext_pairs} baseline-target pairs, its own byte-frozen identity) extended the
+workstation-coverage matrix by running 29 further (strategy, workload) cells. A final
+additive **portability-full-closure campaign** ({port_cl_inv} formal invocations /
+{port_cl_pairs} baseline-target pairs, its own byte-frozen identity) closed the last
+16 uncovered cells, so **all 65 canonical retained workstation cells at orig layout
+have OpenWhisk execution coverage** (4 OpenWhisk-only YC cells remain and are never
+counted as workstation coverage). Both share the same two threats above (order/state
+effect; representative families) and the same interpretation bounds; the closure's
+**cell coverage is not protocol, layout, or performance equivalence**. The two
+libprefetch delivery-order variants in the closure are analysed by delivery order
+(`deliver_us`), not first-query, because both arms deliver the same page set and warm
+post-delivery first-query is not an order-effect estimate. The effectiveness
+comparison built across these cells (workstation vs OpenWhisk, 55 by relative
+first-query reduction + 10 lp by delivery order) reports **relative** quantities only
+-- a descriptive cross-platform consistency check, **not** a claim of equal absolute
+latency, equal effect size, causal equivalence, or reproduction of the workstation
+ranking.
 
-The strategy-space, portability, and portability-extension campaigns answer different
-questions and are **never pooled** into a single effect. Native/WK1 remains the
-primary controlled performance evidence for all of them.
+The strategy-space, portability, portability-extension, and portability-full-closure
+campaigns answer different questions and are **never pooled** into a single effect.
+Native/WK1 remains the primary controlled performance evidence for all of them.
 """
 
 
@@ -1466,6 +1664,14 @@ def run(desc_dir=_DESC_DIR, norm_dir=_NORM_DIR, out_dir=None):
         if CLAIM_RESTRICTIONS.get(k) != v:
             problems.append("restriction %s != %r" % (k, v))
 
+    # ---- FIFTH campaign: portability-full-closure facts (SHA-gated, §20) ----
+    port_closure, ppc = load_portability_full_closure()
+    problems += ppc
+    for k, v in (("portability_full_closure_completes_cell_coverage_not_pooled", True),
+                 ("cell_coverage_is_not_protocol_layout_or_performance_equivalence", True)):
+        if CLAIM_RESTRICTIONS.get(k) != v:
+            problems.append("restriction %s != %r" % (k, v))
+
     ok = not problems
 
     # ---- write tables ------------------------------------------------------
@@ -1542,12 +1748,23 @@ def run(desc_dir=_DESC_DIR, norm_dir=_NORM_DIR, out_dir=None):
         "run_config_sha256": PORT_EXT_EXPECTED["run_config_sha256"],
         "source_bundle_sha256": "0" * 64,
     }
+    port_closure_facts = port_closure if port_closure is not None else {
+        "invocations": PORT_CLOSURE_EXPECTED["invocations"],
+        "pairs": PORT_CLOSURE_EXPECTED["pairs"],
+        "block_pairs": PORT_CLOSURE_EXPECTED["block_pairs"],
+        "workloads": PORT_CLOSURE_EXPECTED["workloads"],
+        "workload_families": {}, "distinct_target_plans": 0,
+        "parity_type_counts": {},
+        "matrix_fingerprint": PORT_CLOSURE_EXPECTED["matrix_fingerprint"],
+        "run_config_sha256": PORT_CLOSURE_EXPECTED["run_config_sha256"],
+        "source_bundle_sha256": "0" * 64,
+    }
     (out_dir / "openwhisk_thesis_notes.md").write_text(
-        render_thesis_notes_md(port_facts, port_ext_facts))
+        render_thesis_notes_md(port_facts, port_ext_facts, port_closure_facts))
     out_shas["openwhisk_thesis_notes.md"] = D.sha256_file(
         out_dir / "openwhisk_thesis_notes.md")
     (out_dir / "threats_to_validity.md").write_text(
-        render_threats_md(port_facts, port_ext_facts))
+        render_threats_md(port_facts, port_ext_facts, port_closure_facts))
     out_shas["threats_to_validity.md"] = D.sha256_file(
         out_dir / "threats_to_validity.md")
 
@@ -1637,21 +1854,45 @@ def run(desc_dir=_DESC_DIR, norm_dir=_NORM_DIR, out_dir=None):
             "run_config_sha256": port_ext_facts.get("run_config_sha256"),
             "descriptive_inputs": port_ext_facts.get("desc_shas", {}),
         },
+        "portability_full_closure_source": {
+            # §20 fifth campaign: the additive portability-full-closure chain feeds
+            # the five-campaign thesis notes + threats docs; provenance recorded
+            # here (SHA-gated in load_portability_full_closure, fail-closed).
+            "portability_full_closure_present": port_closure is not None,
+            "normalization_manifest_sha256":
+                port_closure_facts.get("norm_manifest_sha256"),
+            "descriptive_manifest_sha256":
+                port_closure_facts.get("desc_manifest_sha256"),
+            "source_bundle_sha256": port_closure_facts.get("source_bundle_sha256"),
+            "source_bundle_filename":
+                port_closure_facts.get("source_bundle_filename"),
+            "matrix_fingerprint": port_closure_facts.get("matrix_fingerprint"),
+            "run_config_sha256": port_closure_facts.get("run_config_sha256"),
+            "descriptive_inputs": port_closure_facts.get("desc_shas", {}),
+        },
         "two_role_summary": {
             "strategy_space_formal_invocations": 3600,
             "portability_formal_invocations": port_facts.get("invocations"),
             "portability_ext_formal_invocations": port_ext_facts.get("invocations"),
+            "portability_full_closure_formal_invocations":
+                port_closure_facts.get("invocations"),
             "total_formal_invocations": 3600
                 + (port_facts.get("invocations") or 0)
-                + (port_ext_facts.get("invocations") or 0),
-            "campaigns": 4,
+                + (port_ext_facts.get("invocations") or 0)
+                + (port_closure_facts.get("invocations") or 0),
+            "total_formal_pairs": 1800
+                + (port_facts.get("pairs") or 0)
+                + (port_ext_facts.get("pairs") or 0)
+                + (port_closure_facts.get("pairs") or 0),
+            "campaigns": 5,
             "pooled": False,
             "note": "3600 strategy-space (primary 1600 + secondary 2000) + 468 "
-                    "portability + 852 portability-ext = 4920 formal invocations "
-                    "across four byte-frozen campaigns answering different "
-                    "questions (two roles: strategy-space cost structure, and "
-                    "cross-workload deployment portability + its coverage "
-                    "extension); NOT pooled into a single effect estimate.",
+                    "portability + 852 portability-ext + 456 "
+                    "portability-full-closure = 5376 formal invocations across "
+                    "five byte-frozen campaigns answering different questions (two "
+                    "roles: strategy-space cost structure, and cross-workload "
+                    "deployment portability + its coverage extension + its final "
+                    "cell closure); NOT pooled into a single effect estimate.",
         },
         "outputs": {k: {"sha256": v} for k, v in sorted(out_shas.items())},
         "figures": {

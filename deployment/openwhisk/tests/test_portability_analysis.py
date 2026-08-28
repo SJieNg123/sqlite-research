@@ -6,8 +6,8 @@ portability campaign into thesis-facing evidence, WITHOUT re-running OpenWhisk:
 
   normalize_portability.py  (§11 additive normalizer, fail-closed gates)
     -> descriptive_portability.py  (§12 coverage / plan-parity / workload CSVs)
-      -> synthesis.py campaign weave  (§13/§19 3600 + 468 + 852 = 4920 across
-         four byte-frozen campaigns, never pooled)
+      -> synthesis.py campaign weave  (§13/§19/§20 3600 + 468 + 852 + 456 =
+         5376 across five byte-frozen campaigns, never pooled)
 
 They assert deployment / correctness / binding parity ONLY. No latency claim,
 no ranking, no speedup. The matrix/schedule/execution side is covered separately
@@ -114,9 +114,9 @@ class TestDescriptivePortability(unittest.TestCase):
 
 
 class TestTwoRoleSynthesis(unittest.TestCase):
-    """§13/§19: synthesis must weave the campaigns as 3600 + 468 + 852 = 4920
-    formal invocations across four byte-frozen campaigns that are explicitly NOT
-    pooled, expose the L + M claim categories, and set the machine-readable
+    """§13/§19/§20: synthesis must weave the campaigns as 3600 + 468 + 852 + 456
+    = 5376 formal invocations across five byte-frozen campaigns that are explicitly
+    NOT pooled, expose the L + M claim categories, and set the machine-readable
     restriction flags."""
 
     @classmethod
@@ -135,9 +135,11 @@ class TestTwoRoleSynthesis(unittest.TestCase):
         self.assertEqual(tr["strategy_space_formal_invocations"], 3600)
         self.assertEqual(tr["portability_formal_invocations"], 468)
         self.assertEqual(tr["portability_ext_formal_invocations"], 852)
-        self.assertEqual(tr["total_formal_invocations"], 4920)
-        self.assertEqual(tr["campaigns"], 4)
-        self.assertFalse(tr["pooled"], "the four campaigns must never be pooled")
+        self.assertEqual(tr["portability_full_closure_formal_invocations"], 456)
+        self.assertEqual(tr["total_formal_invocations"], 5376)
+        self.assertEqual(tr["total_formal_pairs"], 2688)
+        self.assertEqual(tr["campaigns"], 5)
+        self.assertFalse(tr["pooled"], "the five campaigns must never be pooled")
 
     def test_manifest_records_portability_ext_chain(self):
         ps = self.manifest["portability_ext_source"]
@@ -169,20 +171,21 @@ class TestTwoRoleSynthesis(unittest.TestCase):
         self.assertIn(("L_cross_workload_portability", "SAFE"), cats)
         self.assertIn(("L_cross_workload_portability", "DO_NOT_CLAIM"), cats)
 
-    def test_thesis_notes_state_4920_and_do_not_pool(self):
-        self.assertIn("4920", self.notes)
+    def test_thesis_notes_state_5376_and_do_not_pool(self):
+        self.assertIn("5376", self.notes)
         self.assertIn("3600", self.notes)
         self.assertIn("468", self.notes)
         self.assertIn("852", self.notes)
+        self.assertIn("456", self.notes)
         self.assertIn("do not pool", self.notes.lower())
 
     def test_thesis_notes_do_not_pool_into_one_effect(self):
         # the framing must explicitly forbid pooling into a single effect, and
-        # must NOT imply all 4920 estimate one effect
+        # must NOT imply all 5376 estimate one effect
         low = self.notes.lower()
         self.assertIn("not be pooled into a single effect", low)
-        self.assertNotIn("4920 invocations estimate", low)
-        self.assertNotIn("4920 formal invocations estimate", low)
+        self.assertNotIn("5376 invocations estimate", low)
+        self.assertNotIn("5376 formal invocations estimate", low)
 
     def test_L_and_M_categories_present(self):
         cats = {(e["category"], e["classification"]) for e in S.CLAIM_MAP}

@@ -9,8 +9,8 @@ YC,layers_5,orig,"native_headtohead{,_YCu,_YCh01} summary.csv (per-seed, orig)",
 YC,layers_92,orig,"native_headtohead{,_YCu,_YCh01} summary.csv (per-seed, orig)",structural skeleton,static,True,BOTH,covered,later-additive head-to-head
 YC,learned_markov_14,orig,"native_headtohead{,_YCu,_YCh01} summary.csv (per-seed, orig)",LOSO 1-10 (train/test fold),keyed,True,BOTH,covered,later-additive head-to-head
 YC,learned_markov_28,orig,"native_headtohead{,_YCu,_YCh01} summary.csv (per-seed, orig)",LOSO 1-10 (train/test fold),keyed,True,BOTH,covered,later-additive head-to-head
-YC,lp_shuf,orig,"native_headtohead{,_YCu,_YCh01} summary.csv (per-seed, orig)",seeds 1-10 (libprefetch trace),keyed,False,WS_ONLY,MECHANISM-QUESTIONABLE (libprefetch readahead; inject-model portability decision required),later-additive head-to-head
-YC,lp_sorted,orig,"native_headtohead{,_YCu,_YCh01} summary.csv (per-seed, orig)",seeds 1-10 (libprefetch trace),keyed,False,WS_ONLY,MECHANISM-QUESTIONABLE (libprefetch readahead; inject-model portability decision required),later-additive head-to-head
+YC,lp_shuf,orig,"native_headtohead{,_YCu,_YCh01} summary.csv (per-seed, orig)",seeds 1-10 (libprefetch trace),keyed,True,BOTH,covered,later-additive head-to-head
+YC,lp_sorted,orig,"native_headtohead{,_YCu,_YCh01} summary.csv (per-seed, orig)",seeds 1-10 (libprefetch trace),keyed,True,BOTH,covered,later-additive head-to-head
 YCu,2d,orig,"native_headtohead{,_YCu,_YCh01} summary.csv (per-seed, orig)",structural (workload-invariant sel.),static,True,BOTH,covered,later-additive head-to-head
 YCu,2e_K10,orig,"native_headtohead{,_YCu,_YCh01} summary.csv (per-seed, orig)",seeds 1-10 (keyed plan seed),keyed,True,BOTH,covered,later-additive head-to-head
 YCu,2e_K500,orig,"native_headtohead{,_YCu,_YCh01} summary.csv (per-seed, orig)",seeds 1-10 (keyed plan seed),keyed,True,BOTH,covered,later-additive head-to-head
@@ -21,8 +21,8 @@ YCu,layers_5,orig,"native_headtohead{,_YCu,_YCh01} summary.csv (per-seed, orig)"
 YCu,layers_92,orig,"native_headtohead{,_YCu,_YCh01} summary.csv (per-seed, orig)",structural skeleton,static,True,BOTH,covered,later-additive head-to-head
 YCu,learned_markov_14,orig,"native_headtohead{,_YCu,_YCh01} summary.csv (per-seed, orig)",LOSO 1-10 (train/test fold),keyed,True,BOTH,covered,later-additive head-to-head
 YCu,learned_markov_28,orig,"native_headtohead{,_YCu,_YCh01} summary.csv (per-seed, orig)",LOSO 1-10 (train/test fold),keyed,True,BOTH,covered,later-additive head-to-head
-YCu,lp_shuf,orig,"native_headtohead{,_YCu,_YCh01} summary.csv (per-seed, orig)",seeds 1-10 (libprefetch trace),keyed,False,WS_ONLY,MECHANISM-QUESTIONABLE (libprefetch readahead; inject-model portability decision required),later-additive head-to-head
-YCu,lp_sorted,orig,"native_headtohead{,_YCu,_YCh01} summary.csv (per-seed, orig)",seeds 1-10 (libprefetch trace),keyed,False,WS_ONLY,MECHANISM-QUESTIONABLE (libprefetch readahead; inject-model portability decision required),later-additive head-to-head
+YCu,lp_shuf,orig,"native_headtohead{,_YCu,_YCh01} summary.csv (per-seed, orig)",seeds 1-10 (libprefetch trace),keyed,True,BOTH,covered,later-additive head-to-head
+YCu,lp_sorted,orig,"native_headtohead{,_YCu,_YCh01} summary.csv (per-seed, orig)",seeds 1-10 (libprefetch trace),keyed,True,BOTH,covered,later-additive head-to-head
 YCh01,2d,orig,"native_headtohead{,_YCu,_YCh01} summary.csv (per-seed, orig)",structural (workload-invariant sel.),static,True,BOTH,covered,later-additive head-to-head
 YCh01,2e_K10,orig,"native_headtohead{,_YCu,_YCh01} summary.csv (per-seed, orig)",seeds 1-10 (keyed plan seed),keyed,True,BOTH,covered,later-additive head-to-head
 YCh01,2e_K500,orig,"native_headtohead{,_YCu,_YCh01} summary.csv (per-seed, orig)",seeds 1-10 (keyed plan seed),keyed,True,BOTH,covered,later-additive head-to-head
@@ -33,34 +33,34 @@ YCh01,layers_5,orig,"native_headtohead{,_YCu,_YCh01} summary.csv (per-seed, orig
 YCh01,layers_92,orig,"native_headtohead{,_YCu,_YCh01} summary.csv (per-seed, orig)",structural skeleton,static,True,BOTH,covered,later-additive head-to-head
 YCh01,learned_markov_14,orig,"native_headtohead{,_YCu,_YCh01} summary.csv (per-seed, orig)",LOSO 1-10 (train/test fold),keyed,True,BOTH,covered,later-additive head-to-head
 YCh01,learned_markov_28,orig,"native_headtohead{,_YCu,_YCh01} summary.csv (per-seed, orig)",LOSO 1-10 (train/test fold),keyed,True,BOTH,covered,later-additive head-to-head
-YCh01,lp_shuf,orig,"native_headtohead{,_YCu,_YCh01} summary.csv (per-seed, orig)",seeds 1-10 (libprefetch trace),keyed,False,WS_ONLY,MECHANISM-QUESTIONABLE (libprefetch readahead; inject-model portability decision required),later-additive head-to-head
-YCh01,lp_sorted,orig,"native_headtohead{,_YCu,_YCh01} summary.csv (per-seed, orig)",seeds 1-10 (libprefetch trace),keyed,False,WS_ONLY,MECHANISM-QUESTIONABLE (libprefetch readahead; inject-model portability decision required),later-additive head-to-head
+YCh01,lp_shuf,orig,"native_headtohead{,_YCu,_YCh01} summary.csv (per-seed, orig)",seeds 1-10 (libprefetch trace),keyed,True,BOTH,covered,later-additive head-to-head
+YCh01,lp_sorted,orig,"native_headtohead{,_YCu,_YCh01} summary.csv (per-seed, orig)",seeds 1-10 (libprefetch trace),keyed,True,BOTH,covered,later-additive head-to-head
 C,2d,orig,ablation_comp_v2,seeds 1-10,static,True,BOTH,covered,RP 4.2: C ablation scope post-fix
 C,2e_K10,orig,ablation_comp_v2,seeds 1-10,keyed,True,BOTH,covered,RP 4.2: C ablation scope post-fix
-C,2e_K40,orig,tiebreak_fix/master,single-inst (n=10 reps),keyed,False,WS_ONLY,PORTABLE-KEYED-NEWBUDGET (2e interior-union supported; needs new frozen plans),RP 4.2 row32: corrected single-inst C:K40
+C,2e_K40,orig,tiebreak_fix/master,single-inst (n=10 reps),keyed,True,BOTH,covered,RP 4.2 row32: corrected single-inst C:K40
 C,2e_K500,orig,unified_v2/matrix,single-inst (n=10 reps),keyed,True,BOTH,covered,RP 4.4: C 2e_K500 NOT in tie-break changed set -> unchanged cell -> unified_v2
-C,2e_K92,orig,tiebreak_fix/master,single-inst (n=10 reps),keyed,False,WS_ONLY,PORTABLE-KEYED-NEWBUDGET (2e interior-union supported; needs new frozen plans),RP 4.2 row32: corrected single-inst C:K92
+C,2e_K92,orig,tiebreak_fix/master,single-inst (n=10 reps),keyed,True,BOTH,covered,RP 4.2 row32: corrected single-inst C:K92
 C,2f_slru,orig,ablation_comp_v2,seeds 1-10 (anchor),keyed,True,BOTH,covered,RP 4.2: C ablation scope post-fix
 C,2f_top14,orig,ablation_comp_v2,seeds 1-10,keyed,True,BOTH,covered,RP 4.2: C ablation scope post-fix
 C,2f_top28,orig,ablation_comp_v2,seeds 1-10,keyed,True,BOTH,covered,RP 4.2: C ablation scope post-fix
 C,layers_5,orig,seeds,seeds 1-10,static,True,BOTH,covered,"RP 4.8: tie-break-unaffected {2d,layers_5,layers_92}"
-C,layers_92,orig,seeds,seeds 1-10,static,False,WS_ONLY,PORTABLE-STATIC (action supports; no new frozen plan),RP 4.8: tie-break-unaffected
+C,layers_92,orig,seeds,seeds 1-10,static,True,BOTH,covered,RP 4.8: tie-break-unaffected
 C,leaf_freq_K10,orig,ablation_comp_v2,seeds 1-10,keyed,True,BOTH,covered,RP 4.2: C ablation scope post-fix
 C,leaf_rand_K10,orig,ablation_comp_v2,seeds 1-10,keyed,True,BOTH,covered,RP 4.2: C ablation scope post-fix
-C,learned_markov_14,orig,learned_10fold,LOSO 1-10,keyed,False,WS_ONLY,PORTABLE-KEYED (action supports; needs new frozen per-seed plans),RP: learned_10fold supersedes single-fold
+C,learned_markov_14,orig,learned_10fold,LOSO 1-10,keyed,True,BOTH,covered,RP: learned_10fold supersedes single-fold
 C,learned_markov_28,orig,learned_10fold,LOSO 1-10,keyed,True,BOTH,covered,RP: learned_10fold supersedes single-fold
-C,lp_shuf,orig,baselines_v2,test seed 1 only,keyed,False,WS_ONLY,MECHANISM-QUESTIONABLE (libprefetch readahead; inject-model portability decision required),RP 4.2: baselines_v2 prior-art (single test seed)
-C,lp_sorted,orig,baselines_v2,test seed 1 only,keyed,False,WS_ONLY,MECHANISM-QUESTIONABLE (libprefetch readahead; inject-model portability decision required),RP 4.2: baselines_v2 prior-art (single test seed)
+C,lp_shuf,orig,baselines_v2,test seed 1 only,keyed,True,BOTH,covered,RP 4.2: baselines_v2 prior-art (single test seed)
+C,lp_sorted,orig,baselines_v2,test seed 1 only,keyed,True,BOTH,covered,RP 4.2: baselines_v2 prior-art (single test seed)
 C_hit,2d,orig,chit_headtohead,structural,static,True,BOTH,covered,chit_headtohead canonical per-seed
 C_hit,2e_K10,orig,chit_headtohead,seeds 1-10,keyed,True,BOTH,covered,chit_headtohead canonical per-seed
-C_hit,2e_K40,orig,c_hit_v2,seeds 1-10,keyed,False,WS_ONLY,PORTABLE-KEYED-NEWBUDGET (2e interior-union supported; needs new frozen plans),RP 4.2 row35: newly measured in c_hit_v2
+C_hit,2e_K40,orig,c_hit_v2,seeds 1-10,keyed,True,BOTH,covered,RP 4.2 row35: newly measured in c_hit_v2
 C_hit,2e_K500,orig,chit_headtohead,seeds 1-10,keyed,True,BOTH,covered,chit_headtohead canonical per-seed
-C_hit,2e_K92,orig,c_hit_v2,seeds 1-10,keyed,False,WS_ONLY,PORTABLE-KEYED-NEWBUDGET (2e interior-union supported; needs new frozen plans),RP 4.2 row35: newly measured in c_hit_v2
+C_hit,2e_K92,orig,c_hit_v2,seeds 1-10,keyed,True,BOTH,covered,RP 4.2 row35: newly measured in c_hit_v2
 C_hit,2f_slru,orig,chit_headtohead,seeds 1-10 (anchor),keyed,True,BOTH,covered,chit_headtohead canonical per-seed
 C_hit,2f_top14,orig,chit_headtohead,seeds 1-10,keyed,True,BOTH,covered,chit_headtohead canonical per-seed
 C_hit,2f_top28,orig,chit_headtohead,seeds 1-10,keyed,True,BOTH,covered,chit_headtohead canonical per-seed
 C_hit,layers_92,orig,chit_headtohead,structural skeleton,static,True,BOTH,covered,chit_headtohead canonical per-seed
 C_hit,learned_markov_14,orig,chit_headtohead,LOSO 1-10,keyed,True,BOTH,covered,chit_headtohead canonical per-seed
 C_hit,learned_markov_28,orig,chit_headtohead,LOSO 1-10,keyed,True,BOTH,covered,chit_headtohead canonical per-seed
-C_hit,lp_shuf,orig,chit_headtohead,seeds 1-10,keyed,False,WS_ONLY,MECHANISM-QUESTIONABLE (libprefetch readahead; inject-model portability decision required),chit_headtohead canonical per-seed
-C_hit,lp_sorted,orig,chit_headtohead,seeds 1-10,keyed,False,WS_ONLY,MECHANISM-QUESTIONABLE (libprefetch readahead; inject-model portability decision required),chit_headtohead canonical per-seed
+C_hit,lp_shuf,orig,chit_headtohead,seeds 1-10,keyed,True,BOTH,covered,chit_headtohead canonical per-seed
+C_hit,lp_sorted,orig,chit_headtohead,seeds 1-10,keyed,True,BOTH,covered,chit_headtohead canonical per-seed

@@ -1,0 +1,6 @@
+workload,ow_n_pairs_sorted,ow_n_pairs_shuf,ow_n_seeds,ow_deliver_us_sorted,ow_deliver_us_shuf,ow_delta_deliver_us,ow_order_ratio_shuf_over_sorted,ow_first_query_us_sorted,ow_first_query_us_shuf,ow_first_query_delta_us,ws_deliver_us_sorted,ws_deliver_us_shuf,ws_order_ratio_shuf_over_sorted,order_ratio_agreement,ws_source
+YC,9,9,3,33626.4,1004201.5,970575.2,29.864,13.5,13.8,0.3,102558.7,1567434.5,15.283,both>1,results/native_headtohead/summary.csv
+YCu,9,9,3,33619.0,1001585.3,967966.3,29.792,13.6,13.6,0.0,102985.2,1554068.6,15.09,both>1,results/native_headtohead_YCu/summary.csv
+YCh01,9,9,3,33504.2,1008321.8,974817.6,30.095,13.6,13.9,0.3,103887.4,1562155.6,15.037,both>1,results/native_headtohead_YCh01/summary.csv
+C,3,3,1,1330.0,19792.3,18462.3,14.881,13.7,13.6,-0.1,2775.1,29175.0,10.513,both>1,results/baselines_v2/summary.csv
+C_hit,9,9,3,1956.3,34740.0,32783.7,17.758,13.5,13.7,0.2,4464.8,52883.5,11.844,both>1,results/chit_headtohead/summary.csv

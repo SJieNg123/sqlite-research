@@ -150,20 +150,34 @@ def planned_closure_target():
 
 
 PLANNED_CLOSURE = planned_closure_target()
-# §11 planned-target invariants (fail loud, CLAUDE.md Rule 12): the closure campaign
-# must target EXACTLY the current WS_ONLY gap -- no more (would touch a frozen cell),
-# no less (would leave a gap) -- and BOTH plus the plan must span the whole matrix.
-_PLANNED_EXTRA = PLANNED_CLOSURE - WS_ONLY
-_PLANNED_MISSING = WS_ONLY - PLANNED_CLOSURE
-if _PLANNED_EXTRA:
-    sys.exit("planned closure targets cells that are not WS_ONLY gaps: %s"
-             % sorted(_PLANNED_EXTRA))
-if _PLANNED_MISSING:
-    sys.exit("planned closure leaves WS_ONLY gaps uncovered: %s" % sorted(_PLANNED_MISSING))
-if (BOTH | PLANNED_CLOSURE) != WS_CELLS:
-    sys.exit("BOTH union planned-closure != full 65-cell matrix")
-if (WS_ONLY - PLANNED_CLOSURE):
-    sys.exit("remaining planned WS_ONLY gap is non-empty")
+# The closure campaign is EXECUTED once its evidence is archived and included in
+# compare_effectiveness.load_ow() -- at which point every WS_ONLY gap becomes BOTH and
+# WS_ONLY is empty. This audit is state-aware and fails loud (CLAUDE.md Rule 12) in BOTH
+# states. (§2 recompute is BIDIRECTIONAL: BOTH/WS_ONLY/OW_ONLY are computed mechanically
+# above; the expected post-closure shape 65/0/4 is asserted here, not hard-coded upstream.)
+CLOSURE_EXECUTED = len(WS_ONLY) == 0
+if CLOSURE_EXECUTED:
+    # POST-EXECUTION: the 16 closure target cells must now ALL be in the executed BOTH set,
+    # the WS matrix must be fully covered, and no WS_ONLY gap may remain.
+    _NOT_COVERED = PLANNED_CLOSURE - BOTH
+    if _NOT_COVERED:
+        sys.exit("closure target cells missing from executed BOTH: %s" % sorted(_NOT_COVERED))
+    if BOTH != WS_CELLS:
+        sys.exit("post-closure executed BOTH != full 65-cell WS matrix")
+    if WS_ONLY:
+        sys.exit("post-closure WS_ONLY must be empty: %s" % sorted(WS_ONLY))
+else:
+    # PRE-EXECUTION (WK1 planning): the campaign must target EXACTLY the current WS_ONLY
+    # gap -- no more (would touch a frozen cell), no less (would leave a gap).
+    _PLANNED_EXTRA = PLANNED_CLOSURE - WS_ONLY
+    _PLANNED_MISSING = WS_ONLY - PLANNED_CLOSURE
+    if _PLANNED_EXTRA:
+        sys.exit("planned closure targets cells that are not WS_ONLY gaps: %s"
+                 % sorted(_PLANNED_EXTRA))
+    if _PLANNED_MISSING:
+        sys.exit("planned closure leaves WS_ONLY gaps uncovered: %s" % sorted(_PLANNED_MISSING))
+    if (BOTH | PLANNED_CLOSURE) != WS_CELLS:
+        sys.exit("BOTH union planned-closure != full 65-cell matrix")
 
 # portability class for each WS_ONLY cell (does the mechanism already exist in the OW action?)
 OW_ACTION_HAS = {"2d", "2e_K10", "2e_K500", "2f_top14", "2f_top28", "2f_slru",
@@ -252,12 +266,22 @@ def main():
         print(f"  {st:20s} x{len(fam[st])}  -> {sorted(fam[st])}")
 
     print()
-    print("PLANNED FULL-CLOSURE TARGET (campaign portability_full_closure, WK1 plan):")
-    print(f"  planned target cells                 : {len(PLANNED_CLOSURE)}")
-    print(f"  == current WS_ONLY gap               : {PLANNED_CLOSURE == WS_ONLY}")
-    print(f"  executed BOTH now                    : {len(BOTH)}/65 (unchanged until WK2)")
-    print(f"  BOTH u planned-closure               : {len(BOTH | PLANNED_CLOSURE)}/65")
-    print(f"  remaining planned WS_ONLY            : {len(WS_ONLY - PLANNED_CLOSURE)}")
+    if CLOSURE_EXECUTED:
+        print("FULL-CLOSURE CAMPAIGN (portability_full_closure): EXECUTED + INCLUDED")
+        print(f"  closure target cells                 : {len(PLANNED_CLOSURE)}")
+        print(f"  all closure cells in executed BOTH   : {PLANNED_CLOSURE <= BOTH}")
+        print(f"  executed BOTH now                    : {len(BOTH)}/65")
+        print(f"  WS_ONLY remaining                    : {len(WS_ONLY)}")
+        print(f"  OW_ONLY (reported separately)        : {len(OW_ONLY)}")
+        print("  CLAIM: every canonical retained WS workload x strategy cell at orig layout")
+        print("         now has OpenWhisk CELL coverage (not protocol/layout/perf equivalence)")
+    else:
+        print("PLANNED FULL-CLOSURE TARGET (campaign portability_full_closure, WK1 plan):")
+        print(f"  planned target cells                 : {len(PLANNED_CLOSURE)}")
+        print(f"  == current WS_ONLY gap               : {PLANNED_CLOSURE == WS_ONLY}")
+        print(f"  executed BOTH now                    : {len(BOTH)}/65 (unchanged until WK2)")
+        print(f"  BOTH u planned-closure               : {len(BOTH | PLANNED_CLOSURE)}/65")
+        print(f"  remaining planned WS_ONLY            : {len(WS_ONLY - PLANNED_CLOSURE)}")
     print()
     print(f"wrote {path1}")
     return dict(total=len(WS_CELLS), both=len(BOTH), ws_only=len(WS_ONLY),
