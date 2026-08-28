@@ -1,0 +1,69 @@
+{
+  "_comment": "SINGLE-BATCH PORTABILITY-FULL-CLOSURE campaign for 05_full_matrix.sh. ONE formal execution matrix: the UNION of six heterogeneous rectangular blocks (B12-B17) covering the final 16 WS_ONLY cells of the 65-cell canonical portability matrix -- the cells the workstation ran but NO prior OpenWhisk campaign (primary/secondary/portability/portability_ext) covered. Like matrix.portability.json / matrix.portability_ext.json this is expressed as explicit blocks -- NOT a global Cartesian product -- because different workloads carry different target-strategy sets and seed semantics. The union recomputes to EXACTLY 228 baseline-target pairs / 456 formal invocations under ONE portability_full_closure_run_config_sha256 (a5be8f15..., independent of the byte-frozen primary 022fbeb0..., secondary 441609e6..., portability 64f44c3e..., and portability_ext bf504a28... campaigns), ONE schedule_seed (20260829), and ONE campaign fingerprint over the complete ordered 456-invocation schedule. baseline is the paired A-arm anchor in every block (not a target). This closes CELL coverage of the matrix -- NOT an exact replication of every workstation seed/repetition protocol. lp_sorted/lp_shuf are the libprefetch ordered-delivery arms: the SAME resident page set as the corresponding canonical 2f_slru working set, delivered by a synchronous page-sized pread loop IN LIST ORDER (delivery_method=pread_ordered, NOT async MADV_WILLNEED); lp's primary quantity is deliver_us / e2e including delivery cost, NOT first_query. Deployment/feasibility + relative-effectiveness evidence only; warm paired first-query latency is NOT a strategy-performance estimate (page-cache carryover falsified; positional/order effect). Every block field is validated against the frozen runtime artifact pin (37 closure keyed plans + the 2e_K40/2e_K92/lp_sorted/lp_shuf markers; learned_markov_14/layers_92 markers already present from the portability_ext layer) before anything runs; real invocation still requires WS2_MATRIX_IMPL_READY=1 and happens on WK2, never WK1. Run this ONE matrix once: 05_full_matrix.sh --matrix ./matrix.portability_full_closure.json. Adding the 37 closure plans to the live manifest changes its bytes, so this campaign runs under a NEW image identity; the archived portability/portability_ext image identities are unaffected.",
+  "schema_version": 3,
+  "campaign": "portability_full_closure",
+  "run_config_key": "portability_full_closure_run_config_sha256",
+  "schedule_seed": 20260829,
+  "blocks": [
+    {
+      "id": "block12",
+      "_note": "read_tail_mixed_20k (C) single-instance budget siblings: 2e_K40 + 2e_K92 (resident 92-interior skeleton UNION native top-<=K hot leaves; interior half == full 92-skeleton, set-equality gated like 2e_K500) vs baseline. C's canonical 2e single-inst source (tiebreak_fix/master); 2 targets x 1 workload x 1 seed x 2 handle_modes x 3 reps = 12 pairs.",
+      "workloads": ["read_tail_mixed_20k"],
+      "strategies": ["baseline", "2e_K40", "2e_K92"],
+      "seeds": [1],
+      "handle_modes": ["warm", "standalone"],
+      "first_operation_ids": [0],
+      "repetitions_per_cell": 3
+    },
+    {
+      "id": "block13",
+      "_note": "read_tail_hit_20k (pure-hit tail C_hit): the 2e_K40 + 2e_K92 budget siblings across seeds 1,2,3 (c_hit_v2 per-seed native sources); 2 targets x 1 workload x 3 seeds x 2 handle_modes x 3 reps = 36 pairs.",
+      "workloads": ["read_tail_hit_20k"],
+      "strategies": ["baseline", "2e_K40", "2e_K92"],
+      "seeds": [1, 2, 3],
+      "handle_modes": ["warm", "standalone"],
+      "first_operation_ids": [0],
+      "repetitions_per_cell": 3
+    },
+    {
+      "id": "block14",
+      "_note": "read_tail_mixed_20k (C) LOSO learned competitor learned_markov_14 folds/test-seeds 1,2,3 (N=14, leakage-gated: test seed excluded from train) vs baseline -- C's N=14 learned cell (ext covered YC/YCu/YCh01/C_hit learned_markov_14, not C); 1 target x 1 workload x 3 seeds x 2 handle_modes x 3 reps = 18 pairs.",
+      "workloads": ["read_tail_mixed_20k"],
+      "strategies": ["baseline", "learned_markov_14"],
+      "seeds": [1, 2, 3],
+      "handle_modes": ["warm", "standalone"],
+      "first_operation_ids": [0],
+      "repetitions_per_cell": 3
+    },
+    {
+      "id": "block15",
+      "_note": "the static layers_92 full-interior skeleton (workload/seed-independent; reuses the canonical 92-interior skeleton, no new keyed plan) on read_tail_mixed_20k (C) -- the one C layers_92 cell the workstation ran; 1 target x 1 workload x 1 seed x 2 handle_modes x 3 reps = 6 pairs. Structural: seeds MUST stay [1] and never expand to 1,2,3.",
+      "workloads": ["read_tail_mixed_20k"],
+      "strategies": ["baseline", "layers_92"],
+      "seeds": [1],
+      "handle_modes": ["warm", "standalone"],
+      "first_operation_ids": [0],
+      "repetitions_per_cell": 3
+    },
+    {
+      "id": "block16",
+      "_note": "libprefetch (lp) ordered-delivery arms lp_sorted + lp_shuf across YC/YCu/YCh01/C_hit, seeds 1,2,3. Both arms deliver the SAME page set as the corresponding canonical 2f_slru resident working set; lp_sorted delivers in file_offset-ascending order, lp_shuf in a seed-shuffled order (offset-sort then Random(424242).shuffle). delivery_method=pread_ordered (synchronous page-sized pread loop IN LIST ORDER); order-sensitive plan_sha256. 2 targets x 4 workloads x 3 seeds x 2 handle_modes x 3 reps = 144 pairs.",
+      "workloads": ["native_ycsb_c_read_zipf", "native_ycsb_c_read_uniform", "native_ycsb_c_hot_hashed_01", "read_tail_hit_20k"],
+      "strategies": ["baseline", "lp_sorted", "lp_shuf"],
+      "seeds": [1, 2, 3],
+      "handle_modes": ["warm", "standalone"],
+      "first_operation_ids": [0],
+      "repetitions_per_cell": 3
+    },
+    {
+      "id": "block17",
+      "_note": "libprefetch (lp) ordered-delivery arms lp_sorted + lp_shuf on read_tail_mixed_20k (C), seed 1 only (C's canonical 2f_slru anchor is seed-1 only); same pread_ordered semantics as block16; 2 targets x 1 workload x 1 seed x 2 handle_modes x 3 reps = 12 pairs.",
+      "workloads": ["read_tail_mixed_20k"],
+      "strategies": ["baseline", "lp_sorted", "lp_shuf"],
+      "seeds": [1],
+      "handle_modes": ["warm", "standalone"],
+      "first_operation_ids": [0],
+      "repetitions_per_cell": 3
+    }
+  ]
+}

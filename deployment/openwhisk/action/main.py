@@ -28,7 +28,8 @@ except ImportError:  # pragma: no cover - OpenWhisk flat layout
 SUPPORTED_STRATEGIES = ("baseline", "2d", "layers_5", "layers_92", "2e_K10",
                         "2f_slru", "2e_K500", "leaf_freq_K10", "leaf_rand_K10",
                         "2f_top102", "learned_markov_102", "2f_top28",
-                        "learned_markov_28", "2f_top14", "learned_markov_14")
+                        "learned_markov_28", "2f_top14", "learned_markov_14",
+                        "2e_K40", "2e_K92", "lp_sorted", "lp_shuf")
 HANDLE_MODES = ("warm", "standalone")
 REQUIRED_REQUEST_FIELDS = ("request_id", "workload", "strategy", "seed",
                            "first_operation_id", "diagnostic_mode", "cold_reset",
@@ -60,7 +61,17 @@ DELIVERY_INVARIANTS = {
 KEYED_STRATEGIES = ("2e_K10", "2f_slru", "2e_K500", "leaf_freq_K10",
                     "leaf_rand_K10", "2f_top102", "learned_markov_102",
                     "2f_top28", "learned_markov_28", "2f_top14",
-                    "learned_markov_14")
+                    "learned_markov_14", "2e_K40", "2e_K92",
+                    "lp_sorted", "lp_shuf")
+# libprefetch (lp) strategies whose delivery lever is the ORDER of synchronous
+# page-sized preads (NOT async MADV_WILLNEED). They are keyed like any other keyed
+# strategy for page selection, but the deliver stage dispatches to an ordered pread
+# loop that preserves the frozen sequence exactly (see deliver dispatch below).
+PREAD_ORDERED_STRATEGIES = ("lp_sorted", "lp_shuf")
+# The frozen shuffle seed for lp_shuf's ordered plan. The action never re-shuffles
+# (the order is baked into the frozen keyed plan and validated order-sensitively);
+# this constant is echoed for provenance only.
+LP_SHUF_SEED = 424242
 _SESSION = None
 
 # The image bakes the artifacts under a FIXED absolute root. OpenWhisk extracts
@@ -379,13 +390,43 @@ def handle(request, session):
         resp["selected_leaf_count"] = len(offsets) - resp["selected_interior_count"]
 
         # ---- stage: deliver (fresh mapping) ----
+        # Two delivery mechanisms coexist. Every existing strategy keeps its async
+        # per-page MADV_WILLNEED delivery (delivery_method=madvise_willneed). The
+        # libprefetch (lp) strategies use a synchronous ORDERED page-sized pread
+        # loop (delivery_method=pread_ordered): lp's experimental lever is the ORDER
+        # of the preads (offset-ascending for lp_sorted, seed-shuffled for lp_shuf),
+        # so the frozen sequence is delivered exactly and NEVER coalesced/async/
+        # mmap-touched. The order is baked into the frozen keyed plan (offsets are
+        # returned by select_offsets in plan order) and validated order-sensitively
+        # by session._validate_keyed_plans; deliver_us is measured around the whole
+        # ordered loop (lp's primary quantity -- see the lp metric note).
+        is_lp = strategy in PREAD_ORDERED_STRATEGIES
         try:
             pm = residency.PageMap(session.db_path)
             try:
-                t0 = time.monotonic_ns()
-                delivered = pm.deliver_willneed(offsets) if offsets else 0
-                resp["deliver_us"] = (time.monotonic_ns() - t0) / 1000.0
-                resp["delivered_page_count"] = delivered
+                if is_lp:
+                    kp = session.strategy_plan(strategy, workload, seed)
+                    t0 = time.monotonic_ns()
+                    delivered, delivered_bytes = (
+                        pm.deliver_pread_ordered(offsets) if offsets else (0, 0))
+                    resp["deliver_us"] = (time.monotonic_ns() - t0) / 1000.0
+                    resp["delivery_method"] = "pread_ordered"
+                    resp["delivery_order"] = ("file_offset_ascending"
+                                              if strategy == "lp_sorted"
+                                              else "seed_shuffled")
+                    resp["shuffle_seed"] = (LP_SHUF_SEED if strategy == "lp_shuf"
+                                            else None)
+                    resp["delivered_page_count"] = delivered
+                    resp["delivered_bytes"] = delivered_bytes
+                    resp["ordered_plan_sha256"] = (kp.get("plan_sha256")
+                                                   if kp else None)
+                else:
+                    t0 = time.monotonic_ns()
+                    delivered = pm.deliver_willneed(offsets) if offsets else 0
+                    resp["deliver_us"] = (time.monotonic_ns() - t0) / 1000.0
+                    resp["delivery_method"] = "madvise_willneed"
+                    resp["delivered_page_count"] = delivered
+                # residency/correctness gates run for BOTH mechanisms
                 vec = pm.residency_vector()
                 resp["resident_interiors_after_prefetch"] = residency.count_in(
                     vec, session.interior_offset_set)

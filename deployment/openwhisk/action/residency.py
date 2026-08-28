@@ -92,6 +92,33 @@ class PageMap:
                 delivered += 1
         return delivered
 
+    def deliver_pread_ordered(self, offsets):
+        """Synchronous ORDERED page-sized pread delivery -- the libprefetch (lp)
+        mechanism. For each frozen offset IN LIST ORDER, read exactly PAGE bytes
+        from the canonical DB fd with a blocking ``os.pread``. The experimental
+        lever of lp is the ORDER of the synchronous preads (offset-ascending for
+        lp_sorted, seed-shuffled for lp_shuf), so the sequence is delivered exactly
+        as given -- never reordered, coalesced, mmap-touched (MADV_WILLNEED), or
+        made asynchronous, any of which would destroy the ordering mechanism.
+
+        Returns ``(delivered_page_count, delivered_bytes)``. Fails closed with
+        OSError on any invalid/misaligned/out-of-range offset, short read, or pread
+        error -- the caller maps that to a complete error envelope (never a partial
+        measured record)."""
+        delivered = 0
+        delivered_bytes = 0
+        for off in offsets:
+            if off < 0 or off % PAGE != 0 or off + PAGE > self.size:
+                raise OSError("lp pread offset %d invalid (file size %d)"
+                              % (off, self.size))
+            buf = os.pread(self.fd, PAGE, off)
+            if len(buf) != PAGE:
+                raise OSError("lp pread short read at offset %d: %d/%d bytes"
+                              % (off, len(buf), PAGE))
+            delivered += 1
+            delivered_bytes += len(buf)
+        return delivered, delivered_bytes
+
     def close(self):
         if getattr(self, "addr", None):
             _libc.munmap(ctypes.c_void_p(self.addr), self.size)

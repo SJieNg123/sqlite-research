@@ -181,13 +181,88 @@ export OW_ARTIFACT_MANIFEST_SHA256='<sha256 of the ext image-baked artifacts.jso
 bash 05_full_matrix.sh --matrix ./matrix.portability_ext.json
 ```
 
+## Portability-FULL-CLOSURE campaign (the final 16 workstation cells)
+
+A **fifth, independent, additive** campaign closes the last 16 `(workload, strategy)`
+cells the workstation ran but no OpenWhisk campaign (primary/secondary/portability/
+portability_ext) had reached — taking the canonical **65-cell** portability matrix to
+**complete cell coverage**. The four prior campaigns above stay **byte-untouched**.
+
+| identity | value | invocation plan |
+|---|---|---|
+| **portability_full_closure** | `a5be8f15…` | `portability_full_closure_invocation_plan` |
+
+`portability_full_closure_run_config_sha256` recomputes deterministically over its
+canonical `portability_full_closure_invocation_plan` (sorted-key compact JSON), and is
+asserted distinct from primary `022fbeb0…`, secondary `441609e6…`, portability
+`64f44c3e…`, and portability_ext `bf504a28…` — all four of which the closure pin writer
+re-asserts **byte-unchanged** (guarded by `test_portability_full_closure.py`).
+
+Formal execution is **one** matrix, `ws2/matrix.portability_full_closure.json`: a
+block-union of six heterogeneous blocks (B12–B17), one `schedule_seed = 20260829`, one
+campaign fingerprint over the ordered **456-invocation** schedule.
+
+| block | workloads | targets (non-baseline) | seeds | pairs | invocations |
+|---|---|---|---|---:|---:|
+| block12 | C (mixed_20k) | `2e_K40`, `2e_K92` | 1 | 12 | 24 |
+| block13 | C_hit | `2e_K40`, `2e_K92` | 1,2,3 | 36 | 72 |
+| block14 | C (mixed_20k) | `learned_markov_14` (LOSO) | 1,2,3 | 18 | 36 |
+| block15 | C (mixed_20k) | `layers_92` | 1 (structural) | 6 | 12 |
+| block16 | YC, YCu, YCh01, C_hit | `lp_sorted`, `lp_shuf` | 1,2,3 | 144 | 288 |
+| block17 | C (mixed_20k) | `lp_sorted`, `lp_shuf` | 1 | 12 | 24 |
+| **union (one campaign)** | | | | **228** | **456** |
+
+The 4 new-name keyed strategies × their cells = **37 frozen delivery plans**
+(`portability_full_closure_freeze_report.json`, native sources under
+`config/plans/keyed/native_source/portability_full_closure/`): `2e_K40` (4), `2e_K92` (4),
+`learned_markov_14` (3, C only — disjoint from the ext learned_markov_14 cells),
+`lp_sorted` (13), `lp_shuf` (13). `layers_92` (block15) reuses the already-committed
+92-interior skeleton — **static, no new frozen plan**.
+
+`2e_K40`/`2e_K92` are the `2e_K500` reconstruct at smaller leaf budgets: the FULL
+92-interior skeleton (set-equality gate, `eip==92`) UNION the native top-≤K hot leaves.
+
+**lp ordered delivery.** `lp_sorted`/`lp_shuf` both deliver the SAME resident page set as
+the corresponding canonical `2f_slru` working set; they differ ONLY in the ORDER of a
+synchronous page-sized `pread` loop (`delivery_method = "pread_ordered"`, never async
+`MADV_WILLNEED`). `lp_sorted` delivers offset-ascending; `lp_shuf` delivers an
+offset-sort then `random.Random(424242).shuffle` order. Offsets are frozen **in delivery
+order**, so `plan_sha256` is **order-sensitive**: the two arms share an identical
+unordered page set but carry different ordered-sequence SHAs. lp's primary quantity is
+`deliver_us` / e2e including delivery, **not** first_query.
+
+**Claim boundary.** This closes **cell coverage** of the 65-cell matrix
+(every canonical `(workload, strategy)` cell now has an OpenWhisk arm), **not** an exact
+replication of every workstation seed/repetition protocol. Executed BOTH stays **49/65**
+until WK2 evidence is archived; the closure only makes it *plannable* to 65/65.
+
+**New image identity:** adding the 37 closure plans to the live `artifacts.json` changes
+its bytes, so this campaign runs under a **new image identity**; the four archived
+campaign image identities are unaffected.
+
+Run stage 05 **exactly once** on the closure matrix (WK2 only — same Terminal-B flow):
+
+```bash
+cd deployment/openwhisk/ws2
+# Validate + schedule (no invocation): 228 pairs / 456 invocations across 6 blocks,
+# single fingerprint distinct from the portability AND portability_ext campaigns.
+bash 05_full_matrix.sh --matrix ./matrix.portability_full_closure.json
+# Execute the ONE closure campaign (requires cooled 03 + gate open + the closure image's manifest sha).
+export WS2_MATRIX_IMPL_READY=1
+export OW_ARTIFACT_MANIFEST_SHA256='<sha256 of the closure image-baked artifacts.json>'
+bash 05_full_matrix.sh --matrix ./matrix.portability_full_closure.json
+```
+
 ## What is committed vs machine-local
 
 Committed (shipped from WK1): the single-batch `matrix.portability.json` (the formal
 execution unit) plus the four `matrix.portability.m*.json` readable fragments, the 36
 frozen delivery-plan CSVs + `portability_freeze_report.json`, the extended pin
 `config/artifacts.native_ycsb.json`, the runtime/builder/WS2 changes, and this
-doc; **and the portability-EXTENSION artifacts**: `matrix.portability_ext.json`, the 63
+doc; **the portability-EXTENSION artifacts**: `matrix.portability_ext.json`, the 63
 ext delivery-plan CSVs + native-source copies + `portability_ext_freeze_report.json` +
-its `PROVENANCE.md`, and `test_portability_ext.py`. Machine-local (git-ignored,
+its `PROVENANCE.md`, and `test_portability_ext.py`; **and the portability-FULL-CLOSURE
+artifacts**: `matrix.portability_full_closure.json`, the 37 closure delivery-plan CSVs +
+native-source copies + `portability_full_closure_freeze_report.json`, and
+`test_portability_full_closure.py`. Machine-local (git-ignored,
 regenerated on WK2): `config/artifacts.json`, `ws2/_image_stage/`, `ws2/_runs/**`.

@@ -437,10 +437,13 @@ class ExtActionDispatch(unittest.TestCase):
 
     def test_ext_keyed_dispatch_fails_closed(self):
         # An ext keyed strategy on a workload it was never frozen for must raise --
-        # never fall back. C (mixed_20k) has no N=14 learned cell.
+        # never fall back. 2e_K40 was frozen (by the later full-closure campaign) on
+        # C and C_hit only, NEVER on YC, so YC/2e_K40 stays genuinely uncovered.
+        # (C/learned_markov_14 is now VALID via closure B14; 2e_K500/YC is a covered
+        # headline cell -- neither works as a fail-closed probe any more.)
         with self.assertRaises(ValueError):
-            main.select_offsets("learned_markov_14", self.sess,
-                                workload="read_tail_mixed_20k", seed=1)
+            main.select_offsets("2e_K40", self.sess,
+                                workload="native_ycsb_c_read_zipf", seed=1)
         # seed 4 is outside the frozen 1..3 axis for every ext keyed cell.
         with self.assertRaises(ValueError):
             main.select_offsets("2e_K500", self.sess,

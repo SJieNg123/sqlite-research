@@ -53,6 +53,7 @@ import oracle  # noqa: E402
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "tools"))
 import portability_manifest as PM  # noqa: E402
 import portability_ext_manifest as XE  # noqa: E402
+import portability_full_closure_manifest as FC  # noqa: E402
 try:
     import sqlite_bridge  # noqa: E402
     _BRIDGE_SQLITE_VERSION = sqlite_bridge.libversion()
@@ -602,6 +603,26 @@ def crosscheck_portability_ext(ext_meta, ext_plan, ext_run_config_sha256):
         sys.exit("portability-ext pin mismatch:\n  " + "\n  ".join(problems))
 
 
+def crosscheck_portability_full_closure(fc_meta, fc_plan, fc_run_config_sha256):
+    """Fail closed unless the frozen pin carries every closure keyed entry, the four
+    new markers (2e_K40/2e_K92/lp_sorted/lp_shuf), and the closure invocation-plan
+    identity the live build produced. The pin was written from the SAME closure freeze
+    report (tools/write_portability_full_closure_pin.py via
+    tools/portability_full_closure_manifest.py), so this proves generation<->pin
+    agreement for the full-closure layer (lp entries checked order-sensitively)."""
+    pin_path = os.path.join(ROOT, PIN_REL)
+    with open(pin_path) as f:
+        pin = json.load(f)
+    problems = FC.crosscheck_closure(pin, fc_meta, ROOT)
+    if pin.get("portability_full_closure_run_config_sha256") != fc_run_config_sha256:
+        problems.append("pin portability_full_closure_run_config_sha256 != generated")
+    if json.dumps(pin.get("portability_full_closure_invocation_plan"), sort_keys=True) != \
+            json.dumps(fc_plan, sort_keys=True):
+        problems.append("pin portability_full_closure_invocation_plan != generated")
+    if problems:
+        sys.exit("portability-full-closure pin mismatch:\n  " + "\n  ".join(problems))
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", required=True)
@@ -759,12 +780,42 @@ def main():
             sys.exit("portability-ext marker collision %s" % strat)
         keyed_markers[strat] = marker
 
+    # ---- PORTABILITY-FULL-CLOSURE layer (additive; the final 16 WS_ONLY cells of
+    # the 65-cell canonical matrix). Driven entirely by the verified closure freeze
+    # report (37 keyed plans: 11 non-lp + 26 lp ORDERED) via
+    # tools/portability_full_closure_manifest.py. Keyed triples are DISJOINT from
+    # every prior entry (2e_K40/2e_K92/lp_sorted/lp_shuf are brand-new names;
+    # C/learned_markov_14 was never frozen). lp offsets are carried IN DELIVERY ORDER;
+    # the four new keyed markers (2e_K40/2e_K92/lp_sorted/lp_shuf) land in
+    # strategy_plans below (learned_markov_14/layers_92 markers already came from the
+    # ext layer). No new traces/oracle: all five workloads x seeds already resolve. -- #
+    fc_live, _fc_pin, fc_meta = FC.build_portability_full_closure_entries(
+        ROOT, set(offsets), page_size, page_count)
+    fc_markers = FC.build_closure_markers(fc_meta)
+    fc_plan = FC.portability_full_closure_invocation_plan()
+    fc_run_config_sha256 = FC.portability_full_closure_run_config_sha256(fc_plan)
+
+    for wl, seeds in fc_live.items():
+        wdst = keyed_block.setdefault(wl, {})
+        for seed_str, strats in seeds.items():
+            sdst = wdst.setdefault(seed_str, {})
+            for strat, entry in strats.items():
+                if strat in sdst:
+                    sys.exit("portability-full-closure keyed collision %s/%s/%s"
+                             % (strat, wl, seed_str))
+                sdst[strat] = entry
+    for strat, marker in fc_markers.items():
+        if strat in keyed_markers:
+            sys.exit("portability-full-closure marker collision %s" % strat)
+        keyed_markers[strat] = marker
+
     # Byte-tie the live manifest to the frozen replay pin (fail closed).
     crosscheck_pin(db_sha, plan_sha, classifier_sha,
                    {s: seedmap[s]["sha256"] for s in seedmap},
                    layers5_sha, layers5_offsets, keyed_meta)
     crosscheck_portability(port_meta, port_traces, port_plan, port_run_config_sha256)
     crosscheck_portability_ext(ext_meta, ext_plan, ext_run_config_sha256)
+    crosscheck_portability_full_closure(fc_meta, fc_plan, fc_run_config_sha256)
 
     st = os.stat(db)
     manifest = {
@@ -848,6 +899,8 @@ def main():
         "portability_run_config_sha256": port_run_config_sha256,
         "portability_ext_invocation_plan": ext_plan,
         "portability_ext_run_config_sha256": ext_run_config_sha256,
+        "portability_full_closure_invocation_plan": fc_plan,
+        "portability_full_closure_run_config_sha256": fc_run_config_sha256,
         "notes": ("Interior skeleton (2d) plan derived from the canonical page "
                   "classifier; invariants validated at generation. Paths are "
                   "repository-relative, resolved at runtime against "

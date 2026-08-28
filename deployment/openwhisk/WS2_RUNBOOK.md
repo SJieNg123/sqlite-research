@@ -137,6 +137,14 @@ bash 05_full_matrix.sh --matrix ./matrix.example.json     # copy+edit for the re
 #    EXACTLY ONCE on ./matrix.portability_ext.json (a block-union of seven blocks B5–B11).
 #    It bakes 63 extra keyed CSVs, so it runs under a NEW image identity — the archived
 #    portability image is untouched. See PORTABILITY_MATRIX.md § Portability-EXTENSION.
+#    For the portability-FULL-CLOSURE campaign (228 pairs / 456 invocations, schedule_seed
+#    20260829, fifth independent identity portability_full_closure a5be8f15…), run stage 05
+#    EXACTLY ONCE on ./matrix.portability_full_closure.json (a block-union of six blocks
+#    B12–B17). It closes the final 16 canonical cells (65/65 plannable coverage) and bakes
+#    37 extra keyed CSVs (incl. lp_sorted/lp_shuf ordered pread delivery), so it runs under
+#    a NEW image identity — all four prior images are untouched. lp arms deliver the same
+#    page set in different pread ORDER; their primary quantity is deliver_us, not
+#    first_query. See PORTABILITY_MATRIX.md § Portability-FULL-CLOSURE.
 
 # 6. Package everything for transfer back to WS1.
 bash 06_collect.sh --openwhisk-sha "$(git -C /path/to/openwhisk rev-parse HEAD)"

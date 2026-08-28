@@ -287,18 +287,21 @@ class TestNativeYcsbPinFrozenSources(unittest.TestCase):
         # 2f_slru} plus the Batch-3 YC secondary set {2e_K500,leaf_freq_K10,
         # leaf_rand_K10,2f_top102,learned_markov_102} plus the Batch-4 portability
         # set {2f_top28,learned_markov_28} plus the portability-EXT markers
-        # {2f_top14,learned_markov_14,layers_92} must all be accepted, and anything
+        # {2f_top14,learned_markov_14,layers_92} plus the portability-FULL-CLOSURE
+        # markers {2e_K40,2e_K92,lp_sorted,lp_shuf} must all be accepted, and anything
         # else rejected.
         allowed = set(self.pin["strategy_plans"].keys())
         self.assertEqual(allowed, {"baseline", "2d", "layers_5", "2e_K10", "2f_slru",
                                    "2e_K500", "leaf_freq_K10", "leaf_rand_K10",
                                    "2f_top102", "learned_markov_102",
                                    "2f_top28", "learned_markov_28",
-                                   "2f_top14", "learned_markov_14", "layers_92"})
+                                   "2f_top14", "learned_markov_14", "layers_92",
+                                   "2e_K40", "2e_K92", "lp_sorted", "lp_shuf"})
         for ok in ("baseline", "2d", "layers_5", "2e_K10", "2f_slru", "2e_K500",
                    "leaf_freq_K10", "leaf_rand_K10", "2f_top102", "learned_markov_102",
                    "2f_top28", "learned_markov_28",
-                   "2f_top14", "learned_markov_14", "layers_92"):
+                   "2f_top14", "learned_markov_14", "layers_92",
+                   "2e_K40", "2e_K92", "lp_sorted", "lp_shuf"):
             self.assertIn(ok, allowed)
         # near-miss names (truncated / renamed variants) must NOT collide with the
         # exact registered keys.
