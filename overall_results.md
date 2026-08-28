@@ -958,10 +958,15 @@ orig 欄取自已 commit 的 [`results/stats/uncertainty.csv`](results/stats/unc
 
 > ⚠️ **本節與上方所有節的角色區別**:上方全部是 **workstation**(裸機 Ryzen 9950X + NVMe,受控 native/WK1)的量測,是本研究**主要**的效能與機制證據。本節是把同一批策略部署進真正的 **Apache OpenWhisk** FaaS action 後的**部署側對照**(deployment complement)——用途是**部署可行性 + footprint/delivery 成本結構**的重現,**不是**另一份效能證據,也**不**推翻或取代 workstation 的結論。整合敘事見 `REPORT.md` §5.6 / Appendix A.5;合成產物在 `deployment/openwhisk/analysis/thesis/`。
 
-**覆蓋範圍(先讀,避免誤讀成全矩陣)。** OpenWhisk **只跑了 YC 這一個 workload**(`native_ycsb_c_read_zipf`,zipfian read),10 seeds、warm(keep-alive process)+ standalone(fresh process)、共 **3600 formal invocation / 1800 pair**,全數過 validity gate,且釘在與 workstation native-YC **同一顆 `test.db`(26331 indexed,orig layout)**。因此:
+**覆蓋範圍(先讀)。** OpenWhisk 證據分兩層、共 **五個 byte-frozen campaign / 5376 formal invocation / 2688 pair**(全數過 validity gate,分屬回答不同問題、never pooled):
 
-- **可對照的只有 YC 這一格**——workstation 的合成 Scattered-Zipf / Uniform-100K / Tail-Mixed、以及其餘 11 個 YCSB read config,**在 OpenWhisk 沒有對應點**,不在本對照範圍。
-- **budget-102 兩臂**(`2f_top102` / `learned_markov_102`)只在 OpenWhisk 以 N=102 跑;workstation head-to-head 跑的是 N=14/28(§「原生 head-to-head」),**預算不同、不直接逐格對**。
+1. **strategy-space**(primary `022fbeb0…` + secondary `441609e6…`):只跑 **YC** 這一個 workload(`native_ycsb_c_read_zipf`,zipfian read),10 seeds、warm(keep-alive process)+ standalone(fresh process)、**3600 invocation / 1800 pair**,釘在與 workstation native-YC **同一顆 `test.db`(26331 indexed,orig layout)**。
+2. **cross-workload portability**(三個 additive campaign:`64f44c3e…` 468 + `bf504a28…` 852 + `a5be8f15…` 456 = **1776 invocation / 888 pair**):把凍結選頁 plan 延伸到全部 **5 個對照 workload**(YC / YCu / YCh01 / C / C_hit,orig layout),逐格補齊 canonical workstation 矩陣——**全部 65 個保留的 (策略 × workload) cell 現在都有 OpenWhisk 執行覆蓋**(BOTH=65、WS_ONLY=0;另有 4 個 YC 專屬的 OpenWhisk-only cell)。
+
+> 這是 **cell 覆蓋**(執行 + 正確性 + plan 綁定),**不是**協定 / layout / 效能等價;絕對效能主張仍以 workstation 為準。因此:
+
+- **逐格效能絕對值仍不跨環境相減** — 5 workload 雖已補齊 OpenWhisk cell 覆蓋,可比較的是**相對**效果與成本結構(見下「效果可攜性」),不是絕對 µs。合成 workload 以外的 layout 軸(vacuum / ta)與其餘 YCSB read config 仍不在 OpenWhisk 範圍。
+- **budget-102 兩臂**(`2f_top102` / `learned_markov_102`)只在 OpenWhisk 以 N=102 跑;workstation head-to-head 跑的是 N=14/28(§「原生 head-to-head」),**預算不同、不直接逐格對**(即 4 個 OpenWhisk-only cell 之二)。
 
 **比什麼、不比什麼(claim discipline)。** 依「資料可比性」規則(§先讀)與 §5.6 的量測限制:
 
@@ -1009,4 +1014,15 @@ footprint 逐頁一致 ⇒ 策略在 FaaS runtime 內被**如實部署**(feasibi
 - **絕對 µs 兩環境系統性不同**(OW deliver 量級較大、baseline 幾何/機器狀態不同),依 §資料可比性規則**不逐格對**,只認相對結構。
 - workstation 已驗證的效能估計(`2d` YC −22% e2e_warm / first-q −36.2% CI 排除 0、跨三種 access pattern 穩定等)是本研究主張的來源,**OpenWhisk 不新增也不修改**這些數字。
 
-> provenance:OpenWhisk formal 證據 = 兩個 immutable、archived 的 matrix(primary/secondary run-config identity,bundle hash 在各自 manifest);normalized / descriptive / thesis 合成在 `deployment/openwhisk/analysis/{normalized,descriptive,thesis}/`、原始 evidence 在 `deployment/openwhisk/evidence/`。此對照的 per-phase 數值源 `openwhisk_cost_vectors.csv`,workstation 側源 `results/ycsb_full` 旗艦 Fig 14。
+### 效果可攜性(65-cell 描述性跨平台一致性)
+
+三個 portability campaign 把 cell 覆蓋補到 65 之後,可以問「workstation 上有效的策略,在 OpenWhisk 是否也有效」。比較用**相對**首次查詢降幅 `R =(baseline_fq − strategy_fq)/ baseline_fq`(>0 = 較快 = 有效;只有相對量跨機可比,絕對 µs 不可),且僅用 standalone handle(warm 有 position/order 效應)。65 個 matched cell 拆兩組:**55 個以 R 比較**,另 **10 個 libprefetch(lp)cell 以「交付順序」(deliver_us)另表比較**(lp_sorted / lp_shuf 交付同一組頁、只差順序,交付後首查對兩臂皆 warm,不進 R 表)。
+
+- workstation 上**強效(R≥0.30)的 41 個 cell,有 38 個在 OpenWhisk 同樣有效**。
+- Spearman 秩相關 ρ ≈ **0.67(全)/ 0.75(高信心)**;方向一致 **42/55**;|R 差| 中位數 **0.114**。
+- 3 個例外都如實標示:`C/2d`、`C/layers_92`(低信心 single-instance 的符號翻轉)、`C_hit/2e_K40`(position-imbalanced 2/7)。
+- lp 那側:shuffle 交付在**兩個平台**都比 sorted 慢(order_ratio 均 >1),交付後首查維持在數 µs 內(對照組)——交付順序這個機制與其成本結構同樣可攜。
+
+這是一個**描述性的跨平台一致性**結果——**不**主張絕對延遲相等、效果量相等、因果等價、或硬體無關的加速倍率。逐 cell 表與稽核見 `deployment/openwhisk/analysis/comparison/VERDICT_effectiveness_portability.md`、`effectiveness_ow_vs_workstation.csv`、`lp_delivery_order.csv`;full-matrix 覆蓋稽核見 `analysis/comparison/workstation_canonical_matrix.csv`(65/65 BOTH、0 WS_ONLY、4 OW_ONLY)。
+
+> provenance:OpenWhisk formal 證據 = **五個** immutable、archived 的 matrix——strategy-space primary `022fbeb0…` / secondary `441609e6…`(合 3600),cross-workload portability `64f44c3e…`(468)/ `bf504a28…`(852)/ `a5be8f15…`(456,live fingerprint `d35708b7…`);**合計 5376 invocation / 2688 pair,分屬回答不同問題的 campaign,於本文中不合併為單一效果估計**。各 bundle hash 與 execution identity 在各自 manifest;normalized / descriptive / thesis 合成在 `deployment/openwhisk/analysis/{normalized,descriptive,thesis}/`、原始 evidence 在 `deployment/openwhisk/evidence/`。此對照的 per-phase 數值源 `openwhisk_cost_vectors.csv`,workstation 側源 `results/ycsb_full` 旗艦 Fig 14。
