@@ -1,0 +1,15 @@
+workload,strategy,family,seed_scope,R,n_pairs,sign_agree_frac
+C,layers_92,sign_flip,seed1,0.3832,20,0.70
+C,layers_92,sign_flip,combined,0.3832,20,0.70
+C,2d,sign_flip,seed1,0.4316,20,0.60
+C,2d,sign_flip,combined,0.4316,20,0.60
+C_hit,2e_K40,sign_flip,seed1,0.4642,6,0.83
+C_hit,2e_K40,sign_flip,seed2,0.5976,6,0.83
+C_hit,2e_K40,sign_flip,seed3,0.5348,6,0.83
+C_hit,2e_K40,sign_flip,combined,0.4865,18,0.83
+C,layers_5,ws_neutral_ow_negative,seed1,0.4185,20,0.75
+C,layers_5,ws_neutral_ow_negative,combined,0.4185,20,0.75
+YCh01,layers_5,ws_neutral_ow_positive,seed1,-0.2425,20,0.55
+YCh01,layers_5,ws_neutral_ow_positive,combined,-0.2425,20,0.55
+YCu,layers_5,ws_neutral_ow_positive,seed1,0.2900,20,0.55
+YCu,layers_5,ws_neutral_ow_positive,combined,0.2900,20,0.55

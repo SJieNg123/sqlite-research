@@ -1,0 +1,184 @@
+{
+  "campaign": "portability_outlier_replication",
+  "campaign_accounting": {
+    "all_archived_bookkeeping_only": {
+      "campaigns": 6,
+      "invocations": 5612,
+      "pairs": 2806,
+      "pooled": false
+    },
+    "five_campaign_coverage_PRESERVED": {
+      "campaigns": 5,
+      "invocations": 5376,
+      "pairs": 2688,
+      "pooled": false
+    },
+    "replication_SEPARATE": {
+      "campaigns": 1,
+      "invocations": 236,
+      "pairs": 118
+    }
+  },
+  "cells": {
+    "C/2d": {
+      "R_ws": 0.433,
+      "baseline_first_R": -0.7026,
+      "classification": "B",
+      "classification_label": "original_batch_likely_position_or_state_confounded",
+      "original_R_ow": -0.636,
+      "original_sign": "-",
+      "position_gap": -1.4336,
+      "position_subsets_same_sign": false,
+      "replication_R_ow": 0.4316,
+      "replication_sign": "+",
+      "sign_agree_frac": 0.6,
+      "target_first_R": 0.731
+    },
+    "C/layers_5": {
+      "R_ws": 0.0275,
+      "baseline_first_R": 0.2174,
+      "classification": "B",
+      "classification_label": "original_negative_effect_likely_batch_or_state_sensitive",
+      "original_R_ow": -0.7129,
+      "original_sign": "-",
+      "position_gap": -0.2214,
+      "position_subsets_same_sign": true,
+      "replication_R_ow": 0.4185,
+      "replication_sign": "+",
+      "sign_agree_frac": 0.75,
+      "target_first_R": 0.4388
+    },
+    "C/layers_92": {
+      "R_ws": 0.423,
+      "baseline_first_R": -0.6189,
+      "classification": "B",
+      "classification_label": "original_batch_likely_position_or_state_confounded",
+      "original_R_ow": -0.7363,
+      "original_sign": "-",
+      "position_gap": -1.3271,
+      "position_subsets_same_sign": false,
+      "replication_R_ow": 0.3832,
+      "replication_sign": "+",
+      "sign_agree_frac": 0.7,
+      "target_first_R": 0.7082
+    },
+    "C_hit/2e_K40": {
+      "R_ws": 0.4612,
+      "baseline_first_R": 0.4587,
+      "classification": "B",
+      "classification_label": "original_batch_likely_position_or_state_confounded",
+      "original_R_ow": -0.4844,
+      "original_sign": "-",
+      "position_gap": -0.2306,
+      "position_subsets_same_sign": true,
+      "replication_R_ow": 0.4865,
+      "replication_sign": "+",
+      "sign_agree_frac": 0.83,
+      "target_first_R": 0.6893
+    },
+    "YCh01/layers_5": {
+      "R_ws": 0.0252,
+      "baseline_first_R": -0.762,
+      "classification": "B",
+      "classification_label": "prior_discrepancy_likely_batch_or_state_sensitive",
+      "original_R_ow": 0.3766,
+      "original_sign": "+",
+      "position_gap": -1.264,
+      "position_subsets_same_sign": false,
+      "replication_R_ow": -0.2425,
+      "replication_sign": "-",
+      "sign_agree_frac": 0.55,
+      "target_first_R": 0.502
+    },
+    "YCu/layers_5": {
+      "R_ws": 0.031,
+      "baseline_first_R": -0.6248,
+      "classification": "B",
+      "classification_label": "prior_discrepancy_likely_batch_or_state_sensitive",
+      "original_R_ow": 0.376,
+      "original_sign": "+",
+      "position_gap": -1.0326,
+      "position_subsets_same_sign": false,
+      "replication_R_ow": 0.29,
+      "replication_sign": "+",
+      "sign_agree_frac": 0.55,
+      "target_first_R": 0.4078
+    }
+  },
+  "does_not_replace_original_R_ow": true,
+  "execution_sensitivity_note": {
+    "cells_whose_balanced_subsets_still_disagree_in_sign": [
+      "C/layers_92",
+      "C/2d",
+      "YCh01/layers_5",
+      "YCu/layers_5"
+    ],
+    "interpretation": "Even at exact balance the baseline-first and target-first subsets disagree in sign for these cells (position gap up to ~1.4), so their combined R is an artifact-cancellation average rather than a clean strategy effect. Only C_hit/2e_K40 and C/layers_5 have same-signed subsets."
+  },
+  "layers_5_findings": {
+    "C/layers_5": {
+      "R_ws": 0.0275,
+      "baseline_first_R": 0.2174,
+      "classification": "B",
+      "classification_label": "original_negative_effect_likely_batch_or_state_sensitive",
+      "original_R_ow": -0.7129,
+      "original_sign": "-",
+      "position_gap": -0.2214,
+      "position_subsets_same_sign": true,
+      "replication_R_ow": 0.4185,
+      "replication_sign": "+",
+      "sign_agree_frac": 0.75,
+      "target_first_R": 0.4388
+    },
+    "YCh01/layers_5": {
+      "R_ws": 0.0252,
+      "baseline_first_R": -0.762,
+      "classification": "B",
+      "classification_label": "prior_discrepancy_likely_batch_or_state_sensitive",
+      "original_R_ow": 0.3766,
+      "original_sign": "+",
+      "position_gap": -1.264,
+      "position_subsets_same_sign": false,
+      "replication_R_ow": -0.2425,
+      "replication_sign": "-",
+      "sign_agree_frac": 0.55,
+      "target_first_R": 0.502
+    },
+    "YCu/layers_5": {
+      "R_ws": 0.031,
+      "baseline_first_R": -0.6248,
+      "classification": "B",
+      "classification_label": "prior_discrepancy_likely_batch_or_state_sensitive",
+      "original_R_ow": 0.376,
+      "original_sign": "+",
+      "position_gap": -1.0326,
+      "position_subsets_same_sign": false,
+      "replication_R_ow": 0.29,
+      "replication_sign": "+",
+      "sign_agree_frac": 0.55,
+      "target_first_R": 0.4078
+    },
+    "interpretation": "The original OW anomalies did not reproduce under balance: C/layers_5's strong negative became positive; YCh01/layers_5 flipped to negative and YCu/layers_5 stayed positive but both are unstable (sign-agreement < 0.60). All classify B (batch/state-sensitive)."
+  },
+  "not_a_performance_ranking": true,
+  "not_pooled": true,
+  "pre_registered_bands": {
+    "NEUTRAL_BAND": 0.1,
+    "SIGN_AGREE_BAND": 0.6,
+    "note": "descriptive aids only, NOT significance thresholds; raw R always reported"
+  },
+  "primary_sign_flip_findings": {
+    "interpretation": "Under EXACT 10/10 position balance, none of the three original sign-flips reproduced as negative; all moved positive toward the workstation sign, so the original OpenWhisk negatives are position/batch-state confounded (classification B), consistent with within-pair page-cache carryover.",
+    "original_sign_flips_reproduced_as_negative": [],
+    "original_sign_flips_that_disappeared_after_balancing": [
+      "C/layers_92",
+      "C/2d",
+      "C_hit/2e_K40"
+    ]
+  },
+  "sensitivity_hypothetical_only": {
+    "frozen_rho_all": 0.668,
+    "hypothetical_rho_all_if_six_replaced": 0.762,
+    "label": "HYPOTHETICAL sensitivity only; the frozen 55-cell synthesis is unchanged"
+  }
+}

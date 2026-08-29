@@ -1,0 +1,52 @@
+# OpenWhisk WK1 PORTABILITY-OUTLIER-REPLICATION normalization — validation report
+
+overall: PASS
+role: independent replication / stability / confound check of six outlier cells (NOT a performance ranking; NOT pooled; native/WK1 remains primary)
+
+## totals
+invocations: 236 (expected 236)
+pairs: 118 (expected 118)
+block_pairs: {"R1": 60, "R2": 20, "R3": 20, "R4": 18} (expected {R1:60, R2:20, R3:20, R4:18})
+
+## exact per-cell / per-seed position balance (the scientific point)
+2d         read_tail_mixed_20k          s1 : baseline_first=10 target_first=10  required=(10, 10)  OK
+2e_K40     read_tail_hit_20k            s1 : baseline_first=3 target_first=3  required=(3, 3)  OK
+2e_K40     read_tail_hit_20k            s2 : baseline_first=3 target_first=3  required=(3, 3)  OK
+2e_K40     read_tail_hit_20k            s3 : baseline_first=3 target_first=3  required=(3, 3)  OK
+layers_5   native_ycsb_c_hot_hashed_01  s1 : baseline_first=10 target_first=10  required=(10, 10)  OK
+layers_5   native_ycsb_c_read_uniform   s1 : baseline_first=10 target_first=10  required=(10, 10)  OK
+layers_5   read_tail_mixed_20k          s1 : baseline_first=10 target_first=10  required=(10, 10)  OK
+layers_92  read_tail_mixed_20k          s1 : baseline_first=10 target_first=10  required=(10, 10)  OK
+
+## identity
+bundle_sha256: 199cb6a1d75313a989f59824c98f4508bf52f639b24199ad0646a9d1a9301612 (sidecar=199cb6a1d75313a989f59824c98f4508bf52f639b24199ad0646a9d1a9301612, match=True)
+matrix_fingerprint: be52e2beadfc4d95547083d1d32898d2bd05fcb79887424f7ddb927a291313b6 (recomputed=be52e2beadfc4d95547083d1d32898d2bd05fcb79887424f7ddb927a291313b6, match=True)
+run_config_sha256: a564770aa39a33485a95afe6e49d95d9143ef70ffe88640673cf40bc7a3ed46b
+artifact_manifest_sha256: f9daf9859bd2657fab831aeed4fca185241c62743ae865dccfc783afd80b8b9d
+action_image_digest: localhost:5000/sqlite-coldstart@sha256:c0809cc544be893e8052c67bae3479acc6178d9b03817aca4ece219e2800966f
+bundle_manifest_run_config_sha256: 022fbeb01a8d9d45686e56823eca1e1ef30712f2a13c4a878cb5f7ef0097b5b7 (packaging quirk: pin-primary summary; authoritative identity is the stamped schedule/response run_config)
+status.status=done
+status.result=PASS
+status.git_sha=b684df8860b113461bdb9a2ec26b301dc32c185e
+status.run_id=20260829T153045Z-b684df8860b1
+status.utc=2026-08-29T15:35:18Z
+
+## plan parity (per executed target plan; parity_type per taxonomy)
+2d         read_tail_mixed_20k          s1  pages=92 int=92 leaf=0  deliver=madvise_willneed  structural_static  matches_frozen=static
+2e_K40     read_tail_hit_20k            s1  pages=132 int=92 leaf=40  deliver=madvise_willneed  semantic_contract_reconstruction  matches_frozen=True
+2e_K40     read_tail_hit_20k            s2  pages=132 int=92 leaf=40  deliver=madvise_willneed  semantic_contract_reconstruction  matches_frozen=True
+2e_K40     read_tail_hit_20k            s3  pages=132 int=92 leaf=40  deliver=madvise_willneed  semantic_contract_reconstruction  matches_frozen=True
+layers_5   native_ycsb_c_hot_hashed_01  s1  pages=5 int=5 leaf=0  deliver=madvise_willneed  structural_static  matches_frozen=static
+layers_5   native_ycsb_c_read_uniform   s1  pages=5 int=5 leaf=0  deliver=madvise_willneed  structural_static  matches_frozen=static
+layers_5   read_tail_mixed_20k          s1  pages=5 int=5 leaf=0  deliver=madvise_willneed  structural_static  matches_frozen=static
+layers_92  read_tail_mixed_20k          s1  pages=92 int=92 leaf=0  deliver=madvise_willneed  structural_static  matches_frozen=static
+
+## pair-order structural balance by target strategy (integrity only)
+portability_outlier_replication | 2d | standalone : baseline_first=10 target_first=10
+portability_outlier_replication | 2e_K40 | standalone : baseline_first=9 target_first=9
+portability_outlier_replication | layers_5 | standalone : baseline_first=30 target_first=30
+portability_outlier_replication | layers_92 | standalone : baseline_first=10 target_first=10
+
+## fail-closed problems (0)
+(none — all gates passed)
+

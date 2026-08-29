@@ -1,0 +1,68 @@
+{
+  "campaign": "portability_outlier_replication",
+  "campaign_accounting": {
+    "all_archived_campaigns_bookkeeping_only": {
+      "campaigns": 6,
+      "invocations": 5612,
+      "note": "bookkeeping union only; NOT one estimator; NOT pooled",
+      "pairs": 2806
+    },
+    "five_campaign_coverage_PRESERVED": {
+      "campaigns": 5,
+      "invocations": 5376,
+      "pairs": 2688,
+      "pooled": false
+    },
+    "replication_SEPARATE": {
+      "campaigns": 1,
+      "invocations": 236,
+      "pairs": 118
+    }
+  },
+  "does_not_pool_into_five_campaign_estimator": true,
+  "does_not_replace_original_R_ow": true,
+  "does_not_rewrite_55cell_synthesis": true,
+  "execution_identity": {
+    "action_image_digest": "localhost:5000/sqlite-coldstart@sha256:c0809cc544be893e8052c67bae3479acc6178d9b03817aca4ece219e2800966f",
+    "artifact_manifest_sha256": "f9daf9859bd2657fab831aeed4fca185241c62743ae865dccfc783afd80b8b9d",
+    "authoritative_run_config_sha256": "a564770aa39a33485a95afe6e49d95d9143ef70ffe88640673cf40bc7a3ed46b",
+    "matrix_fingerprint": "be52e2beadfc4d95547083d1d32898d2bd05fcb79887424f7ddb927a291313b6",
+    "schedule_seed": 20260830,
+    "source_bundle_sha256": "199cb6a1d75313a989f59824c98f4508bf52f639b24199ad0646a9d1a9301612",
+    "sqlite_research_git_sha": "b684df8860b113461bdb9a2ec26b301dc32c185e"
+  },
+  "generated_utc": "2026-08-29T16:19:39Z",
+  "generator_git_sha": "b27d94b3aa861ab133104462663a1ea2f386dd2a",
+  "outputs": {
+    "replication_cell_comparison.csv": {
+      "bytes": 1255,
+      "sha256": "4afa89008bc57e21dd4d72331b2dd6dddc733aa71b83f5ad24f689efbb91f7ba"
+    },
+    "replication_position_diagnostics.csv": {
+      "bytes": 835,
+      "sha256": "79f99b9b3892300abc0bfdcb6551bd7adb4b3301d124efb3bba05e32daf356f5"
+    },
+    "replication_seed_diagnostics.csv": {
+      "bytes": 755,
+      "sha256": "f0ca21f12c54879de233d06de95d3812bed8640ebd14f670423f04992c51544a"
+    },
+    "replication_summary.json": {
+      "bytes": 6412,
+      "sha256": "e3b83c1ce960ae826b6027ab070476ce49af6791974d17c16133bf6ea4251687"
+    },
+    "sensitivity_replaced_six.csv": {
+      "bytes": 427,
+      "sha256": "a793ccec94086b6f90f9d9407200a170969a3f008bfb9d03586e3c159ce15d09"
+    }
+  },
+  "pre_registered_bands": {
+    "NEUTRAL_BAND": 0.1,
+    "SIGN_AGREE_BAND": 0.6,
+    "note": "descriptive classification aids, NOT significance thresholds"
+  },
+  "role": "replication_supplement_not_a_coverage_estimator_not_pooled",
+  "source_comparison_table": "deployment/openwhisk/analysis/comparison/effectiveness_ow_vs_workstation.csv",
+  "source_comparison_table_sha256": "d7cc7673068b975603ac2b78409f1518ac3d4740d2f78e417df01874f235803a",
+  "source_normalized_pairs": "deployment/openwhisk/analysis/normalized/portability_outlier_replication/portability_outlier_replication_normalized_pairs.csv",
+  "source_normalized_pairs_sha256": "0ce335644c441b902844fee25b502ea88407bf7b770b7843bedf56aa80b15156"
+}

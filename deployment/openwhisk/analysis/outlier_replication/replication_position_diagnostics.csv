@@ -1,0 +1,7 @@
+workload,strategy,family,all_balanced_R,baseline_first_R,target_first_R,position_gap_bf_minus_tf,n_baseline_first,n_target_first,position_subsets_same_sign,position_dominates_R,spread_min,spread_max,spread_iqr,sign_agree_frac
+C,layers_92,sign_flip,0.3832,-0.6189,0.7082,-1.3271,10,10,False,True,-0.7700,0.7380,1.3698,0.70
+C,2d,sign_flip,0.4316,-0.7026,0.7310,-1.4336,10,10,False,True,-0.7943,0.7444,1.4352,0.60
+C_hit,2e_K40,sign_flip,0.4865,0.4587,0.6893,-0.2306,9,9,True,False,-0.7030,0.7367,0.4768,0.83
+C,layers_5,ws_neutral_ow_negative,0.4185,0.2174,0.4388,-0.2214,10,10,True,False,-0.7345,0.5377,0.8233,0.75
+YCh01,layers_5,ws_neutral_ow_positive,-0.2425,-0.7620,0.5020,-1.2640,10,10,False,True,-0.8326,0.5449,1.2775,0.55
+YCu,layers_5,ws_neutral_ow_positive,0.2900,-0.6248,0.4078,-1.0326,10,10,False,True,-0.7959,0.4828,1.1495,0.55

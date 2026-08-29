@@ -1,0 +1,3 @@
+scenario,rho_all,rho_high_conf,n_all,n_high_conf,direction_agreement_all,direction_agreement_high_conf,median_abs_gap,note
+frozen_original_HISTORICAL,0.668,0.746,55,41,42/55,33/41,0.1140,"authoritative frozen 55-cell estimator — unchanged, canonical"
+hypothetical_six_replaced_SENSITIVITY_ONLY,0.762,0.810,55,41,45/55,34/41,0.1133,HYPOTHETICAL what-if; NOT historical; six original R_ow swapped for balanced replication R_ow

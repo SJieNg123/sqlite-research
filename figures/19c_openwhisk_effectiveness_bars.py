@@ -1,6 +1,6 @@
 """Fig 19c -- OpenWhisk vs workstation effectiveness as grouped BARS (baseline = 0).
 
-Same 55 non-lp cells as Figs 19/19b. Here the y-axis is the *relative* first-query
+The 55 non-lp (strategy x workload) cells both platforms ran at orig. The y-axis is the *relative* first-query
 reduction R = (baseline_fq - strategy_fq)/baseline_fq, i.e. how much faster than baseline
 the first query is -- so the BASELINE sits at 0 by construction. Blue bar = workstation,
 orange bar = OpenWhisk (standalone). Bars above 0 = faster than baseline (effective); bars
