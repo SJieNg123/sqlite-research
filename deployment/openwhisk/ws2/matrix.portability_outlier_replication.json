@@ -1,0 +1,50 @@
+{
+  "_comment": "OUTLIER-REPLICATION campaign for 05_full_matrix.sh -- a SIXTH additive OpenWhisk campaign that is a targeted STABILITY / CONFOUND CHECK, NOT new coverage and NOT a sixth pooled performance estimator. It re-runs, under EXACT deterministic baseline-target position balance and STANDALONE handles ONLY, the six (workload,strategy) cells whose original OpenWhisk<->workstation first-query effectiveness discrepancy is largest: the category-(1) sign-flips C/layers_92, C/2d, C_hit/2e_K40, plus the category-(2) WS-neutral/OW-side anomalies C/layers_5, YCh01/layers_5, YCu/layers_5. It tests whether those discrepancies are STABLE deployment effects or ARTIFACTS of low n / baseline-target position imbalance / short-lived execution state. All six cells are ALREADY members of the frozen 65-cell canonical portability matrix, so this campaign adds ZERO coverage (coverage stays 65/65) and reuses every existing plan/strategy/runtime byte-for-byte: 2e_K40 on read_tail_hit_20k reuses the audited portability_full_closure keyed plans (seeds 1,2,3); layers_92 / layers_5 / 2d reuse their committed static strategy artifacts. The union of the four rectangular blocks (R1-R4) recomputes to EXACTLY 118 baseline-target pairs / 236 formal invocations under ONE portability_outlier_replication_run_config_sha256 (a564770a..., independent of the byte-frozen primary 022fbeb0..., secondary 441609e6..., portability 64f44c3e..., portability_ext bf504a28..., and portability_full_closure a5be8f15... campaigns), ONE schedule_seed (20260830), and ONE campaign fingerprint over the complete ordered 236-invocation schedule. baseline is the paired A-arm anchor in every block (not a target). position_balance=exact is a HARD GATE: the schedule builder assigns AB/BA order by a DETERMINISTIC per-cell balanced hash-rank (NOT the per-pair coin-flip used by the five prior campaigns), and the schedule validator asserts each cell is EXACTLY baseline_first==target_first -- 10/10 for each single/static cell, 3/3 for each C_hit/2e_K40 seed. This campaign is STANDALONE ONLY (no warm arm) because the workstation<->OpenWhisk effectiveness comparison uses the standalone handle. It does NOT replace the original R_ow analysis values; the analysis contract (analysis/analyze_outlier_replication.py) reports BOTH the original batch R_ow and this replication batch R_ow and classifies each cell (reproduced / original-position-or-state-confounded / execution-sensitive) per pre-registered rules in PORTABILITY_OUTLIER_REPLICATION.md. Every block field is validated against the frozen runtime artifact pin (reused 2e_K40 keyed plans + reused layers_92/2d/layers_5 static strategies -- ZERO new keyed plans, ZERO new markers) before anything runs; real invocation still requires WS2_MATRIX_IMPL_READY=1 and happens on WK2, never WK1. Run this ONE matrix once: 05_full_matrix.sh --matrix ./matrix.portability_outlier_replication.json. Adding the two identity keys to the live manifest changes its bytes, so this campaign runs under a NEW image identity; the archived five prior campaign image identities are unaffected.",
+  "schema_version": 3,
+  "campaign": "portability_outlier_replication",
+  "run_config_key": "portability_outlier_replication_run_config_sha256",
+  "schedule_seed": 20260830,
+  "position_balance": "exact",
+  "blocks": [
+    {
+      "id": "R1",
+      "_note": "read_tail_mixed_20k (C) -- the three largest C discrepancy targets in ONE block: layers_92 (cat-1 sign-flip, +0.42 WS -> -0.74 OW, orig low-n/imbalanced), 2d (cat-1 sign-flip, +0.43 -> -0.64, orig 0/3 target-first), layers_5 (cat-1 WS-neutral +0.03 but OW strongly negative -0.71). All reuse committed static strategy artifacts (layers_92/2d = 92-interior skeleton family; layers_5 = 5-interior prefix); NO new keyed plan. 3 targets x 1 workload x 1 seed x 1 handle_mode(standalone) x 20 reps = 60 pairs; position_balance=exact -> each of the 3 cells 10 baseline-first / 10 target-first.",
+      "workloads": ["read_tail_mixed_20k"],
+      "strategies": ["baseline", "layers_92", "2d", "layers_5"],
+      "seeds": [1],
+      "handle_modes": ["standalone"],
+      "first_operation_ids": [0],
+      "repetitions_per_cell": 20
+    },
+    {
+      "id": "R2",
+      "_note": "native_ycsb_c_hot_hashed_01 (YCh01) -- layers_5 cat-2 discrepancy (+0.03 WS -> +0.38 OW): tests deployment-specific amplification of a WS-neutral strategy vs batch/state sensitivity. Reuses the committed layers_5 static strategy artifact; NO new keyed plan. 1 target x 1 workload x 1 seed x 1 handle_mode(standalone) x 20 reps = 20 pairs; exact -> 10 baseline-first / 10 target-first.",
+      "workloads": ["native_ycsb_c_hot_hashed_01"],
+      "strategies": ["baseline", "layers_5"],
+      "seeds": [1],
+      "handle_modes": ["standalone"],
+      "first_operation_ids": [0],
+      "repetitions_per_cell": 20
+    },
+    {
+      "id": "R3",
+      "_note": "native_ycsb_c_read_uniform (YCu) -- layers_5 cat-2 discrepancy (+0.03 WS -> +0.38 OW), same test as R2 on the uniform-read workload. Reuses the committed layers_5 static strategy artifact; NO new keyed plan. 1 target x 1 workload x 1 seed x 1 handle_mode(standalone) x 20 reps = 20 pairs; exact -> 10 baseline-first / 10 target-first.",
+      "workloads": ["native_ycsb_c_read_uniform"],
+      "strategies": ["baseline", "layers_5"],
+      "seeds": [1],
+      "handle_modes": ["standalone"],
+      "first_operation_ids": [0],
+      "repetitions_per_cell": 20
+    },
+    {
+      "id": "R4",
+      "_note": "read_tail_hit_20k (C_hit) -- 2e_K40 cat-1 sign-flip (+0.46 WS -> -0.48 OW, orig 2/7 position imbalance). Preserves the original three seeds 1,2,3 and REUSES the audited portability_full_closure keyed plans for 2e_K40 on read_tail_hit_20k (NO re-freeze, NO new keyed plan). 1 target x 1 workload x 3 seeds x 1 handle_mode(standalone) x 6 reps = 18 pairs; exact -> each seed 3 baseline-first / 3 target-first.",
+      "workloads": ["read_tail_hit_20k"],
+      "strategies": ["baseline", "2e_K40"],
+      "seeds": [1, 2, 3],
+      "handle_modes": ["standalone"],
+      "first_operation_ids": [0],
+      "repetitions_per_cell": 6
+    }
+  ]
+}

@@ -41,6 +41,28 @@ def _order(schedule_seed, pair_id, target):
     return ["baseline", target] if ab else [target, "baseline"]
 
 
+def _balanced_cell_orders(schedule_seed, wl, seed, fop, hm, target, reps):
+    """EXACT baseline-target position balance for one cell's `reps` repetitions.
+
+    Opt-in path (matrix flag ``position_balance: "exact"``): instead of the per-pair
+    coin-flip in ``_order`` -- which for small n can land 0/3 or 2/7 baseline-first --
+    this ranks the cell's reps by a deterministic ``sha256(seed|cell|rep)`` and assigns
+    the lower half AB (baseline-first) and the upper half BA (target-first), so the cell
+    is GUARANTEED exactly ``reps/2`` each. The schedule_seed still selects WHICH reps are
+    AB (order only), but can no longer perturb the count. Requires an even ``reps``."""
+    if reps % 2 != 0:
+        raise ValueError(
+            "position_balance=exact needs an even repetitions_per_cell; got %d for "
+            "cell %s-s%d-f%d-%s-%s" % (reps, wl, seed, fop, hm, target))
+    key = "%d|%s-s%d-f%d-%s-%s" % (schedule_seed, wl, seed, fop, hm, target)
+    ranked = sorted(range(reps),
+                    key=lambda r: hashlib.sha256(
+                        ("%s-r%d" % (key, r)).encode()).hexdigest())
+    ab_reps = set(ranked[: reps // 2])
+    return {r: (["baseline", target] if r in ab_reps else [target, "baseline"])
+            for r in range(reps)}
+
+
 def _invocation(pair_id, arm, strategy, pos, combo, ids, schedule_seed):
     wl, seed, fop, hm, rep = combo
     return {
@@ -116,19 +138,27 @@ def build_campaign_schedule(matrix, ids):
     fail-closed (per-block rectangularity, cross-block disjointness, exact totals)
     before returning; a malformed union aborts here, before persistence."""
     schedule_seed = int(matrix["schedule_seed"])
+    # Opt-in exact position balance (default path is byte-identical when the flag is
+    # absent): when set, each cell's AB/BA orders are precomputed balanced per cell.
+    balanced = matrix.get("position_balance") == "exact"
     blocks = blocks_from_matrix(matrix)
     pairs, invocations = [], []
     pos = 0
     for b in blocks:
+        reps = int(b["repetitions"])
         for wl in b["workloads"]:
             for seed in b["seeds"]:
                 for fop in b["first_operation_ids"]:
                     for hm in b["handle_modes"]:
-                        for rep in range(int(b["repetitions"])):
+                        cell_orders = ({t: _balanced_cell_orders(
+                            schedule_seed, wl, seed, fop, hm, t, reps)
+                            for t in b["targets"]} if balanced else None)
+                        for rep in range(reps):
                             for target in b["targets"]:
                                 pair_id = "%s-s%d-f%d-%s-r%d-%s" % (
                                     wl, seed, fop, hm, rep, target)
-                                order = _order(schedule_seed, pair_id, target)
+                                order = (cell_orders[target][rep] if balanced
+                                         else _order(schedule_seed, pair_id, target))
                                 pairs.append({
                                     "pair_id": pair_id, "workload": wl, "seed": seed,
                                     "first_operation_id": fop, "handle_mode": hm,

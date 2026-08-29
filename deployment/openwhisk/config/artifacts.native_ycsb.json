@@ -5441,5 +5441,131 @@
     "total_invocations": 456
   },
   "portability_full_closure_run_config_sha256": "a5be8f150bc87182d3a158ff580b83a04073a84ff258cde07d78a73e35f60faf",
-  "portability_full_closure_run_config_sha256_note": "Deterministic sha256 over the canonical portability_full_closure_invocation_plan (sorted-key compact JSON). Independent identity for the FULL-CLOSURE matrix (228 pairs / 456 invocations across six rectangular sub-matrices B12-B17, schedule_seed=20260829) covering the final 16 WS_ONLY cells of the 65-cell canonical portability matrix -- the C/C_hit 2e_K40/2e_K92 budget siblings, C/learned_markov_14, C/layers_92 (static), and the libprefetch lp_sorted/lp_shuf ordered-delivery arms across YC/YCu/YCh01/C_hit/C. Distinct from primary (022fbeb0..), secondary (441609e6..), portability (64f44c3e..) and portability_ext (bf504a28..) run configs, which are byte-frozen and untouched. lp arms deliver the corresponding 2f_slru resident page set by a synchronous page-sized pread loop IN LIST ORDER (delivery_method=pread_ordered); lp's primary quantity is deliver_us / e2e, NOT first_query. This closes CELL coverage of the matrix; it is not an exact replication of every workstation seed/repetition protocol (analysis/thesis/threats_to_validity.md)."
+  "portability_full_closure_run_config_sha256_note": "Deterministic sha256 over the canonical portability_full_closure_invocation_plan (sorted-key compact JSON). Independent identity for the FULL-CLOSURE matrix (228 pairs / 456 invocations across six rectangular sub-matrices B12-B17, schedule_seed=20260829) covering the final 16 WS_ONLY cells of the 65-cell canonical portability matrix -- the C/C_hit 2e_K40/2e_K92 budget siblings, C/learned_markov_14, C/layers_92 (static), and the libprefetch lp_sorted/lp_shuf ordered-delivery arms across YC/YCu/YCh01/C_hit/C. Distinct from primary (022fbeb0..), secondary (441609e6..), portability (64f44c3e..) and portability_ext (bf504a28..) run configs, which are byte-frozen and untouched. lp arms deliver the corresponding 2f_slru resident page set by a synchronous page-sized pread loop IN LIST ORDER (delivery_method=pread_ordered); lp's primary quantity is deliver_us / e2e, NOT first_query. This closes CELL coverage of the matrix; it is not an exact replication of every workstation seed/repetition protocol (analysis/thesis/threats_to_validity.md).",
+  "portability_outlier_replication_invocation_plan": {
+    "kind": "portability_outlier_replication_matrix",
+    "purpose": "stability_confound_check_not_coverage",
+    "workload_set": [
+      "native_ycsb_c_hot_hashed_01",
+      "native_ycsb_c_read_uniform",
+      "read_tail_hit_20k",
+      "read_tail_mixed_20k"
+    ],
+    "strategies": [
+      "2d",
+      "2e_K40",
+      "baseline",
+      "layers_5",
+      "layers_92"
+    ],
+    "seeds": [
+      1,
+      2,
+      3
+    ],
+    "handle_modes": [
+      "standalone"
+    ],
+    "first_operation_ids": [
+      0
+    ],
+    "position_balance": "exact",
+    "schedule_seed": 20260830,
+    "concurrency": 1,
+    "sequential": true,
+    "matrices": [
+      {
+        "name": "R1",
+        "workloads": [
+          "read_tail_mixed_20k"
+        ],
+        "strategies": [
+          "baseline",
+          "layers_92",
+          "2d",
+          "layers_5"
+        ],
+        "seeds": [
+          1
+        ],
+        "reps": 20,
+        "handle_modes": [
+          "standalone"
+        ],
+        "pairs": 60,
+        "per_cell_pairs": 20,
+        "per_cell_baseline_first": 10,
+        "per_cell_target_first": 10
+      },
+      {
+        "name": "R2",
+        "workloads": [
+          "native_ycsb_c_hot_hashed_01"
+        ],
+        "strategies": [
+          "baseline",
+          "layers_5"
+        ],
+        "seeds": [
+          1
+        ],
+        "reps": 20,
+        "handle_modes": [
+          "standalone"
+        ],
+        "pairs": 20,
+        "per_cell_pairs": 20,
+        "per_cell_baseline_first": 10,
+        "per_cell_target_first": 10
+      },
+      {
+        "name": "R3",
+        "workloads": [
+          "native_ycsb_c_read_uniform"
+        ],
+        "strategies": [
+          "baseline",
+          "layers_5"
+        ],
+        "seeds": [
+          1
+        ],
+        "reps": 20,
+        "handle_modes": [
+          "standalone"
+        ],
+        "pairs": 20,
+        "per_cell_pairs": 20,
+        "per_cell_baseline_first": 10,
+        "per_cell_target_first": 10
+      },
+      {
+        "name": "R4",
+        "workloads": [
+          "read_tail_hit_20k"
+        ],
+        "strategies": [
+          "baseline",
+          "2e_K40"
+        ],
+        "seeds": [
+          1,
+          2,
+          3
+        ],
+        "reps": 6,
+        "handle_modes": [
+          "standalone"
+        ],
+        "pairs": 18,
+        "per_cell_pairs": 6,
+        "per_cell_baseline_first": 3,
+        "per_cell_target_first": 3
+      }
+    ],
+    "total_pairs": 118,
+    "total_invocations": 236
+  },
+  "portability_outlier_replication_run_config_sha256": "a564770aa39a33485a95afe6e49d95d9143ef70ffe88640673cf40bc7a3ed46b",
+  "portability_outlier_replication_run_config_sha256_note": "Deterministic sha256 over the canonical portability_outlier_replication_invocation_plan (sorted-key compact JSON). Independent identity for the SIXTH additive campaign: a targeted STABILITY / CONFOUND replication (NOT new coverage) of the six largest workstation<->OpenWhisk first-query discrepancies -- C/layers_92, C/2d, C/layers_5, YCh01/layers_5, YCu/layers_5 (each 20 pairs, 10 baseline-first / 10 target-first) and C_hit/2e_K40 (seeds 1,2,3; each 6 pairs, 3/3) -- 118 pairs / 236 invocations, STANDALONE ONLY, schedule_seed=20260830, position_balance=exact (deterministic per-cell balanced AB/BA, not the per-pair coin-flip). Distinct from primary (022fbeb0..), secondary (441609e6..), portability (64f44c3e..), portability_ext (bf504a28..) and portability_full_closure (a5be8f15..) run configs, which are byte-frozen and untouched. REUSE-ONLY: adds NO keyed plans and NO markers (2e_K40 reuses the audited full-closure keyed plans; layers_92/2d/layers_5 reuse committed static strategy artifacts), so it adds ZERO coverage -- all six cells are already members of the frozen 65-cell canonical portability matrix (coverage stays 65/65). Does NOT replace the original R_ow analysis; both batches are reported and each cell classified (analysis/analyze_outlier_replication.py, PORTABILITY_OUTLIER_REPLICATION.md)."
 }

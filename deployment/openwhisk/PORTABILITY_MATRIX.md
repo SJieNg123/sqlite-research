@@ -253,6 +253,72 @@ export OW_ARTIFACT_MANIFEST_SHA256='<sha256 of the closure image-baked artifacts
 bash 05_full_matrix.sh --matrix ./matrix.portability_full_closure.json
 ```
 
+## Outlier-replication campaign (stability / confound check — NOT new coverage)
+
+A **sixth, independent, additive** campaign is a targeted **stability / confound check**,
+not new coverage and not a sixth pooled performance estimator. It re-runs, under **exact
+deterministic baseline-target position balance** and **standalone handles only**, the six
+`(workload, strategy)` cells whose original OpenWhisk↔workstation first-query discrepancy
+is largest: the true sign-flips `C/layers_92`, `C/2d`, `C_hit/2e_K40`, and the WS-neutral
+anomalies `C/layers_5` (OW strongly negative), `YCh01/layers_5`, `YCu/layers_5` (OW
+positive). All six are already members of the frozen **65-cell** matrix, so **coverage
+stays 65/65 and this campaign adds no coverage**; it **reuses every plan/strategy/runtime
+byte-for-byte** (0 new keyed plans, 0 new markers). The five prior campaigns stay
+**byte-untouched**.
+
+| identity | value | invocation plan |
+|---|---|---|
+| **portability_outlier_replication** | `a564770a…` | `portability_outlier_replication_invocation_plan` |
+
+`portability_outlier_replication_run_config_sha256` recomputes deterministically over its
+canonical `portability_outlier_replication_invocation_plan` (sorted-key compact JSON), and
+is asserted distinct from primary `022fbeb0…`, secondary `441609e6…`, portability
+`64f44c3e…`, portability_ext `bf504a28…`, and portability_full_closure `a5be8f15…` — all
+five of which the replication pin writer re-asserts **byte-unchanged** (guarded by
+`test_portability_outlier_replication.py`).
+
+Formal execution is **one** matrix, `ws2/matrix.portability_outlier_replication.json`: a
+block-union of four blocks (R1–R4), one `schedule_seed = 20260830`, `position_balance =
+"exact"`, one campaign fingerprint over the ordered **236-invocation** schedule.
+
+| block | workloads | targets (non-baseline) | seeds | reps | pairs | invocations |
+|---|---|---|---|---:|---:|---:|
+| R1 | C (mixed_20k) | `layers_92`, `2d`, `layers_5` | 1 | 20 | 60 | 120 |
+| R2 | YCh01 | `layers_5` | 1 | 20 | 20 | 40 |
+| R3 | YCu | `layers_5` | 1 | 20 | 20 | 40 |
+| R4 | C_hit | `2e_K40` | 1,2,3 | 6 | 18 | 36 |
+| **union (one campaign)** | | | | | **118** | **236** |
+
+**Exact position balance is a hard gate.** Unlike the five prior campaigns (per-pair hash
+coin-flip, which for small n produced the very 0/3, 1/2, 2/7 baseline/target-first splits
+that confound the original discrepancies), this campaign sets `position_balance: "exact"`:
+`build_schedule.build_campaign_schedule` ranks each cell's reps by
+`sha256(seed|cell|rep)` and assigns the lower half baseline-first, the upper half
+target-first, **guaranteeing exactly `reps/2` each**; `validate_schedule.validate_campaign`
+fails closed unless every cell is `baseline_first == target_first` — **10/10** for each
+single/static cell, **3/3** for each `C_hit/2e_K40` seed. The flag is opt-in: the five
+frozen (flagless) matrices build **byte-identically** (their fingerprints are re-asserted
+by the existing tests). `2e_K40` reuses the audited full-closure keyed plans;
+`layers_92`/`2d`/`layers_5` reuse committed static strategy artifacts — **no re-freeze**.
+
+Interpretation is **pre-registered** (`PORTABILITY_OUTLIER_REPLICATION.md`): the
+replication does **not** replace the original `R_ow`; `analysis/analyze_outlier_replication.py`
+reports **both** batches side by side and classifies each cell (reproduced deployment
+divergence / original position-or-state-confounded / execution-sensitive), fixed before
+any evidence existed and failing closed until the archived evidence exists.
+
+```bash
+cd deployment/openwhisk/ws2
+# Validate + schedule (no invocation): 118 pairs / 236 invocations across 4 blocks,
+# STANDALONE only, exact 10/10 & 3/3 position balance, fingerprint distinct from all five
+# prior campaigns.
+bash 05_full_matrix.sh --matrix ./matrix.portability_outlier_replication.json
+# Execute the ONE replication campaign (requires cooled 03 + gate open + the image's manifest sha).
+export WS2_MATRIX_IMPL_READY=1
+export OW_ARTIFACT_MANIFEST_SHA256='<sha256 of the replication image-baked artifacts.json>'
+bash 05_full_matrix.sh --matrix ./matrix.portability_outlier_replication.json
+```
+
 ## What is committed vs machine-local
 
 Committed (shipped from WK1): the single-batch `matrix.portability.json` (the formal

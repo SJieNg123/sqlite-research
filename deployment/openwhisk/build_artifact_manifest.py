@@ -54,6 +54,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "tools"))
 import portability_manifest as PM  # noqa: E402
 import portability_ext_manifest as XE  # noqa: E402
 import portability_full_closure_manifest as FC  # noqa: E402
+import portability_outlier_replication_manifest as OR  # noqa: E402
 try:
     import sqlite_bridge  # noqa: E402
     _BRIDGE_SQLITE_VERSION = sqlite_bridge.libversion()
@@ -623,6 +624,27 @@ def crosscheck_portability_full_closure(fc_meta, fc_plan, fc_run_config_sha256):
         sys.exit("portability-full-closure pin mismatch:\n  " + "\n  ".join(problems))
 
 
+def crosscheck_portability_outlier_replication(repl_plan, repl_run_config_sha256):
+    """Fail closed unless the frozen pin (a) already carries every strategy/plan the
+    replication reuses (verify_reuse -- adds NOTHING) and (b) carries the replication
+    invocation-plan identity the live build produced. The pin was written from the SAME
+    single-source manifest (tools/write_portability_outlier_replication_pin.py via
+    tools/portability_outlier_replication_manifest.py). Reuse-only: this campaign adds
+    NO keyed entries and NO markers, so there is nothing to merge -- only the identity to
+    re-tie generation<->pin."""
+    pin_path = os.path.join(ROOT, PIN_REL)
+    with open(pin_path) as f:
+        pin = json.load(f)
+    problems = OR.crosscheck_replication(pin)
+    if pin.get("portability_outlier_replication_run_config_sha256") != repl_run_config_sha256:
+        problems.append("pin portability_outlier_replication_run_config_sha256 != generated")
+    if json.dumps(pin.get("portability_outlier_replication_invocation_plan"), sort_keys=True) != \
+            json.dumps(repl_plan, sort_keys=True):
+        problems.append("pin portability_outlier_replication_invocation_plan != generated")
+    if problems:
+        sys.exit("portability-outlier-replication pin mismatch:\n  " + "\n  ".join(problems))
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", required=True)
@@ -817,6 +839,14 @@ def main():
     crosscheck_portability_ext(ext_meta, ext_plan, ext_run_config_sha256)
     crosscheck_portability_full_closure(fc_meta, fc_plan, fc_run_config_sha256)
 
+    # Outlier-replication (sixth, reuse-only) campaign: adds NO keyed entries and NO
+    # markers -- every strategy it schedules is already merged above (2e_K40 keyed +
+    # layers_92/2d/layers_5 static). Only its independent identity is (re)computed here
+    # and tied to the pin; nothing is added to keyed_block / keyed_markers.
+    repl_plan = OR.portability_outlier_replication_invocation_plan()
+    repl_run_config_sha256 = OR.portability_outlier_replication_run_config_sha256(repl_plan)
+    crosscheck_portability_outlier_replication(repl_plan, repl_run_config_sha256)
+
     st = os.stat(db)
     manifest = {
         "schema_version": 2,
@@ -901,6 +931,8 @@ def main():
         "portability_ext_run_config_sha256": ext_run_config_sha256,
         "portability_full_closure_invocation_plan": fc_plan,
         "portability_full_closure_run_config_sha256": fc_run_config_sha256,
+        "portability_outlier_replication_invocation_plan": repl_plan,
+        "portability_outlier_replication_run_config_sha256": repl_run_config_sha256,
         "notes": ("Interior skeleton (2d) plan derived from the canonical page "
                   "classifier; invariants validated at generation. Paths are "
                   "repository-relative, resolved at runtime against "

@@ -415,6 +415,28 @@ def validate_campaign(schedule, matrix):
         bad("%d expected block cell(s) missing from schedule, e.g. %s"
             % (len(missing), sorted(missing)[:3]))
 
+    # -- opt-in EXACT position balance (matrix flag position_balance="exact") -----
+    # For each balance cell (target x workload x seed x first_op x handle_mode -- i.e.
+    # every _CELL_FIELDS coordinate EXCEPT repetition_id), the reps must split EXACTLY
+    # half baseline-first / half target-first. This is a HARD gate for the outlier-
+    # replication campaign; default (flagless) campaigns skip it and keep the per-pair
+    # coin-flip. Read from `pairs` (each carries its AB/BA `order`).
+    if matrix.get("position_balance") == "exact":
+        bal_fields = tuple(f for f in _CELL_FIELDS if f != "repetition_id")
+        ab_ct, ba_ct = Counter(), Counter()
+        for p in pairs:
+            order = p.get("order", [])
+            ck = (p.get("target_strategy"),) + tuple(p.get(f) for f in bal_fields)
+            if order and order[0] == "baseline":
+                ab_ct[ck] += 1
+            else:
+                ba_ct[ck] += 1
+        for ck in sorted(set(ab_ct) | set(ba_ct)):
+            ab, ba = ab_ct[ck], ba_ct[ck]
+            if ab != ba:
+                bad("position_balance=exact violated at cell %s: baseline_first=%d "
+                    "target_first=%d (require equal)" % (ck, ab, ba))
+
     # -- global request_id / schedule_position uniqueness + contiguity ------------
     rids = [i["request_id"] for i in inv]
     if len(set(rids)) != len(rids):

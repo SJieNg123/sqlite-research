@@ -145,6 +145,13 @@ bash 05_full_matrix.sh --matrix ./matrix.example.json     # copy+edit for the re
 #    a NEW image identity — all four prior images are untouched. lp arms deliver the same
 #    page set in different pread ORDER; their primary quantity is deliver_us, not
 #    first_query. See PORTABILITY_MATRIX.md § Portability-FULL-CLOSURE.
+#    For the OUTLIER-REPLICATION stability check (118 pairs / 236 invocations, schedule_seed
+#    20260830, sixth independent identity portability_outlier_replication a564770a…), run
+#    stage 05 EXACTLY ONCE on ./matrix.portability_outlier_replication.json (a block-union of
+#    four blocks R1–R4). It is a STANDALONE-ONLY, exact-position-balanced (10/10 & 3/3) re-run
+#    of the six largest workstation↔OpenWhisk first-query discrepancies — it adds NO coverage
+#    (stays 65/65) and adds NO keyed plans/markers (reuses committed strategy artifacts). See
+#    PORTABILITY_MATRIX.md § Outlier-replication and PORTABILITY_OUTLIER_REPLICATION.md.
 
 # 6. Package everything for transfer back to WS1.
 bash 06_collect.sh --openwhisk-sha "$(git -C /path/to/openwhisk rev-parse HEAD)"
