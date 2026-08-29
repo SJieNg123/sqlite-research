@@ -1018,9 +1018,10 @@ footprint 逐頁一致 ⇒ 策略在 FaaS runtime 內被**如實部署**(feasibi
 
 三個 portability campaign 把 cell 覆蓋補到 65 之後,可以問「workstation 上有效的策略,在 OpenWhisk 是否也有效」。比較用**相對**首次查詢降幅 `R =(baseline_fq − strategy_fq)/ baseline_fq`(>0 = 較快 = 有效;只有相對量跨機可比,絕對 µs 不可),且僅用 standalone handle(warm 有 position/order 效應)。65 個 matched cell 拆兩組:**55 個以 R 比較**,另 **10 個 libprefetch(lp)cell 以「交付順序」(deliver_us)另表比較**(lp_sorted / lp_shuf 交付同一組頁、只差順序,交付後首查對兩臂皆 warm,不進 R 表)。
 
-- workstation 上**強效(R≥0.30)的 41 個 cell,全部 41 個在 OpenWhisk 同樣有效**。
-- Spearman 秩相關 ρ ≈ **0.76(全)/ 0.79(高信心)**;方向一致 **45/55**;|R 差| 中位數 **0.113**。
-- 原本 3 個「強效卻在 OpenWhisk 反向」的例外(`C/2d`、`C/layers_92`、`C_hit/2e_K40`)皆出自單一實例／position-imbalanced 的低信心批次;一個**獨立複現 campaign**(portability_outlier_replication、evidence `b684df8860b1…`、236 invocation / 118 pair、每格在 **10 baseline-first / 10 target-first 嚴格位置平衡**下重跑)把六個 outlier cell 逐一重測,**三個符號翻轉全部翻回正向且與 workstation 貼合**(`C/2d` +0.432 對 WS +0.433、`C/layers_92` +0.383 對 +0.423、`C_hit/2e_K40` +0.487 對 +0.461)——證實原始負值是批次內位置／page-cache carryover 假象,非真實反向。上表六格已用位置平衡後的複現值取代原低信心值(皆脫離 low-conf);剩下的類別不一致只落在 workstation 端本就近中性(R_ws≈0.03)的 `layers_5` 那組。此複現為**穩健性檢查**,與五個覆蓋 campaign 分屬不同問題、**不併入 5376/2688 的單一效果估計**(含此檔僅作 unpooled 記帳 5612/2806);且即便位置平衡,這六格 baseline-first / target-first 子集仍可能不同號,合併 R 只作描述。
+- workstation 上**強效(R≥0.30)的 41 個 cell,有 38 個在 OpenWhisk 同樣有效**。
+- Spearman 秩相關 ρ ≈ **0.67(全)/ 0.75(高信心)**;方向一致 **42/55**;|R 差| 中位數 **0.114**。
+- 3 個例外都如實標示:`C/2d`、`C/layers_92`(低信心 single-instance 的符號翻轉)、`C_hit/2e_K40`(position-imbalanced 2/7)。
+- **上表 55 格凍結為 primary、歷史 R_ow 值保持不變、不被後續批次覆寫。** 另一個獨立**複現 campaign**(portability_outlier_replication、evidence `b684df8860b1…`、236 invocation / 118 pair)把六個 outlier cell 在 **10 baseline-first / 10 target-first 嚴格位置平衡**下重跑,僅作**穩健性 / 敏感度檢查、與 primary 並列(side-by-side,不取代凍結值)**:三個符號翻轉在平衡下皆翻回正向(`C/2d` +0.432、`C/layers_92` +0.383、`C_hit/2e_K40` +0.487),顯示原始 OW 負值受**批次內位置 / 短暫執行狀態(execution / storage state)**影響、非真實反向。此複現值只存於 `analysis/outlier_replication/`(原值與複現值同表並列),**不併入 5376/2688 的單一效果估計**(含此檔僅作 unpooled 記帳 5612/2806);假設性六格替換後 ρ≈0.76 / 0.81、方向 45/55,已明確標為 **sensitivity-only**、非歷史 primary。
 - lp 那側:shuffle 交付在**兩個平台**都比 sorted 慢(order_ratio 均 >1),交付後首查維持在數 µs 內(對照組)——交付順序這個機制與其成本結構同樣可攜。
 
 這是一個**描述性的跨平台一致性**結果——**不**主張絕對延遲相等、效果量相等、因果等價、或硬體無關的加速倍率。逐 cell 表與稽核見 `deployment/openwhisk/analysis/comparison/VERDICT_effectiveness_portability.md`、`effectiveness_ow_vs_workstation.csv`、`lp_delivery_order.csv`;full-matrix 覆蓋稽核見 `analysis/comparison/workstation_canonical_matrix.csv`(65/65 BOTH、0 WS_ONLY、4 OW_ONLY)。

@@ -1,0 +1,30 @@
+{
+  "_comment": "YCH01 TWO-CELL FOLLOW-UP campaign for 05_full_matrix.sh -- a SEVENTH additive OpenWhisk campaign that is a targeted SIGN / STABILITY CHECK, NOT new coverage and NOT a seventh pooled performance estimator. It re-runs, under EXACT deterministic baseline-target position balance and STANDALONE handles ONLY, the ONLY two (workload,strategy) cells that -- after the sixth (portability_outlier_replication) balanced re-run refreshed the comparison table -- still have a POSITIVE workstation first-query effect but a NON-POSITIVE OpenWhisk one: YCh01/layers_5 (R_ws +0.025 neutral-positive, R_ow -0.243 from the sixth balanced batch) and YCh01/2f_top14 (R_ws +0.214, R_ow -0.019 near zero from the portability_ext batch). It tests only whether those two discrepancies are STABLE under a fresh independent batch with EXACTLY balanced within-pair position. The previously observed direction is described ONLY as a pair-position / short-lived execution-state / execution-storage-state effect; NO specific physical mechanism (e.g. page-cache carryover) is attributed, and the -0.019 2f_top14 value is a NEAR-ZERO result, NOT a strong harmful effect. Both cells are ALREADY members of the frozen 65-cell canonical portability matrix, so this campaign adds ZERO coverage (coverage stays 65/65) and reuses every existing plan/strategy/runtime byte-for-byte: 2f_top14 on native_ycsb_c_hot_hashed_01 reuses the audited portability_ext keyed plans (seeds 1,2,3; plan_sha256 6bc163bd.., seed-invariant top-14 selection); layers_5 reuses its committed static strategy artifact (5-interior prefix). The union of the two rectangular blocks (Y1-Y2) recomputes to EXACTLY 72 baseline-target pairs / 144 formal invocations under ONE portability_ych01_followup_run_config_sha256 (7a3cc45d..., independent of the byte-frozen primary 022fbeb0..., secondary 441609e6..., portability 64f44c3e..., portability_ext bf504a28..., portability_full_closure a5be8f15..., and portability_outlier_replication a564770a... campaigns), ONE schedule_seed (20260901), and ONE campaign fingerprint over the complete ordered 144-invocation schedule. baseline is the paired A-arm anchor in every block (not a target). position_balance=exact is a HARD GATE: the schedule builder assigns AB/BA order by a DETERMINISTIC per-cell/per-seed balanced hash-rank (NOT the per-pair coin-flip used by the prior campaigns), and the schedule validator asserts each cell is EXACTLY baseline_first==target_first -- 18/18 for YCh01/layers_5, 6/6 for each YCh01/2f_top14 seed. This campaign is STANDALONE ONLY (no warm arm) because the workstation<->OpenWhisk effectiveness comparison uses the standalone handle. It does NOT replace the original R_ow analysis values and does NOT alter the frozen 55-cell headline comparison; the prior batches and this one are reported side by side. Every block field is validated against the frozen runtime artifact pin (reused 2f_top14 keyed plans + reused layers_5 static strategy -- ZERO new keyed plans, ZERO new markers) before anything runs; real invocation still requires WS2_MATRIX_IMPL_READY=1 and happens on WK2, never WK1. Run this ONE matrix once: 05_full_matrix.sh --matrix ./matrix.portability_ych01_followup.json. Adding the two identity keys to the live manifest changes its bytes, so this campaign runs under a NEW image identity; the archived six prior campaign image identities are unaffected.",
+  "schema_version": 3,
+  "campaign": "portability_ych01_followup",
+  "run_config_key": "portability_ych01_followup_run_config_sha256",
+  "schedule_seed": 20260901,
+  "position_balance": "exact",
+  "blocks": [
+    {
+      "id": "Y1",
+      "_note": "native_ycsb_c_hot_hashed_01 (YCh01) -- layers_5: latest workstation R +0.025 (neutral-positive) vs OpenWhisk R -0.243 (sixth balanced batch, 10/10). Fresh independent batch with tighter exact balance to test whether the negative OW direction is stable or a pair-position / short-lived execution-state effect. Reuses the committed layers_5 static strategy artifact (5-interior prefix); NO new keyed plan. 1 target x 1 workload x 1 seed x 1 handle_mode(standalone) x 36 reps = 36 pairs; position_balance=exact -> 18 baseline-first / 18 target-first.",
+      "workloads": ["native_ycsb_c_hot_hashed_01"],
+      "strategies": ["baseline", "layers_5"],
+      "seeds": [1],
+      "handle_modes": ["standalone"],
+      "first_operation_ids": [0],
+      "repetitions_per_cell": 36
+    },
+    {
+      "id": "Y2",
+      "_note": "native_ycsb_c_hot_hashed_01 (YCh01) -- 2f_top14: latest workstation R +0.214 vs OpenWhisk R -0.019 (portability_ext batch, small n / position imbalance). The -0.019 is a NEAR-ZERO OW result, not a strong harmful effect; this block re-measures it under exact per-seed balance across the canonical seeds 1,2,3. REUSES the audited portability_ext keyed plans for 2f_top14 on native_ycsb_c_hot_hashed_01 (NO re-freeze, NO new keyed plan; seed-invariant top-14 selection, plan_sha256 6bc163bd..). 1 target x 1 workload x 3 seeds x 1 handle_mode(standalone) x 12 reps = 36 pairs; exact -> each seed 6 baseline-first / 6 target-first.",
+      "workloads": ["native_ycsb_c_hot_hashed_01"],
+      "strategies": ["baseline", "2f_top14"],
+      "seeds": [1, 2, 3],
+      "handle_modes": ["standalone"],
+      "first_operation_ids": [0],
+      "repetitions_per_cell": 12
+    }
+  ]
+}

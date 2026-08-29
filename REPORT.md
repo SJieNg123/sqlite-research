@@ -1058,17 +1058,17 @@ campaign（portability_full_closure，run-config `a5be8f15…`、live fingerprin
 相對量可跨機比較，絕對微秒不可），且僅用 standalone handle（warm 有 position/order 效應）。65 個
 matched cell 中，**55 個以首次查詢降幅比較**，另 **10 個 libprefetch(lp) cell 以「交付順序」(deliver_us)
 另表比較**——因為 lp_sorted 與 lp_shuf 交付同一組 page、差別只在順序，交付後首次查詢對兩臂皆為 warm。
-**結果：workstation 上強效（R≥0.30）的 41 個 cell，全部 41 個在 OpenWhisk 同樣有效**；Spearman 秩相關
-ρ≈0.76（全）/ 0.79（高信心）、方向一致 45/55、|R 差| 中位數 0.113。原本 3 個強效卻在 OpenWhisk 反向
-的例外（C/2d、C/layers_92、C_hit/2e_K40）都出自單一實例／position-imbalanced 的低信心批次；一個**獨立的
-複現 campaign**（portability_outlier_replication，evidence `b684df8860b1…`、236 invocation / 118 pair、每格
-在 **10 baseline-first / 10 target-first 的嚴格位置平衡**下重跑）把六個 outlier cell 逐一重測，結果**三個
-符號翻轉全部翻回正向、且與 workstation 幾乎貼合**（C/2d +0.432 對 WS +0.433、C/layers_92 +0.383 對 +0.423、
-C_hit/2e_K40 +0.487 對 +0.461），證實原始 OpenWhisk 負值是**批次內位置／page-cache carryover 的假象**、
-不是真實反向。表中這六格已用位置平衡後的複現值取代原低信心值（皆脫離 low-conf）；剩下的類別不一致只出現在
-workstation 端本就近中性（R_ws≈0.03）的 `layers_5` 那組。此複現 campaign 是**穩健性檢查**，與前述五個覆蓋
-campaign **分屬不同問題、不併入 5376/2688 的單一效果估計**（含此檔僅作 unpooled 記帳 5612/2806）；即便在位置
-平衡下，這六格的 baseline-first 與 target-first 子集仍可能不同號（§9 診斷），故合併 R 只作描述、不當乾淨點估計。
+**結果：workstation 上強效（R≥0.30）的 41 個 cell，有 38 個在 OpenWhisk 同樣有效**；Spearman 秩相關
+ρ≈0.67（全）/ 0.75（高信心）、方向一致 42/55、|R 差| 中位數 0.114。3 個例外都如實標示：C/2d 與
+C/layers_92 是低信心 single-instance 的符號翻轉，C_hit/2e_K40 是 position-imbalanced(2/7) 的 cell。**這 55
+格凍結表為 primary、其歷史 R_ow 值保持不變、不被任何後續批次覆寫。** 另有一個獨立的**複現 campaign**
+（portability_outlier_replication，evidence `b684df8860b1…`、236 invocation / 118 pair）把上述六個 outlier
+cell 在 **10 baseline-first / 10 target-first 的嚴格位置平衡**下重跑，僅作**穩健性 / 敏感度檢查、與 primary
+並列（side-by-side，不取代凍結值）**：三個符號翻轉在平衡下皆翻回正向（C/2d +0.432、C/layers_92 +0.383、
+C_hit/2e_K40 +0.487），顯示原始 OpenWhisk 負值受**批次內位置 / 短暫執行狀態（execution / storage state）**
+影響、而非真實反向。此複現值只存於 `analysis/outlier_replication/`（原值與複現值同表並列），**不併入
+5376/2688 的單一效果估計**（含此檔僅作 unpooled 記帳 5612/2806）；假設性將六格替換後 ρ≈0.76 / 0.81、方向
+45/55，已明確標為 **sensitivity-only**、非歷史 primary。
 lp 那側：shuffle 交付在**兩個平台**都比 sorted 慢（order_ratio 均 >1），而交付後首次查詢維持在數微秒內
 （對照組），顯示交付順序這個機制與其成本結構同樣可攜。這是一個**描述性的跨平台一致性**結果——**不**
 主張絕對延遲相等、效果量相等、因果等價、或硬體無關的加速倍率。逐 cell 表與稽核見

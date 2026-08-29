@@ -5567,5 +5567,82 @@
     "total_invocations": 236
   },
   "portability_outlier_replication_run_config_sha256": "a564770aa39a33485a95afe6e49d95d9143ef70ffe88640673cf40bc7a3ed46b",
-  "portability_outlier_replication_run_config_sha256_note": "Deterministic sha256 over the canonical portability_outlier_replication_invocation_plan (sorted-key compact JSON). Independent identity for the SIXTH additive campaign: a targeted STABILITY / CONFOUND replication (NOT new coverage) of the six largest workstation<->OpenWhisk first-query discrepancies -- C/layers_92, C/2d, C/layers_5, YCh01/layers_5, YCu/layers_5 (each 20 pairs, 10 baseline-first / 10 target-first) and C_hit/2e_K40 (seeds 1,2,3; each 6 pairs, 3/3) -- 118 pairs / 236 invocations, STANDALONE ONLY, schedule_seed=20260830, position_balance=exact (deterministic per-cell balanced AB/BA, not the per-pair coin-flip). Distinct from primary (022fbeb0..), secondary (441609e6..), portability (64f44c3e..), portability_ext (bf504a28..) and portability_full_closure (a5be8f15..) run configs, which are byte-frozen and untouched. REUSE-ONLY: adds NO keyed plans and NO markers (2e_K40 reuses the audited full-closure keyed plans; layers_92/2d/layers_5 reuse committed static strategy artifacts), so it adds ZERO coverage -- all six cells are already members of the frozen 65-cell canonical portability matrix (coverage stays 65/65). Does NOT replace the original R_ow analysis; both batches are reported and each cell classified (analysis/analyze_outlier_replication.py, PORTABILITY_OUTLIER_REPLICATION.md)."
+  "portability_outlier_replication_run_config_sha256_note": "Deterministic sha256 over the canonical portability_outlier_replication_invocation_plan (sorted-key compact JSON). Independent identity for the SIXTH additive campaign: a targeted STABILITY / CONFOUND replication (NOT new coverage) of the six largest workstation<->OpenWhisk first-query discrepancies -- C/layers_92, C/2d, C/layers_5, YCh01/layers_5, YCu/layers_5 (each 20 pairs, 10 baseline-first / 10 target-first) and C_hit/2e_K40 (seeds 1,2,3; each 6 pairs, 3/3) -- 118 pairs / 236 invocations, STANDALONE ONLY, schedule_seed=20260830, position_balance=exact (deterministic per-cell balanced AB/BA, not the per-pair coin-flip). Distinct from primary (022fbeb0..), secondary (441609e6..), portability (64f44c3e..), portability_ext (bf504a28..) and portability_full_closure (a5be8f15..) run configs, which are byte-frozen and untouched. REUSE-ONLY: adds NO keyed plans and NO markers (2e_K40 reuses the audited full-closure keyed plans; layers_92/2d/layers_5 reuse committed static strategy artifacts), so it adds ZERO coverage -- all six cells are already members of the frozen 65-cell canonical portability matrix (coverage stays 65/65). Does NOT replace the original R_ow analysis; both batches are reported and each cell classified (analysis/analyze_outlier_replication.py, PORTABILITY_OUTLIER_REPLICATION.md).",
+  "portability_ych01_followup_invocation_plan": {
+    "kind": "portability_ych01_followup_matrix",
+    "purpose": "sign_stability_check_not_coverage",
+    "workload_set": [
+      "native_ycsb_c_hot_hashed_01"
+    ],
+    "strategies": [
+      "2f_top14",
+      "baseline",
+      "layers_5"
+    ],
+    "seeds": [
+      1,
+      2,
+      3
+    ],
+    "handle_modes": [
+      "standalone"
+    ],
+    "first_operation_ids": [
+      0
+    ],
+    "position_balance": "exact",
+    "schedule_seed": 20260901,
+    "concurrency": 1,
+    "sequential": true,
+    "matrices": [
+      {
+        "name": "Y1",
+        "workloads": [
+          "native_ycsb_c_hot_hashed_01"
+        ],
+        "strategies": [
+          "baseline",
+          "layers_5"
+        ],
+        "seeds": [
+          1
+        ],
+        "reps": 36,
+        "handle_modes": [
+          "standalone"
+        ],
+        "pairs": 36,
+        "per_cell_pairs": 36,
+        "per_cell_baseline_first": 18,
+        "per_cell_target_first": 18
+      },
+      {
+        "name": "Y2",
+        "workloads": [
+          "native_ycsb_c_hot_hashed_01"
+        ],
+        "strategies": [
+          "baseline",
+          "2f_top14"
+        ],
+        "seeds": [
+          1,
+          2,
+          3
+        ],
+        "reps": 12,
+        "handle_modes": [
+          "standalone"
+        ],
+        "pairs": 36,
+        "per_cell_pairs": 12,
+        "per_cell_baseline_first": 6,
+        "per_cell_target_first": 6
+      }
+    ],
+    "total_pairs": 72,
+    "total_invocations": 144
+  },
+  "portability_ych01_followup_run_config_sha256": "7a3cc45d7fac26e90315b3e16cec320c48210da475d42819b8253ec53ab60437",
+  "portability_ych01_followup_run_config_sha256_note": "Deterministic sha256 over the canonical portability_ych01_followup_invocation_plan (sorted-key compact JSON). Independent identity for the SEVENTH additive campaign: a targeted SIGN / STABILITY follow-up (NOT new coverage) of the ONLY two cells whose latest workstation first-query effect is positive but OpenWhisk is non-positive -- YCh01/layers_5 (36 pairs, 18 baseline-first / 18 target-first) and YCh01/2f_top14 (seeds 1,2,3; each 12 pairs, 6/6) -- 72 pairs / 144 invocations, STANDALONE ONLY, schedule_seed=20260901, position_balance=exact (deterministic per-cell/per-seed balanced AB/BA, not the per-pair coin-flip). The previously observed direction is described only as a pair-position / short-lived execution-state / execution-storage-state effect; no specific physical mechanism is attributed. Distinct from primary (022fbeb0..), secondary (441609e6..), portability (64f44c3e..), portability_ext (bf504a28..), portability_full_closure (a5be8f15..) and portability_outlier_replication (a564770a..) run configs, which are byte-frozen and untouched. REUSE-ONLY: adds NO keyed plans and NO markers (2f_top14 reuses the audited portability_ext keyed plans; layers_5 reuses the committed static strategy artifact), so it adds ZERO coverage -- both cells are already members of the frozen 65-cell canonical portability matrix (coverage stays 65/65). Does NOT replace the original R_ow analysis and does NOT alter the frozen 55-cell headline comparison; the prior batches and this one are reported side by side."
 }

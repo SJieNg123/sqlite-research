@@ -55,6 +55,7 @@ import portability_manifest as PM  # noqa: E402
 import portability_ext_manifest as XE  # noqa: E402
 import portability_full_closure_manifest as FC  # noqa: E402
 import portability_outlier_replication_manifest as OR  # noqa: E402
+import portability_ych01_followup_manifest as YF  # noqa: E402
 try:
     import sqlite_bridge  # noqa: E402
     _BRIDGE_SQLITE_VERSION = sqlite_bridge.libversion()
@@ -645,6 +646,27 @@ def crosscheck_portability_outlier_replication(repl_plan, repl_run_config_sha256
         sys.exit("portability-outlier-replication pin mismatch:\n  " + "\n  ".join(problems))
 
 
+def crosscheck_portability_ych01_followup(fu_plan, fu_run_config_sha256):
+    """Fail closed unless the frozen pin (a) already carries every strategy/plan the
+    follow-up reuses (verify_reuse -- adds NOTHING) and (b) carries the follow-up
+    invocation-plan identity the live build produced. The pin was written from the SAME
+    single-source manifest (tools/write_portability_ych01_followup_pin.py via
+    tools/portability_ych01_followup_manifest.py). Reuse-only: this campaign adds NO keyed
+    entries and NO markers, so there is nothing to merge -- only the identity to re-tie
+    generation<->pin."""
+    pin_path = os.path.join(ROOT, PIN_REL)
+    with open(pin_path) as f:
+        pin = json.load(f)
+    problems = YF.crosscheck_followup(pin)
+    if pin.get("portability_ych01_followup_run_config_sha256") != fu_run_config_sha256:
+        problems.append("pin portability_ych01_followup_run_config_sha256 != generated")
+    if json.dumps(pin.get("portability_ych01_followup_invocation_plan"), sort_keys=True) != \
+            json.dumps(fu_plan, sort_keys=True):
+        problems.append("pin portability_ych01_followup_invocation_plan != generated")
+    if problems:
+        sys.exit("portability-ych01-followup pin mismatch:\n  " + "\n  ".join(problems))
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", required=True)
@@ -847,6 +869,14 @@ def main():
     repl_run_config_sha256 = OR.portability_outlier_replication_run_config_sha256(repl_plan)
     crosscheck_portability_outlier_replication(repl_plan, repl_run_config_sha256)
 
+    # YCh01 two-cell follow-up (seventh, reuse-only) campaign: adds NO keyed entries and NO
+    # markers -- both strategies it schedules are already merged above (2f_top14 keyed +
+    # layers_5 static). Only its independent identity is (re)computed here and tied to the
+    # pin; nothing is added to keyed_block / keyed_markers.
+    fu_plan = YF.portability_ych01_followup_invocation_plan()
+    fu_run_config_sha256 = YF.portability_ych01_followup_run_config_sha256(fu_plan)
+    crosscheck_portability_ych01_followup(fu_plan, fu_run_config_sha256)
+
     st = os.stat(db)
     manifest = {
         "schema_version": 2,
@@ -933,6 +963,8 @@ def main():
         "portability_full_closure_run_config_sha256": fc_run_config_sha256,
         "portability_outlier_replication_invocation_plan": repl_plan,
         "portability_outlier_replication_run_config_sha256": repl_run_config_sha256,
+        "portability_ych01_followup_invocation_plan": fu_plan,
+        "portability_ych01_followup_run_config_sha256": fu_run_config_sha256,
         "notes": ("Interior skeleton (2d) plan derived from the canonical page "
                   "classifier; invariants validated at generation. Paths are "
                   "repository-relative, resolved at runtime against "
