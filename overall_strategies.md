@@ -1,6 +1,6 @@
 # Overall Strategies — 現有策略總覽
 
-> **最後更新：2026-07-30**（learned_markov 對齊完整 10-fold LOSO；新增原生 YCSB 驗證節）
+> **最後更新：2026-08-30**（新增「命名對照」節：論文短名 ↔ codebase codename，含 `2c`=`layers_N` 說明；codename 本身不改）。前次 2026-07-30：learned_markov 對齊完整 10-fold LOSO；新增原生 YCSB 驗證節。
 
 > 本檔講「每個策略是什麼 + 目前最新結果」。想知道「怎麼測出來的」（共用 benchmark_harness、cold-start 機制、結構派 vs 歷史派前置、每策略確切 post-cold-script），見 [strategies_explained.md](strategies_explained.md)。權威全表見 [overall_results.md](overall_results.md)。
 
@@ -11,6 +11,24 @@
 1. **Layout**（build-time，一次性）：1a orig / 1b VACUUM / 1c type-aware
 2. **Prefetch**（runtime，每次 cold start）：2c layers_N / 2d / 2e_K* / 2f SLRU；ratio 變體 3a/3b；prior-art baselines lp_* / learned_markov
 3. **Memory-sharing**（多 process RAM）：4a MAP_SHARED / 4b private buffer pool
+
+### 命名對照（論文短名 ↔ 本檔/codebase codename）
+
+論文（`paper/main.tex`）自 2026-08-30 起改用**直觀短名**；本檔與 codebase **沿用右欄 codename**（對應原始碼檔名、`results/` 目錄、manifest 與凍結 campaign 身分，不改）。兩套名字指同一策略：
+
+| 論文短名 | 本檔/codebase codename | 說明 |
+|---|---|---|
+| `Skel-N`（`Skel-5`/`Skel-92`）| **2c `layers_N`**（`layers_5`/`layers_92`）| 前 N 個 interior |
+| `Skel` | 2d | 觀測到的常駐 interior（mincore 過濾）|
+| `Skel+K`（`Skel+10`/`Skel+500`）| 2e_K（`2e_K10`/`2e_K500`；ratio 變體 3a=K40 / 3b=K92）| interior + top-K hot leaf |
+| `Skel-all-range` / `Skel-all-page` | 2a / 2b | 全 92 interior，range hint / 逐頁 hint |
+| `Dump` | 2f `2f_slru` | 整個 resident working set |
+| `Dump-N`（`Dump-14`/`Dump-28`）| `2f_topN`（`2f_top14`/`2f_top28`）| top-N 頻率部分 dump |
+| `Default` / `Vacuum` / `Clustered` | 1a orig / 1b VACUUM / 1c type-aware | 三種 layout |
+| `LP-sorted` / `LP-shuf` | `lp_sorted` / `lp_shuf` | libprefetch 遞送順序臂 |
+| learned-Markov | `learned_markov`（`_14`/`_28`）| Chen-inspired 一階 Markov baseline |
+
+> **`2c` = `layers_N` 記號說明：** `2c` 只是**本總覽的分類編號**（category 2「Prefetch」下的第 c 項）。原始碼與論文都用策略 id `layers_N`（實際檔案 `prefetch_layers.c`、id `layers_5`/`layers_92`），**沒有 `2c` 這個 id**；論文對應短名為 `Skel-N`。看到 `2c`、`layers_N`、`Skel-N` 三者請一律當同一策略。
 
 ---
 
@@ -36,7 +54,7 @@
 
 決定 cold start 後、第一筆 query 之前，主動載入哪些 page 進 OS page cache。
 
-### 2c — Layers N（structure-based）
+### 2c — Layers N（structure-based；論文 `Skel-N`）
 
 只 prefetch **按 file offset 升序前 N 個 interior page**（skip leaves）。[prefetch_layers.c](prefetch_vacuum/src/prefetch_layers.c)。
 
@@ -54,7 +72,7 @@
 - **N=1 普遍比 baseline 慢**（warmer/madvise 開銷 > coverage 受益）。
 - 最佳 N 與 layout/workload 強耦合，非 universal。
 
-### 2d — Access pattern，只 interior
+### 2d — Access pattern，只 interior（論文 `Skel`）
 
 跑一次 workload 後 `mincore()` dump residency，只 prefetch **走過的** interior（~4–30 syscall，deliver 可忽略）。[prefetch_access.c](strategies/access/src/prefetch_access.c)。hotset 由 `run_experiment.py --regen-hotsets` 凍結。
 
@@ -67,7 +85,7 @@
 - first-q 與 layers_92 同級，但 deliver 更省（只載走過的 interior）。
 - **e2e_warm 三 workload 皆改善（−14/−32/−32%）** — warm-process 下（不含冷 open）targeted interior 預熱有實質效益。
 
-### 2e — Access pattern，interior + top-K leaves
+### 2e — Access pattern，interior + top-K leaves（論文 `Skel+K`）
 
 2d 集合再加 top-K hot leaf（`gen_hotleaves.py`：key→leaf 頻率取前 K）。
 
@@ -85,7 +103,7 @@
 
 > **⚠️ C 的大效益來自 workload 的 not-found 熱點、非 2e 的普適性質；`2e_K10` 的 first-op leakage 已修正。** C 為何有 ~50% not-found 全匯聚最右葉的機制、以及 pure-hit 控制組 C_hit，見 [overall_workloads.md](overall_workloads.md)「Tail-Mixed / Tail-Hit」。**策略層結論：** C_hit 上穩健效益是 **interior skeleton ~−28% e2e_warm**（frequency leaf 相對 interior-only 幾乎不加分，逐 strategy 數字見 [overall_results.md](overall_results.md)「C_hit control」）。**`2e_K10` 的舊 −69.6% 是 first-op leakage**（leaf count 打平時 `Counter.most_common` insertion-order tie-break 恰選中被測 first-op 葉；coverage 2e_K10 10/10 vs 2f_top14/learned/frequency 0/10）——**已改成 `(-count, pageno)` deterministic tie-break（commit `de4490f` + regression test），修正後 `2e_K10` C_hit == interior skeleton、C 跨 seed −55% 雙峰**。**普適結論：page-type interior skeleton 是 robust 贏面；access-frequency leaf 只在有真實熱點時生效。** 見 REPORT §6.2.8 / `results/{tiebreak_fix,c_hit_v2}`。
 
-### 2f — SLRU prefetch（整個 resident working set）
+### 2f — SLRU prefetch（整個 resident working set；論文 `Dump`）
 
 `mincore()` dump 全部 resident page，逐頁 `madvise/pread`。[prefetch_slru.c](strategies/slru/src/prefetch_slru.c)。**不碰 SQLite 內部**，但只知有無被用、不知次數。
 
@@ -118,7 +136,7 @@
 
 把外部 prior-art 的**選頁/遞送核心**移植到同一 harness，做同批配對比較。**不跑對方系統本尊，只重現核心 + 剝除編排。** 資料 `results/baselines_v2`（`tools/baselines_v2.sh`，orig）。
 
-#### libprefetch-style — `lp_sorted` / `lp_shuf`（VanDeBogart+09）
+#### libprefetch-style — `lp_sorted` / `lp_shuf`（VanDeBogart+09；論文 `LP-sorted` / `LP-shuf`）
 
 核心：application-provided access list ＋ **offset 排序** ＋ 批次同步載入（sync pread）。**選頁與遞送分離**：兩 arm hotset 內容≡`2f_slru`（checksum 相同），只差 warmer pread **順序**（sorted=offset 升序 / shuf=打亂）。file-side `build_hotset(order=)`，warmer.c 不改。commit `5ac88da`/`850b27b`。
 
@@ -132,7 +150,7 @@
 
 - **NVMe 上 offset 排序遞送快 10–16×**，效應**全在 deliver、fq 不變**（載完 cache 相同）。診斷（rusage File system inputs）：sorted 與 shuf 讀**相同裝置位元組（~18 MB ≈ 工作集）**,排除資料量差異 → 結果**與 sequential readahead + 隱式 request coalescing 一致**（offset 排序快 10–16×）;惟**未取 block trace / request-count**,不宣稱已證明 request 數量/大小或 coalescing 機制本身。async(fadvise) 無此效應（僅發 hint）→ 專屬同步 pread 路徑。
 
-#### learned-style — `learned_markov`（Chen-inspired transition baseline）+ `frequency`
+#### learned-style — `learned_markov`（Chen-inspired transition baseline；論文 learned-Markov）+ `frequency`
 
 **Chen 等（ICDE 2021）formulation 啟發**的輕量 baseline（**非重現**）：保留「歷史 trace 學 page 轉移、預測下一批頁 + held-out」，把不可得 neural model 換成透明**一階 Markov**；未重現 Decision Module/背景執行緒/neural 架構；只用 page-access context。實作 `strategies/learned/`：每 query 獨立 episode `START→root→interior→leaf→END`（僅 op 內 transition）、`P(q|p)=count/Σ`、從 START 做 **finite-horizon expected-visit**（horizon=max深度+1，非 stationary）；hotset 取 `_scores.csv` top-N。**held-out（完整 10-fold LOSO latency 已跑，`results/learned_10fold/`，2026-07-30）**：每 test seed N∈1..10 在 9-seed 補集訓練、量測 held-out seed N（硬 assert `test∉train`）；n=10、async+pread、A/B/C×orig、300 prefetch 格 delivery=100%、330 格 `cold_pct`=0。`frequency_train` 為**獨立 code path** 分析臂（取 `_marginal.csv`，對象是同一批訓練 traces）。footprint 對齊 `2f_topN`。commit `a98e673`（8 validation gate 全過）。
 
