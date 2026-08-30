@@ -1,4 +1,4 @@
-"""Fig 19c -- OpenWhisk vs workstation effectiveness as grouped BARS (baseline = 0).
+"""Fig 19 -- OpenWhisk vs workstation effectiveness as grouped BARS (baseline = 0).
 
 The 55 non-lp (strategy x workload) cells both platforms ran at orig. The y-axis is the *relative* first-query
 reduction R = (baseline_fq - strategy_fq)/baseline_fq, i.e. how much faster than baseline
@@ -77,7 +77,7 @@ def main():
                  "baseline — relative reduction, not absolute µs", fontsize=12, y=1.00)
     fig.tight_layout()
 
-    save(fig, "19c_openwhisk_effectiveness_bars")
+    save(fig, "19_openwhisk_effectiveness_bars")
 
 
 if __name__ == "__main__":
