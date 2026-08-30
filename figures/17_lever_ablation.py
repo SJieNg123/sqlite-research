@@ -22,8 +22,8 @@ import matplotlib.pyplot as plt
 SOURCE = ROOT / "results/ablation_comp_v2/uncertainty.csv"
 
 ARMS   = ["2d", "leaf_rand_K10", "leaf_freq_K10", "2e_K10"]
-LABELS = {"2d": "2d\n(interior · page-type)", "leaf_rand_K10": "leaf_rand\n(control)",
-          "leaf_freq_K10": "leaf_freq\n(access-freq)", "2e_K10": "2e_K10\n(combined)"}
+LABELS = {"2d": "Skel\n(interior · page-type)", "leaf_rand_K10": "leaf_rand\n(control)",
+          "leaf_freq_K10": "leaf_freq\n(access-freq)", "2e_K10": "Skel+10\n(combined)"}
 ARM_COLOR = {"2d": "#3b82f6", "leaf_rand_K10": "#9ca3af",
              "leaf_freq_K10": "#059669", "2e_K10": "#111827"}
 METRICS = [("first_query_us", "first-query"), ("e2e_warm_us", "warm-process e2e")]

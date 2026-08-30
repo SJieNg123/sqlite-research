@@ -76,6 +76,28 @@ STRAT_ORDER  = ["baseline", "layers_5", "layers_92", "2d", "2e_K10", "2e_K500", 
 STRAT_LABELS  = {"baseline": "baseline", "layers_5": "layers_5", "layers_92": "layers_92",
               "2d": "2d", "2e_K10": "2e_K10", "2e_K500": "2e_K500", "2f_slru": "2f SLRU"}
 
+# paper-facing display names (notebook codename -> short name used in the paper).
+# separate from STRAT_LABELS (which several non-paper figures still use verbatim).
+STRAT_DISPLAY = {
+    "baseline": "baseline",
+    "layers_5": "Skel-5", "layers_46": "Skel-46", "layers_92": "Skel-92",
+    "2a": "Skel-all-range", "2b": "Skel-all-page", "2d": "Skel",
+    "2e_K10": "Skel+10", "2e_K40": "Skel+40", "2e_K50": "Skel+50",
+    "2e_K92": "Skel+92", "2e_K100": "Skel+100", "2e_K500": "Skel+500",
+    "2f_slru": "Dump", "2f_SLRU": "Dump",
+    "2f_top14": "Dump-14", "2f_top28": "Dump-28",
+    "2f_top100": "Dump-100", "2f_top500": "Dump-500",
+    "learned_markov": "learned-Markov",
+    "learned_markov_14": "learned-Markov-14", "learned_markov_28": "learned-Markov-28",
+    "lp_sorted": "LP-sorted", "lp_shuf": "LP-shuf",
+    # ablation controls: paper renders these codenames verbatim, keep as-is
+    "leaf_rand_K10": "leaf_rand_K10", "leaf_freq_K10": "leaf_freq_K10",
+}
+
+def strat_display(s):
+    """Paper short-name for a notebook codename; identity for anything unmapped."""
+    return STRAT_DISPLAY.get(s, s)
+
 def load_summary(arm="async"):
     """Return {(workload, db, strategy): row} from summary.csv for one arm.
     baseline rows are stored under arm 'baseline' but exposed for every requested arm."""

@@ -15,7 +15,7 @@ import csv, os
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from plot_utils import save, STRATEGY_COLORS, workload_display_name
+from plot_utils import save, STRATEGY_COLORS, workload_display_name, strat_display
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SWEEP = os.path.join(ROOT, "results/ram_pressure")
@@ -52,8 +52,8 @@ for col, wl in enumerate(WORKLOADS):
                 if (wl, s, "async") in DATA[t] else float("nan") for t, _ in CAPS]
         fq = [float(DATA[t].get((wl, s, "async"), {}).get("fq_median", "nan"))
               if (wl, s, "async") in DATA[t] else float("nan") for t, _ in CAPS]
-        ax_d.plot(xpos, dpct, "o-", color=col_s, lw=2, ms=6, label=s)
-        ax_f.plot(xpos, fq, "o-", color=col_s, lw=2, ms=6, label=s)
+        ax_d.plot(xpos, dpct, "o-", color=col_s, lw=2, ms=6, label=strat_display(s))
+        ax_f.plot(xpos, fq, "o-", color=col_s, lw=2, ms=6, label=strat_display(s))
     ax_f.plot(xpos, base_fq, "--", color="#dc2626", lw=1.5, label="baseline (no prefetch)")
     ax_d.axvline(0.5, color="#9ca3af", ls=":", lw=1)   # mark "cap < WS" region start
     ax_d.set_title(WL_TITLE[wl], fontsize=11)

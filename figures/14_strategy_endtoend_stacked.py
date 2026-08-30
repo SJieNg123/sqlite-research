@@ -21,7 +21,7 @@ import numpy as np
 UNIFIED = ROOT / "results/unified_v2/matrix/summary.csv"
 
 ARMS      = ['baseline', 'layers_5', '2d', '2f_slru']   # tie-break-unaffected only
-ARM_LABEL = {'baseline': 'baseline', 'layers_5': 'layers_5', '2d': '2d', '2f_slru': '2f_slru'}
+ARM_LABEL = {'baseline': 'baseline', 'layers_5': 'Skel-5', '2d': 'Skel', '2f_slru': 'Dump'}
 # CSV keys stay legacy (A/B/C); titles resolve to canonical display names.
 WORKLOADS = ['A', 'B', 'C']
 WL_TITLE  = {'A': workload_display_name('A'),

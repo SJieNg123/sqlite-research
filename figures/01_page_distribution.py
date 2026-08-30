@@ -11,9 +11,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 LAYOUTS = [
-    ("1a (orig)",       ROOT / "pipeline/preparation/layout_rewriter/runs/classify_before.csv",  "#888888"),
-    ("1b (VACUUM)",     ROOT / "pipeline/preparation/layout_rewriter/runs/classify_vacuum.csv",  "#1f77b4"),
-    ("1c (type-aware)", ROOT / "pipeline/preparation/layout_rewriter/runs/classify_after.csv",   "#d62728"),
+    ("orig",       ROOT / "pipeline/preparation/layout_rewriter/runs/classify_before.csv",  "#888888"),
+    ("vacuum",     ROOT / "pipeline/preparation/layout_rewriter/runs/classify_vacuum.csv",  "#1f77b4"),
+    ("type-aware", ROOT / "pipeline/preparation/layout_rewriter/runs/classify_after.csv",   "#d62728"),
 ]
 DB_SIZE_MB = 103
 
