@@ -411,13 +411,28 @@ class FollowupNormalizerRegistry(unittest.TestCase):
         self.assertEqual(self.FU["keyed_freeze_report_rel"],
                          "config/plans/keyed/portability_ext_freeze_report.json")
 
+    def test_post_wk2_evidence_fields_are_wired(self):
+        # WK2 has run: evidence_dir/bundle/fingerprint are now filled from the archived bundle
+        # (execution git 26500fe8fe57). Before WK2 these were None; the wiring below is the
+        # post-execution state.
+        self.assertEqual(self.FU["evidence_dir"],
+                         "evidence/portability_ych01_followup/26500fe8fe57")
+        self.assertEqual(self.FU["bundle"],
+                         "ws2_bundle_26500fe8fe57_20260829T200658Z.tar.gz")
+        self.assertEqual(self.FU["expected_matrix_fingerprint"],
+                         "47aab3200fbcdc3a31f5ef43a85af7a26c18385e2961ad0e9c21ee1fe8450794")
+
     def test_normalizer_fails_loud_without_evidence(self):
-        # evidence_dir/bundle/fingerprint are None on WK1 -> normalize() must refuse.
-        self.assertIsNone(self.FU["evidence_dir"])
-        self.assertIsNone(self.FU["bundle"])
-        self.assertIsNone(self.FU["expected_matrix_fingerprint"])
-        with self.assertRaises(SystemExit):
-            self.NZ.normalize(os.path.join(REPO, "deployment/openwhisk"), "/tmp/should_not_write")
+        # The fail-loud guard must still refuse if the evidence identity is cleared.
+        saved = {k: self.FU[k] for k in ("evidence_dir", "bundle", "expected_matrix_fingerprint")}
+        try:
+            self.FU["evidence_dir"] = None
+            self.FU["bundle"] = None
+            self.FU["expected_matrix_fingerprint"] = None
+            with self.assertRaises(SystemExit):
+                self.NZ.normalize(os.path.join(REPO, "deployment/openwhisk"), "/tmp/should_not_write")
+        finally:
+            self.FU.update(saved)
 
 
 if __name__ == "__main__":

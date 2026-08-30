@@ -1,0 +1,5 @@
+workload,strategy,seed,n_pairs,seed_R,seed_baseline_first_R,seed_target_first_R,seed_sign_agree_frac,note
+YCh01,layers_5,1,36,-0.5961,-0.7423,-0.4466,0.61,single seed (structural static; seed 1)
+YCh01,2f_top14,1,12,-0.0726,-1.1197,0.4856,0.50,n=12 per seed; do not over-interpret
+YCh01,2f_top14,2,12,0.5808,-0.7389,0.7350,0.67,n=12 per seed; do not over-interpret
+YCh01,2f_top14,3,12,-0.0163,-1.0188,0.6583,0.50,n=12 per seed; do not over-interpret

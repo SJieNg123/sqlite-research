@@ -1,0 +1,145 @@
+{
+  "source": "effectiveness_ow_vs_workstation_revised_freeze.csv",
+  "n_cells": 55,
+  "n_high_confidence": 46,
+  "n_high_conf_clean": 42,
+  "n_low_conf": 9,
+  "n_position_sensitive": 4,
+  "direction_agreement_all": "46/55",
+  "direction_agreement_high_confidence": "37/46",
+  "direction_agreement_high_conf_clean": "34/42",
+  "category_agreement_all": "46/55",
+  "strong_ws_threshold": 0.3,
+  "n_strong_ws": 41,
+  "n_strong_ws_effective_on_ow": 41,
+  "strong_ws_agreement": "41/41",
+  "n_effective_ws": 48,
+  "n_effective_ws_effective_on_ow": 45,
+  "effective_ws_agreement": "45/48",
+  "rho_all": 0.7611,
+  "rho_high_confidence": 0.7851,
+  "rho_high_conf_clean": 0.8103,
+  "median_abs_gap": 0.1122,
+  "per_workload": {
+    "YC": {
+      "n": 10,
+      "rho": 0.7697,
+      "direction_agreement": "9/10"
+    },
+    "YCu": {
+      "n": 10,
+      "rho": 0.8667,
+      "direction_agreement": "7/10"
+    },
+    "YCh01": {
+      "n": 10,
+      "rho": 0.8182,
+      "direction_agreement": "8/10"
+    },
+    "C": {
+      "n": 14,
+      "rho": 0.6953,
+      "direction_agreement": "11/14"
+    },
+    "C_hit": {
+      "n": 11,
+      "rho": 0.2455,
+      "direction_agreement": "11/11"
+    }
+  },
+  "n_exceptions": 9,
+  "exceptions": [
+    {
+      "workload": "YC",
+      "strategy": "layers_5",
+      "R_ws": 0.0336,
+      "R_ow": 0.1469,
+      "cat_ws": "neutral",
+      "cat_ow": "effective",
+      "position_sensitive": false,
+      "evidence_campaign": "historical"
+    },
+    {
+      "workload": "YCu",
+      "strategy": "layers_5",
+      "R_ws": 0.031,
+      "R_ow": 0.29,
+      "cat_ws": "neutral",
+      "cat_ow": "effective",
+      "position_sensitive": true,
+      "evidence_campaign": "portability_outlier_replication"
+    },
+    {
+      "workload": "YCu",
+      "strategy": "learned_markov_14",
+      "R_ws": 0.0355,
+      "R_ow": 0.4392,
+      "cat_ws": "neutral",
+      "cat_ow": "effective",
+      "position_sensitive": false,
+      "evidence_campaign": "historical"
+    },
+    {
+      "workload": "YCu",
+      "strategy": "learned_markov_28",
+      "R_ws": 0.2161,
+      "R_ow": 0.0836,
+      "cat_ws": "effective",
+      "cat_ow": "neutral",
+      "position_sensitive": false,
+      "evidence_campaign": "historical"
+    },
+    {
+      "workload": "YCh01",
+      "strategy": "layers_5",
+      "R_ws": 0.0252,
+      "R_ow": -0.5961,
+      "cat_ws": "neutral",
+      "cat_ow": "harmful",
+      "position_sensitive": false,
+      "evidence_campaign": "portability_ych01_followup"
+    },
+    {
+      "workload": "YCh01",
+      "strategy": "learned_markov_14",
+      "R_ws": 0.2062,
+      "R_ow": 0.0714,
+      "cat_ws": "effective",
+      "cat_ow": "neutral",
+      "position_sensitive": false,
+      "evidence_campaign": "historical"
+    },
+    {
+      "workload": "C",
+      "strategy": "layers_5",
+      "R_ws": 0.0275,
+      "R_ow": 0.4185,
+      "cat_ws": "neutral",
+      "cat_ow": "effective",
+      "position_sensitive": false,
+      "evidence_campaign": "portability_outlier_replication"
+    },
+    {
+      "workload": "C",
+      "strategy": "leaf_freq_K10",
+      "R_ws": 0.2127,
+      "R_ow": 0.0806,
+      "cat_ws": "effective",
+      "cat_ow": "neutral",
+      "position_sensitive": false,
+      "evidence_campaign": "historical"
+    },
+    {
+      "workload": "C",
+      "strategy": "leaf_rand_K10",
+      "R_ws": 0.0166,
+      "R_ow": 0.2521,
+      "cat_ws": "neutral",
+      "cat_ow": "effective",
+      "position_sensitive": false,
+      "evidence_campaign": "historical"
+    }
+  ],
+  "coverage": "65/65",
+  "pooled": false
+}

@@ -1,0 +1,87 @@
+{
+  "accounting": {
+    "all_archive_bookkeeping": {
+      "campaigns": 7,
+      "invocations": 5756,
+      "is_one_estimator": false,
+      "pairs": 2878,
+      "pooled": false
+    },
+    "coverage": {
+      "cells": 65,
+      "followup_adds_coverage_cells": 0,
+      "of": 65
+    },
+    "five_campaign_coverage": {
+      "campaigns": 5,
+      "invocations": 5376,
+      "pairs": 2688,
+      "pooled": false
+    },
+    "never_call_5756_2878_one_estimator": true,
+    "seventh_ych01_followup": {
+      "campaign": "portability_ych01_followup",
+      "invocations": 144,
+      "pairs": 72
+    },
+    "sixth_outlier_replication": {
+      "campaign": "portability_outlier_replication",
+      "invocations": 236,
+      "pairs": 118
+    }
+  },
+  "campaign": "portability_ych01_followup",
+  "campaign_role": "independent_sign_stability_check_two_ych01_cells",
+  "cells": {
+    "YCh01/2f_top14": {
+      "R_ws": 0.2139,
+      "historical_current_R_ow": -0.019,
+      "historical_note": "near zero; NOT strongly harmful",
+      "historical_ow_pos": "5/4",
+      "interpretation": "The seventh batch shows the two exactly-balanced position subsets strongly OPPOSE (baseline-first -1.019, target-first +0.615; sign-agree 0.56 < 0.60), so the cell is pair-position / execution-state sensitive rather than a clean platform divergence. The historical near-zero -0.019 is a position-averaged value over a highly position-sensitive cell, not evidence of a stable harmful OW effect. Per-seed medians vary (seed1 -0.073, seed2 +0.581, seed3 -0.016) but n=12 per seed is too small to read as a seed effect; position dominates.",
+      "main_axis": "pair_position_sensitive",
+      "position_sensitive": true,
+      "positive_neutral_or_negative": "position-dominated: aggregate +0.282 is a cancellation artifact of strongly opposed subsets (bf -1.019, tf +0.615), not a stable positive effect",
+      "section8_decision": "D",
+      "section8_label": "position_subsets_disagree_execution_state_or_pair_position_sensitive",
+      "seed_R": {
+        "1": -0.0726,
+        "2": 0.5808,
+        "3": -0.0163
+      },
+      "seed_sensitive": true,
+      "seventh_R_ow": 0.2815,
+      "seventh_baseline_first_R": -1.0188,
+      "seventh_pair_count": 36,
+      "seventh_sign_agree_frac": 0.56,
+      "seventh_target_first_R": 0.6151
+    },
+    "YCh01/layers_5": {
+      "R_ws": 0.0252,
+      "historical_low_conf": "True",
+      "historical_ow_pos": "1/2",
+      "historical_primary_R_ow": 0.3766,
+      "interpretation": "Under a fresh independent EXACT-balanced batch the aggregate is negative (-0.596) and BOTH position subsets are negative (bf -0.742, tf -0.447), unlike the sixth batch whose subsets opposed (bf -0.762, tf +0.502). The negative aggregate SIGN is reproduced across two independent balanced batches (sixth -0.243, seventh -0.596); the historical primary +0.377 (low-conf, n=3 pairs, 1/2 split) does not hold under exact balance. Position still modulates MAGNITUDE (bf more negative than tf) but no longer the SIGN. R_ws is itself only +0.025 (neutral), so this is an OW-side non-positive result for a structurally-neutral 5-page static plan.",
+      "main_axis": "direction_stable_position_magnitude_modulated",
+      "negative_behavior_reproduced": true,
+      "section7_decision": "C",
+      "section7_label": "both_position_subsets_negative_stronger_reproducible_ow_negative",
+      "seventh_R_ow": -0.5961,
+      "seventh_baseline_first_R": -0.7423,
+      "seventh_pair_count": 36,
+      "seventh_sign_agree_frac": 0.61,
+      "seventh_target_first_R": -0.4466,
+      "sixth_balanced_R_ow": -0.2425,
+      "sixth_baseline_first_R": -0.762,
+      "sixth_target_first_R": 0.502,
+      "still_position_sensitive": false
+    }
+  },
+  "does_not_alter_frozen_55_cell_comparison": true,
+  "does_not_replace_prior_R_ow": true,
+  "estimator": "median of per-pair (baseline_fq - target_fq)/baseline_fq; bf/tf split by lower schedule_position; identical to sixth-campaign estimator",
+  "generated_utc": "2026-08-30T08:25:56Z",
+  "mechanism_language": "pair-position / short-lived execution-state / execution-storage-state; NO page-cache carryover attributed",
+  "not_a_performance_ranking": true,
+  "not_pooled": true
+}

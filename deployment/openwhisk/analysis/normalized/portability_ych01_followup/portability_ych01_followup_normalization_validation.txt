@@ -1,0 +1,42 @@
+# OpenWhisk WK1 YCH01 TWO-CELL FOLLOW-UP normalization — validation report
+
+overall: PASS
+role: independent sign / stability check of two YCh01 cells (NOT a performance ranking; NOT pooled; does not alter the 55-cell comparison; native/WK1 remains primary)
+
+## totals
+invocations: 144 (expected 144)
+pairs: 72 (expected 72)
+block_pairs: {"Y1": 36, "Y2": 36} (expected {Y1:36, Y2:36})
+
+## exact per-cell / per-seed position balance (the scientific point)
+2f_top14   native_ycsb_c_hot_hashed_01  s1 : baseline_first=6 target_first=6  required=(6, 6)  OK
+2f_top14   native_ycsb_c_hot_hashed_01  s2 : baseline_first=6 target_first=6  required=(6, 6)  OK
+2f_top14   native_ycsb_c_hot_hashed_01  s3 : baseline_first=6 target_first=6  required=(6, 6)  OK
+layers_5   native_ycsb_c_hot_hashed_01  s1 : baseline_first=18 target_first=18  required=(18, 18)  OK
+
+## identity
+bundle_sha256: 77e30869c7ac4d3b75c99174f9c2091320c51c7f8476580c43ddfdc5f0015925 (sidecar=77e30869c7ac4d3b75c99174f9c2091320c51c7f8476580c43ddfdc5f0015925, match=True)
+matrix_fingerprint: 47aab3200fbcdc3a31f5ef43a85af7a26c18385e2961ad0e9c21ee1fe8450794 (recomputed=47aab3200fbcdc3a31f5ef43a85af7a26c18385e2961ad0e9c21ee1fe8450794, match=True)
+run_config_sha256: 7a3cc45d7fac26e90315b3e16cec320c48210da475d42819b8253ec53ab60437
+artifact_manifest_sha256: 31a227b38d80372e782f1468452206024e373bc650b63be8f0c90787e9575a43
+action_image_digest: localhost:5000/sqlite-coldstart@sha256:749bbe577bd24458ac32936216ccd67af1b72aa378df75bd85a009c84736d052
+bundle_manifest_run_config_sha256: 022fbeb01a8d9d45686e56823eca1e1ef30712f2a13c4a878cb5f7ef0097b5b7 (packaging quirk: pin-primary summary; authoritative identity is the stamped schedule/response run_config)
+status.status=done
+status.result=PASS
+status.git_sha=26500fe8fe5710d51b6525234dd6d736765072bb
+status.run_id=20260829T200310Z-26500fe8fe57
+status.utc=2026-08-29T20:05:56Z
+
+## plan parity (per executed target plan; parity_type per taxonomy)
+2f_top14   native_ycsb_c_hot_hashed_01  s1  pages=14 int=14 leaf=0  deliver=madvise_willneed  exact_native_plan  matches_frozen=True
+2f_top14   native_ycsb_c_hot_hashed_01  s2  pages=14 int=14 leaf=0  deliver=madvise_willneed  exact_native_plan  matches_frozen=True
+2f_top14   native_ycsb_c_hot_hashed_01  s3  pages=14 int=14 leaf=0  deliver=madvise_willneed  exact_native_plan  matches_frozen=True
+layers_5   native_ycsb_c_hot_hashed_01  s1  pages=5 int=5 leaf=0  deliver=madvise_willneed  structural_static  matches_frozen=static
+
+## pair-order structural balance by target strategy (integrity only)
+portability_ych01_followup | 2f_top14 | standalone : baseline_first=18 target_first=18
+portability_ych01_followup | layers_5 | standalone : baseline_first=18 target_first=18
+
+## fail-closed problems (0)
+(none — all gates passed)
+

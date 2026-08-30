@@ -1,0 +1,80 @@
+{
+  "accounting": {
+    "all_archive_bookkeeping": {
+      "campaigns": 7,
+      "invocations": 5756,
+      "is_one_estimator": false,
+      "pairs": 2878,
+      "pooled": false
+    },
+    "coverage": {
+      "cells": 65,
+      "followup_adds_coverage_cells": 0,
+      "of": 65
+    },
+    "five_campaign_coverage": {
+      "campaigns": 5,
+      "invocations": 5376,
+      "pairs": 2688,
+      "pooled": false
+    },
+    "seventh": {
+      "campaign": "portability_ych01_followup",
+      "invocations": 144,
+      "pairs": 72
+    },
+    "sixth": {
+      "campaign": "portability_outlier_replication",
+      "invocations": 236,
+      "pairs": 118
+    }
+  },
+  "authoritative_identity": {
+    "action_image_digest": "localhost:5000/sqlite-coldstart@sha256:749bbe577bd24458ac32936216ccd67af1b72aa378df75bd85a009c84736d052",
+    "execution_git_sha": "26500fe8fe5710d51b6525234dd6d736765072bb",
+    "matrix_fingerprint": "47aab3200fbcdc3a31f5ef43a85af7a26c18385e2961ad0e9c21ee1fe8450794",
+    "run_config_sha256": "7a3cc45d7fac26e90315b3e16cec320c48210da475d42819b8253ec53ab60437",
+    "schedule_seed": 20260901,
+    "source_bundle_sha256": "77e30869c7ac4d3b75c99174f9c2091320c51c7f8476580c43ddfdc5f0015925"
+  },
+  "builder_git_sha": "59272929fa23a9f51daa62a14810dc9cb73eb8f8",
+  "campaign": "portability_ych01_followup",
+  "does_not_alter_frozen_55_cell_comparison": true,
+  "does_not_pool": true,
+  "does_not_replace_prior_R_ow": true,
+  "generated_utc": "2026-08-30T08:25:56Z",
+  "outputs": {
+    "ych01_followup_cell_comparison.csv": {
+      "rows": 2,
+      "sha256": "3028742bf92d4fbc13daed8be08afa3bc1fead8f1b873c25e80616bae6c3d094"
+    },
+    "ych01_followup_position_diagnostics.csv": {
+      "rows": 2,
+      "sha256": "9aefde49c36ff4c9bd370ba5b8d9be09551e084d5730113f4232f56a00141681"
+    },
+    "ych01_followup_seed_diagnostics.csv": {
+      "rows": 4,
+      "sha256": "f22c9fb7a414583e682294f96256966ca01d4d2d82035ff5aa6d7c943c851010"
+    },
+    "ych01_followup_summary.json": {
+      "sha256": "cfb0c6938b0f9e1396d4bea5b3095e2593dabb093dec6dfcdf968536980a32e5"
+    }
+  },
+  "role": "SEVENTH campaign follow-up supplement (sign/stability, two YCh01 cells)",
+  "source_frozen_comparison": {
+    "path": "analysis/comparison/effectiveness_ow_vs_workstation_historical_freeze.csv",
+    "sha256": "d7cc7673068b975603ac2b78409f1518ac3d4740d2f78e417df01874f235803a"
+  },
+  "source_normalization_manifest": {
+    "path": "analysis/normalized/portability_ych01_followup/portability_ych01_followup_normalization_manifest.json",
+    "sha256": "06ad9a473075fcc249362f0c8210eb2da38d0d9c415973acaff5f6c1989fa21f"
+  },
+  "source_normalized_pairs": {
+    "path": "analysis/normalized/portability_ych01_followup/portability_ych01_followup_normalized_pairs.csv",
+    "sha256": "a7eeab00220c543f9a1c4aae1c4ac8fdd0f5c2c10cd8bfcb73777c0f592af040"
+  },
+  "source_sixth_position_diagnostics": {
+    "path": "analysis/outlier_replication/replication_position_diagnostics.csv",
+    "sha256": "79f99b9b3892300abc0bfdcb6551bd7adb4b3301d124efb3bba05e32daf356f5"
+  }
+}

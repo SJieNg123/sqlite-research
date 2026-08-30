@@ -93,8 +93,8 @@ p-values**, only descriptive bands over the balanced pairs:
   not a significance claim).
 
 The analysis (`analysis/analyze_outlier_replication.py`) reports **both** the original
-`R_ow` and the replication `R_ow` side by side — it **never replaces** the original
-value — and classifies each cell:
+`R_ow` and the replication `R_ow` side by side — this campaign's own artifact **never
+replaces** the original value in place — and classifies each cell:
 
 **Family ① — true sign-flip cells** (`C/layers_92`, `C/2d`, `C_hit/2e_K40`):
 - replication `R_ow ≤ −0.10` and stable → **A. replicated deployment divergence**
@@ -115,6 +115,18 @@ value — and classifies each cell:
 There is **no post-hoc selection** of whichever batch looks better: every cell is
 reported with both `R_ow` values, the original and replication position splits, the
 replication sign-agreement fraction, and its pre-registered class.
+
+> **One-time revised freeze (revision `ow-eff-revision-2026-08-30`).** This campaign's own
+> artifact keeps the side-by-side format above. Separately — as a single, pre-registered,
+> deliberate revision of the *paper-facing* frozen comparison table — five of these balanced
+> cells (`C/layers_92`, `C/2d`, `C_hit/2e_K40`, `C/layers_5`, `YCu/layers_5`) are ADOPTED as
+> the authoritative per-cell estimate in
+> `analysis/comparison/effectiveness_ow_vs_workstation_revised_freeze.csv`. (The `YCh01/layers_5`
+> cell listed above is superseded there by the **seventh** campaign, not this sixth one, per
+> precedence seventh > sixth > historical.) The historical table is preserved byte-identically
+> (`effectiveness_ow_vs_workstation_historical_freeze.csv`) and every superseded cell is recorded
+> in `effectiveness_freeze_revision.json`; coverage stays 65/65 and the campaigns are still
+> never pooled. The pre-registered class labels above are unchanged by the revision.
 
 ## What this campaign does NOT do
 

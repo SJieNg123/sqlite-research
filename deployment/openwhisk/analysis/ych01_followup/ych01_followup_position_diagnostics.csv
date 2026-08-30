@@ -1,0 +1,3 @@
+workload,strategy,family,all_R,baseline_first_R,target_first_R,position_gap_bf_minus_tf,n_baseline_first,n_target_first,position_subsets_same_sign,position_dominates_R,median_baseline_fq_us,median_target_fq_us,baseline_fq_us_when_baseline_first,baseline_fq_us_when_target_first,target_fq_us_when_baseline_first,target_fq_us_when_target_first,R_min,R_q1,R_q3,R_iqr,R_max,sign_agree_frac
+YCh01,layers_5,ws_neutral_ow_originally_positive,-0.5961,-0.7423,-0.4466,-0.2957,18,18,True,False,133.450,147.500,133.700,96.472,234.620,139.916,-2.8325,-0.7774,0.3238,1.1012,0.7396,0.61
+YCh01,2f_top14,ws_positive_ow_originally_near_zero,0.2815,-1.0188,0.6151,-1.6339,18,18,False,True,139.877,142.833,133.380,286.917,278.917,140.894,-4.4555,-1.0466,0.6604,1.7070,0.8852,0.56

@@ -415,12 +415,15 @@ CLAIM_MAP = [
               "order, reported separately), prefetch strategies that are effective "
               "on the workstation stay effective on OpenWhisk in the DESCRIPTIVE "
               "sense of relative first-query reduction vs each platform's own "
-              "same-condition baseline (high-confidence workstation-effective "
-              "strategies 32/37 effective on both; Spearman rho 0.67 all / 0.75 "
-              "high-confidence).",
+              "same-condition baseline (strongly workstation-effective strategies, "
+              "R_ws>=0.30, 41/41 effective on OpenWhisk; Spearman rho 0.76 all / 0.79 "
+              "high-confidence / 0.81 high-confidence-and-position-clean; computed over "
+              "the revised freeze).",
      "classification": "QUALIFIED",
      "support": "comparison/VERDICT_effectiveness_portability.md; "
-                "comparison/effectiveness_ow_vs_workstation.csv; "
+                "comparison/effectiveness_ow_vs_workstation_revised_freeze.csv "
+                "(historical: effectiveness_ow_vs_workstation_historical_freeze.csv; "
+                "supersession: effectiveness_freeze_revision.json); "
                 "comparison/ws_provenance.csv",
      "qualification": "Descriptive cross-platform CONSISTENCY of relative reductions "
                       "only (standalone handles; same-batch R). It is NOT a claim of "

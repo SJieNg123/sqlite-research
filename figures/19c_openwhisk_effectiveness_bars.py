@@ -12,7 +12,10 @@ the two environments (different machine state + delivery mechanism) and must NOT
 cell-for-cell. Reduction-vs-baseline cancels that offset, so blue and orange ARE comparable.
 The 10 libprefetch cells are compared separately by delivery order (55 + 10 = 65 matched).
 
-Data source: deployment/openwhisk/analysis/comparison/effectiveness_ow_vs_workstation.csv
+Data source: the revised freeze
+deployment/openwhisk/analysis/comparison/effectiveness_ow_vs_workstation_revised_freeze.csv
+(7 cells carry exactly position-balanced replication values; a `*` on the strategy label
+marks a position_sensitive cell -- positive balanced aggregate, subsets disagree in sign).
 Run:  /home/u03/.cache/coldstart-venv/bin/python figures/19c_openwhisk_effectiveness_bars.py
 """
 import csv
@@ -22,7 +25,7 @@ import numpy as np
 
 from plot_utils import ROOT, plt, save
 
-CSV = ROOT / "deployment/openwhisk/analysis/comparison/effectiveness_ow_vs_workstation.csv"
+CSV = ROOT / "deployment/openwhisk/analysis/comparison/effectiveness_ow_vs_workstation_revised_freeze.csv"
 
 WL_ORDER = ["YC", "YCu", "YCh01", "C", "C_hit"]
 WS_COLOR = "#1f77b4"   # blue   = workstation
@@ -58,7 +61,9 @@ def main():
 
         ax.set_title(wl, fontsize=11)
         ax.set_xticks(x)
-        ax.set_xticklabels([r["strategy"] for r in cells], rotation=90, fontsize=7.5)
+        labels = [r["strategy"] + ("*" if str(r.get("position_sensitive", "")).strip().lower() == "true" else "")
+                  for r in cells]
+        ax.set_xticklabels(labels, rotation=90, fontsize=7.5)
         ax.set_xlim(-0.7, len(cells) - 0.3)
         ax.grid(axis="x", visible=False)
         ax.margins(x=0)

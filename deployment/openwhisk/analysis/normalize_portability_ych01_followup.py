@@ -72,10 +72,11 @@ YCH01 = "native_ycsb_c_hot_hashed_01"
 FU = {
     "campaign": "portability_ych01_followup",
     # POST-WK2 fields: filled from the produced evidence bundle after the matrix runs.
-    # Left None on WK1 so normalize() fails loud rather than silently normalizing nothing.
-    "evidence_dir": None,     # e.g. "evidence/portability_ych01_followup/<evidence_hash>"
-    "bundle": None,           # e.g. "ws2_bundle_<hash>_<ts>.tar.gz"
-    "expected_matrix_fingerprint": None,  # depends on the WK2 image identity
+    # Wired 2026-08-29 from the archived WK2 bundle (execution git_sha 26500fe8fe57).
+    "evidence_dir": "evidence/portability_ych01_followup/26500fe8fe57",
+    "bundle": "ws2_bundle_26500fe8fe57_20260829T200658Z.tar.gz",
+    "expected_matrix_fingerprint":
+        "47aab3200fbcdc3a31f5ef43a85af7a26c18385e2961ad0e9c21ee1fe8450794",
     "matrix_rel": "ws2/matrix.portability_ych01_followup.json",
     # the keyed 2f_top14 plans reuse the AUDITED portability_ext freeze report.
     "keyed_freeze_report_rel": "config/plans/keyed/portability_ext_freeze_report.json",

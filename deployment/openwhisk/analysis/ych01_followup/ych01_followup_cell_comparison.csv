@@ -1,0 +1,3 @@
+workload,strategy,family,R_ws,historical_primary_R_ow,historical_ow_pos,historical_low_conf,sixth_balanced_R_ow,seventh_R_ow,seventh_baseline_first_R,seventh_target_first_R,sixth_baseline_first_R,sixth_target_first_R,seventh_pair_count,seventh_sign_agree_frac,seventh_sign,classification_code,classification_label,main_axis
+YCh01,layers_5,ws_neutral_ow_originally_positive,0.0252,0.3766,1/2,True,-0.2425,-0.5961,-0.7423,-0.4466,-0.7620,0.5020,36,0.61,-,C,both_position_subsets_negative_stronger_reproducible_ow_negative,direction_stable_position_magnitude_modulated
+YCh01,2f_top14,ws_positive_ow_originally_near_zero,0.2139,-0.0190,5/4,False,NA,0.2815,-1.0188,0.6151,NA,NA,36,0.56,+,D,position_subsets_disagree_execution_state_or_pair_position_sensitive,pair_position_sensitive

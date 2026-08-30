@@ -1,4 +1,4 @@
-# Effectiveness portability: OpenWhisk vs workstation (49 comparable cells)
+# Effectiveness portability: OpenWhisk vs workstation (55 first-query cells, REVISED freeze)
 
 **Question.** Do prefetch strategies that are effective on the workstation stay
 effective on the simulated serverless platform (OpenWhisk)?
@@ -10,77 +10,106 @@ reductions are the only cross-machine-comparable quantity; absolute microseconds
 not. This is a **descriptive cross-platform consistency check, not a causal-equivalence
 or absolute-latency claim.** OpenWhisk uses **standalone** handles only — warm handles
 carry a strong positional/order effect that makes warm first_query unusable for
-strategy comparison. Source: `compare_effectiveness.py` (reads canonical workstation
-`results/…/summary.csv` + frozen OpenWhisk `analysis/normalized/…_pairs.csv`, standalone
-only). Per-cell table: `effectiveness_ow_vs_workstation.csv`; per-cell workstation
-provenance: `ws_provenance.csv`.
+strategy comparison.
 
-**Coverage.** **49/49 comparable cells resolved** (YC 10, YCu 10, YCh01 10, C 10,
-C_hit 9), completing the workstation-coverage matrix (the earlier 20 + 29 added by the
-`portability_ext` campaign). The intersection is computed **mechanically** as
-{OW standalone cells} ∩ {the same cell measured on the workstation from its per-cell
-canonical source}; it is not hard-coded to a target. 4 OpenWhisk cells
+**Frozen input (paper-facing).** This verdict is computed over the **revised** frozen
+table `effectiveness_ow_vs_workstation_revised_freeze.csv` — the single authoritative
+paper-facing input. Seven of the 55 cells carry their targeted, independently rebuilt,
+**exactly position-balanced** replication estimates (five from the sixth campaign
+`portability_outlier_replication`, two from the seventh `portability_ych01_followup`);
+the other 48 are byte-carried from the historical freeze. The historical table is
+preserved byte-identically at `effectiveness_ow_vs_workstation_historical_freeze.csv`
+and the supersession record is `effectiveness_freeze_revision.json`. See "Freeze
+revision" below.
+
+**Coverage.** **55 first-query cells** (YC 10, YCu 10, YCh01 10, C 14, C_hit 11) + **10
+libprefetch delivery-order cells = 65 matched (65/65).** 4 OpenWhisk cells
 (YC `2f_top102`, `learned_markov_102`, `leaf_freq_K10`, `leaf_rand_K10`) have no
-workstation head-to-head measurement and are correctly excluded, leaving 49.
+workstation head-to-head measurement and are correctly excluded from the workstation
+coverage. The lp cells are compared separately by delivery order (`lp_delivery_order.csv`)
+and are NOT mixed into the first-query rank correlation.
 
-**Per-cell workstation provenance (deterministic; strict same-batch R).** Every cell's
-strategy value and its no-prefetch baseline come from the SAME file + SAME db group
-(`orig`, matching the OW-pinned orig-layout `test.db`) + SAME seed/fold — asserted
-`same_batch = True` for all 49. Sources: YC/YCu/YCh01 → `native_headtohead{,_YCu,_YCh01}`
-(per-seed); C_hit → `chit_headtohead` (per-seed); C ablation scope
-{2d, 2e_K10, 2f_slru, 2f_top14, 2f_top28, leaf_freq_K10, leaf_rand_K10} →
-`ablation_comp_v2/seed{01..10}` (per-seed); **C/2e_K500 → `unified_v2/matrix` (db=orig,
-tie-break-unchanged main-matrix cell per RESULT_PROVENANCE §4.2/§4.4)**; **C/layers_5 →
-`results/seeds/seed{01..10}` (db=orig, per-seed cross-seed robustness §4.8)**;
-**C/learned_markov_28 → `results/learned_10fold/seed{1..10}` (per-LOSO-fold, model
-trained on the other 9 seeds; a later additive canonical source superseding single-fold
-`baselines_v2` for the learned comparison)**. C is NOT globally sourced from
-ablation_comp_v2.
+## Result (recomputed from scratch over the revised freeze)
 
-## Result
+- **Strong strategies port.** Of the **41** cells strongly effective on the workstation
+  (R_ws ≥ 0.30), **all 41 are also effective on OpenWhisk (41/41).** Under the historical
+  freeze three of these read "harmful" on OpenWhisk (C/2d, C/layers_92, C_hit/2e_K40);
+  under exactly position-balanced replication all three are positive, so no strongly
+  workstation-effective strategy is harmful on OpenWhisk. `2f_slru` sits at ~0.90 on both
+  platforms in every workload.
+- **Rank correlation (Spearman, R_ws vs R_ow):** ALL 55 cells ρ = **0.76**;
+  high-confidence cells (46, excluding n≤3 / fully position-imbalanced) ρ = **0.79**;
+  high-confidence **and non-position-sensitive** cells (42) ρ = **0.81**;
+  per-workload YC 0.77, YCu 0.87, YCh01 0.82, C 0.70. **C_hit ρ = 0.25 is a
+  range-restriction artifact**: all 11 C_hit cells are effective on both platforms
+  (11/11 direction agreement), so there is almost no rank spread to correlate.
+- **Direction agreement:** 46/55 cells agree on category (effective / neutral / harmful,
+  ±10% band); 37/46 high-confidence; 34/42 high-confidence-and-non-position-sensitive.
+- **Median |R_OW − R_WS| = 0.112.**
 
-- **Strong strategies port.** Of the **35** cells strongly effective on the workstation
-  (R_ws ≥ 0.30), **34 are also effective on OpenWhisk.** The one exception is **C / 2d**,
-  a 3-pair static cell run fully position-imbalanced (0/3 target-first), whose OpenWhisk
-  "harmful" reading is the standalone order artifact, not a regression (flagged
-  `low_conf`). `2f_slru` sits at ~0.90 on both platforms in every workload.
-- **Rank correlation (Spearman, R_ws vs R_ow):** ALL 49 cells ρ = **0.69**;
-  high-confidence cells (38, excluding position-confounded / n≤3) ρ = **0.78**;
-  per-workload YC 0.77, YCu 0.87, YCh01 0.66, C 0.76. **C_hit ρ = 0.13 is a
-  range-restriction artifact**: all 9 C_hit cells are effective on both platforms
-  (9/9 direction agreement), so there is almost no rank spread to correlate.
-- **Direction agreement:** 38/49 cells agree on category (effective / neutral / harmful,
-  ±10% band); 31/38 high-confidence cells.
-- **Median |R_OW − R_WS| = 0.115.**
+## The 9 disagreements (only one is OpenWhisk-negative, and it is workstation-neutral)
 
-## The 11 disagreements (none is a strong-strategy portability failure)
-
-Five are **WS-effective → OW-not-effective** (the claim-relevant direction): four are
-*moderate* workstation cells (R_ws ≈ 0.21) that fall just under the OW ±10% band —
-`YCu/learned_markov_28` (0.22→0.08), `YCh01/2f_top14` (0.21→−0.02),
-`YCh01/learned_markov_14` (0.21→0.07), `C/leaf_freq_K10` (0.21→0.08); the smallest-budget
-N=14 variants are the ones that thin out on OpenWhisk. The fifth is the
-position-confounded `C/2d` above.
+Three are **WS-effective → OW-neutral** (the claim-relevant direction): all are *moderate*
+workstation cells (R_ws ≈ 0.21) that fall just under the OW ±10% band —
+`YCu/learned_markov_28` (0.22→0.08), `YCh01/learned_markov_14` (0.21→0.07),
+`C/leaf_freq_K10` (0.21→0.08); the smallest-budget N=14 / leaf-frequency variants are the
+ones that thin out on OpenWhisk. **None is a strong (R_ws ≥ 0.30) strategy.**
 
 Five are **WS-neutral → OW-effective** (OpenWhisk shows *more* benefit, not a failure of
 the "effective ports" claim): `YC/layers_5`, `YCu/layers_5`, `YCu/learned_markov_14`,
-`YCh01/layers_5`, `C/leaf_rand_K10`. One is **WS-neutral → OW-harmful**: `C/layers_5`
-(0.03→−0.71), again a 3-pair static cell run 0/3 position-imbalanced (`low_conf`).
+`C/layers_5`, `C/leaf_rand_K10`.
 
-Category agreement is threshold-sensitive for the near-zero strategies (`layers_5`,
+One is **WS-neutral → OW-harmful**: `YCh01/layers_5` (R_ws ≈ 0.025 → R_ow −0.596). This is
+the **only** OpenWhisk-negative cell in the table. Its 36-pair, exactly position-balanced
+seventh-campaign replication is reproducibly negative (both position subsets negative:
+baseline-first −0.742, target-first −0.447). Because R_ws ≈ +0.025 is approximately
+neutral, this is an OpenWhisk-negative result for a **workstation-neutral** strategy — NOT
+the failure of a strongly workstation-effective strategy.
+
+**Position-sensitive cells (4).** `C/layers_92`, `C/2d`, `YCu/layers_5`, `YCh01/2f_top14`
+carry a positive *balanced aggregate* whose baseline-first and target-first subsets
+disagree in sign. Their aggregate is a **descriptive balanced-batch estimate**, not a
+clean position-independent causal effect; the dependence is a pair-position / short-lived
+execution-state / execution-storage-state effect (not attributed to page-cache carryover).
+They are flagged `position_sensitive` and are excluded from the ρ = 0.81
+high-confidence-and-non-position-sensitive subset.
+
+Category agreement remains threshold-sensitive for the near-zero strategies (`layers_5`,
 `leaf_freq_K10`, `leaf_rand_K10` sit on the band). The threshold-free rank correlation
-(0.78 high-conf) is the more robust statistic.
+(0.81 on clean cells) is the more robust statistic.
+
+## Freeze revision (provenance)
+
+The revised freeze supersedes exactly seven cells (precedence seventh > sixth > historical,
+applied per cell only where a later campaign targeted that cell). Nothing else moved.
+
+| cell | historical R_ow | revised R_ow | campaign | pairs / balance | position-sensitive |
+|---|---|---|---|---|---|
+| C/layers_92 | −0.7363 | +0.3832 | sixth | 20 / 10-10 | yes |
+| C/2d | −0.6360 | +0.4316 | sixth | 20 / 10-10 | yes |
+| C_hit/2e_K40 | −0.4844 | +0.4865 | sixth | 18 / 9-9 | no |
+| C/layers_5 | −0.7129 | +0.4185 | sixth | 20 / 10-10 | no |
+| YCu/layers_5 | +0.3760 | +0.2900 | sixth | 20 / 10-10 | yes |
+| YCh01/layers_5 | +0.3766 | −0.5961 | seventh | 36 / 18-18 | no |
+| YCh01/2f_top14 | −0.0190 | +0.2815 | seventh | 36 / 18-18 | yes |
+
+Targeted, independently rebuilt, exactly position-balanced replications were run because
+these initial cells had low sample counts or pair-position imbalance; the campaigns and
+per-cell precedence rules were pre-registered before the evidence was inspected. Under
+balanced replication the several WS-positive / OW-negative sign reversals disappeared;
+YCh01/layers_5 remained reproducibly OpenWhisk-negative but is workstation-neutral.
 
 ## Conclusion (bounded, descriptive)
 
-Across the full 49-cell workstation-coverage matrix, **strategy effectiveness is
-consistent between the workstation and OpenWhisk in the descriptive sense that matters
-for the thesis**: strong strategies stay strong (34/35), ranking is preserved
-(ρ ≈ 0.78 on clean cells), and every sign flip is either a near-zero strategy at the
-neutral boundary, a smallest-budget N=14 variant, or a position-confounded low-n static
-cell. This is a cross-platform **consistency** result, NOT a claim of equal absolute
-latency, equal effect size, causal equivalence, or hardware-independent speedup.
+Across the full 55-cell first-query matrix, **strategy effectiveness is consistent between
+the workstation and OpenWhisk in the descriptive sense that matters for the thesis**:
+strong strategies stay strong (41/41), ranking is preserved (ρ ≈ 0.81 on clean cells), and
+the single OpenWhisk-negative cell is a workstation-neutral strategy, not a strong one.
+This is a cross-platform **consistency** result, NOT a claim of equal absolute latency,
+equal effect size, causal equivalence, or hardware-independent speedup.
 
-*Scope: standalone first_query only; relative reductions only; not a headline
-warm-latency claim; the four OpenWhisk campaigns (3600 + 468 + 852) serve distinct
-roles and are never pooled; no OpenWhisk evidence was rerun or altered.*
+*Scope: standalone first_query only; relative reductions only; not a headline warm-latency
+claim; the seven OpenWhisk campaigns (3600 + 468 + 852 + 456 + 236 + 144) serve distinct
+roles and are **never pooled** (5756 invocations / 2878 pairs is unpooled accounting, not
+one estimator); the revision selects which audited per-cell estimate is used for 7 cells
+and does not change coverage (65/65); no OpenWhisk evidence was rerun or altered.*

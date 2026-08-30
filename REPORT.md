@@ -1058,17 +1058,21 @@ campaign（portability_full_closure，run-config `a5be8f15…`、live fingerprin
 相對量可跨機比較，絕對微秒不可），且僅用 standalone handle（warm 有 position/order 效應）。65 個
 matched cell 中，**55 個以首次查詢降幅比較**，另 **10 個 libprefetch(lp) cell 以「交付順序」(deliver_us)
 另表比較**——因為 lp_sorted 與 lp_shuf 交付同一組 page、差別只在順序，交付後首次查詢對兩臂皆為 warm。
-**結果：workstation 上強效（R≥0.30）的 41 個 cell，有 38 個在 OpenWhisk 同樣有效**；Spearman 秩相關
-ρ≈0.67（全）/ 0.75（高信心）、方向一致 42/55、|R 差| 中位數 0.114。3 個例外都如實標示：C/2d 與
-C/layers_92 是低信心 single-instance 的符號翻轉，C_hit/2e_K40 是 position-imbalanced(2/7) 的 cell。**這 55
-格凍結表為 primary、其歷史 R_ow 值保持不變、不被任何後續批次覆寫。** 另有一個獨立的**複現 campaign**
-（portability_outlier_replication，evidence `b684df8860b1…`、236 invocation / 118 pair）把上述六個 outlier
-cell 在 **10 baseline-first / 10 target-first 的嚴格位置平衡**下重跑，僅作**穩健性 / 敏感度檢查、與 primary
-並列（side-by-side，不取代凍結值）**：三個符號翻轉在平衡下皆翻回正向（C/2d +0.432、C/layers_92 +0.383、
-C_hit/2e_K40 +0.487），顯示原始 OpenWhisk 負值受**批次內位置 / 短暫執行狀態（execution / storage state）**
-影響、而非真實反向。此複現值只存於 `analysis/outlier_replication/`（原值與複現值同表並列），**不併入
-5376/2688 的單一效果估計**（含此檔僅作 unpooled 記帳 5612/2806）；假設性將六格替換後 ρ≈0.76 / 0.81、方向
-45/55，已明確標為 **sensitivity-only**、非歷史 primary。
+**結果：workstation 上強效（R≥0.30）的 41 個 cell，全部 41 個在 OpenWhisk 同樣有效（41/41）**；Spearman
+秩相關 ρ≈0.76（全 55）/ 0.79（高信心）/ 0.81（高信心且非位置敏感）、方向一致 46/55、|R 差| 中位數 0.112。
+**唯一在 OpenWhisk 讀作有害的 cell 是 YCh01/layers_5**（R_ws≈+0.025 中性 → R_ow −0.596）——是一個
+workstation 上本就中性的策略、不是強效策略失效；其餘 8 個不一致都落在 ±10% 中性邊界附近。
+
+**這 55 格凍結比較表為「修訂後凍結」(revised freeze)，是唯一對外（paper-facing）的凍結來源。** 其中 7 格
+採用針對性、獨立重建、**嚴格位置平衡**的複現估計（第六 campaign 5 格、第七 campaign 2 格），其餘 48 格逐位元
+沿用歷史值。**歷史凍結表逐位元完整保存**於 `effectiveness_ow_vs_workstation_historical_freeze.csv`、逐格取代
+紀錄（含 old/new R_ow、campaign、pair 數、位置平衡、SHA256）於 `effectiveness_freeze_revision.json`；修訂僅
+改變這 7 格採用「哪一個已稽核估計」、不改變覆蓋（仍 65/65）。三個原本在 OpenWhisk 讀作 harmful 的強效 cell
+（C/2d、C/layers_92、C_hit/2e_K40）在平衡複現下皆翻回正向（+0.432 / +0.383 / +0.487），故無任何強效策略在
+OpenWhisk 有害。其中 4 格（C/layers_92、C/2d、YCu/layers_5、YCh01/2f_top14）標為 **position-sensitive**：其平衡
+總計為正、但兩個位置子集符號不一致，屬**描述性平衡批次估計**、非乾淨的位置無關因果效應（歸因於 pair-position /
+短暫執行—儲存狀態，**不**歸因 page-cache carryover），已排除於 ρ≈0.81 的乾淨子集之外。七個 OpenWhisk campaign
+各司其職、**永不 pool**（5756 invocation / 2878 pair 為 unpooled 記帳、非單一估計）。
 lp 那側：shuffle 交付在**兩個平台**都比 sorted 慢（order_ratio 均 >1），而交付後首次查詢維持在數微秒內
 （對照組），顯示交付順序這個機制與其成本結構同樣可攜。這是一個**描述性的跨平台一致性**結果——**不**
 主張絕對延遲相等、效果量相等、因果等價、或硬體無關的加速倍率。逐 cell 表與稽核見
