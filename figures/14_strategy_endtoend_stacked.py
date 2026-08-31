@@ -72,7 +72,7 @@ for ax, wl in zip(axes, WORKLOADS):
            label='first-query (SQL latency)')
     ax.bar(x, dels, bottom=fqs, color='#dc2626', alpha=0.95, edgecolor='black',
            linewidth=0.5, label='deliver (prefetch syscalls)')
-    ax.bar(x, opens, bottom=warm, color='#fbbf24', alpha=0.95, edgecolor='black',
+    ax.bar(x, opens, bottom=warm, color='#fde047', alpha=0.7, edgecolor='black',
            linewidth=0.5, label='cold open(db) — saved if integrated')
     ax.axhline(baseline, color='#9ca3af', ls='--', lw=1.0, alpha=0.7, zorder=0)
 
