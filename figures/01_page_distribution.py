@@ -1,6 +1,6 @@
 """Figure 1: Interior-page placement across the 3 layouts.
 
-Story: 1a (orig) scatters interior pages across all 103 MB → layers_N
+Story: 1a (orig) scatters interior pages across all ~103 MiB → layers_N
 prefetch must do many small reads. 1b (VACUUM) packs them mid-file. 1c
 (type-aware) packs all 92 interior pages into the first ~400 KB —
 making layers_92 collapse from 92 syscalls to 1 contiguous read.
@@ -15,7 +15,7 @@ LAYOUTS = [
     ("vacuum",     ROOT / "pipeline/preparation/layout_rewriter/runs/classify_vacuum.csv",  "#1f77b4"),
     ("type-aware", ROOT / "pipeline/preparation/layout_rewriter/runs/classify_after.csv",   "#d62728"),
 ]
-DB_SIZE_MB = 103
+DB_SIZE_MIB = 103  # 102.9 MiB (107,851,776 bytes) rounded for axis scaling
 
 def load_interior(p):
     out = []
@@ -30,17 +30,17 @@ for ax, (name, path, color) in zip(axes, LAYOUTS):
     pos = load_interior(path)
     ax.eventplot(pos, lineoffsets=0, linelengths=0.8, linewidths=0.8, colors=color)
     ax.set_yticks([])
-    ax.set_xlim(-1, DB_SIZE_MB + 1)
+    ax.set_xlim(-1, DB_SIZE_MIB + 1)
     ax.set_ylim(-0.6, 0.6)
 
     n = len(pos)
     span = max(pos) - min(pos) if pos else 0
     ax.set_title(
         f"{name} · {n} interior pages · "
-        f"span = {span:.1f} MB ({span/DB_SIZE_MB*100:.0f}% of file)",
+        f"span = {span:.1f} MiB ({span/DB_SIZE_MIB*100:.0f}% of file)",
         loc="left", fontsize=10, color=color, fontweight="bold", pad=4)
     ax.grid(False)
 
-axes[-1].set_xlabel("file offset (MB) · DB size = 103 MB")
+axes[-1].set_xlabel("file offset (MiB) · DB size ≈ 103 MiB")
 fig.tight_layout()
 save(fig, "01_page_distribution")
