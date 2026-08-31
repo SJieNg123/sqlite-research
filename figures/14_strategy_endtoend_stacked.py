@@ -8,9 +8,7 @@ different batch (results/tiebreak_fix) and are reported separately in the
 paper's Table tab:corrected-arms; they are deliberately NOT stacked here.
 
 Stack per strategy (layout orig, arm async, medians):
-  first_query (bottom) + deliver + cold open(db) (top).
-  warm-process / integrated e2e = first_query + deliver          (bar minus grey)
-  standalone-warmer e2e         = first_query + deliver + open    (full bar)
+  first_query (bottom) + deliver (top) = warm-process / integrated e2e.
 Green/red label = warm-process e2e vs the same-batch baseline.
 """
 import csv, sys
@@ -59,39 +57,36 @@ x = np.arange(len(ARMS))
 
 print("Figure 14 — plotted cells (unified_v2 absolute stack):")
 for ax, wl in zip(axes, WORKLOADS):
-    fqs, dels, opens = [], [], []
+    fqs, dels = [], []
     for s in ARMS:
-        fq, dl, op = get(wl, s)
-        fqs.append(fq); dels.append(dl); opens.append(op)
-    warm       = [f + d for f, d in zip(fqs, dels)]
-    standalone = [w + o for w, o in zip(warm, opens)]
-    baseline   = fqs[0]
+        fq, dl, _op = get(wl, s)
+        fqs.append(fq); dels.append(dl)
+    warm     = [f + d for f, d in zip(fqs, dels)]
+    baseline = fqs[0]
     colors = [STRATEGY_COLORS.get(s, '#3b82f6') for s in ARMS]
 
     ax.bar(x, fqs, color=colors, alpha=0.9, edgecolor='black', linewidth=0.5,
            label='first-query (SQL latency)')
     ax.bar(x, dels, bottom=fqs, color='#dc2626', alpha=0.95, edgecolor='black',
            linewidth=0.5, label='deliver (prefetch syscalls)')
-    ax.bar(x, opens, bottom=warm, color='#fde047', alpha=0.7, edgecolor='black',
-           linewidth=0.5, label='cold open(db) — saved if integrated')
     ax.axhline(baseline, color='#9ca3af', ls='--', lw=1.0, alpha=0.7, zorder=0)
 
-    for xi, wv, sv, s in zip(x, warm, standalone, ARMS):
+    for xi, wv, s in zip(x, warm, ARMS):
         if s == 'baseline':
             continue
         wi = (wv - baseline) / baseline * 100.0
         col = '#15803d' if wi < 0 else '#dc2626'
         sign = '+' if wi >= 0 else ''
         print(f"  {wl:1s} {s:9s} fq={fqs[ARMS.index(s)]:7.1f} deliver={dels[ARMS.index(s)]:7.1f}"
-              f" open={opens[ARMS.index(s)]:6.1f} warm={wv:7.1f} ({sign}{wi:.0f}%)")
-        ax.text(xi, sv * 1.07, f'{sign}{wi:.0f}%', ha='center', va='bottom',
+              f" warm={wv:7.1f} ({sign}{wi:.0f}%)")
+        ax.text(xi, wv * 1.07, f'{sign}{wi:.0f}%', ha='center', va='bottom',
                 fontsize=8.5, fontweight='bold', color=col)
 
     ax.set_xticks(x)
     ax.set_xticklabels([ARM_LABEL[s] for s in ARMS], fontsize=9, rotation=25, ha='right')
     ax.set_title(WL_TITLE[wl], fontsize=11)
     ax.set_yscale('log')
-    ax.set_ylim(80, max(standalone) * 4.0)
+    ax.set_ylim(80, max(warm) * 3.0)
     ax.grid(axis='y', alpha=0.25, which='both')
     ax.set_axisbelow(True)
 
