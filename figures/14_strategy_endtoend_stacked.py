@@ -1,4 +1,4 @@
-"""Figure 14: End-to-end cold-start decomposition under two deployment models.
+"""Figure 14: Warm-process end-to-end cold-start decomposition.
 
 Canonical (Phase 3). Stacked absolute microseconds require a single
 machine-state batch, so this chart plots ONLY the tie-break-unaffected
@@ -66,9 +66,9 @@ for ax, wl in zip(axes, WORKLOADS):
     colors = [STRATEGY_COLORS.get(s, '#3b82f6') for s in ARMS]
 
     ax.bar(x, fqs, color=colors, alpha=0.9, edgecolor='black', linewidth=0.5,
-           label='first-query (SQL latency)')
+           label='First query')
     ax.bar(x, dels, bottom=fqs, color='#dc2626', alpha=0.95, edgecolor='black',
-           linewidth=0.5, label='deliver (prefetch syscalls)')
+           linewidth=0.5, label='Deliver')
     ax.axhline(baseline, color='#9ca3af', ls='--', lw=1.0, alpha=0.7, zorder=0)
 
     for xi, wv, s in zip(x, warm, ARMS):
@@ -90,7 +90,7 @@ for ax, wl in zip(axes, WORKLOADS):
     ax.grid(axis='y', alpha=0.25, which='both')
     ax.set_axisbelow(True)
 
-axes[0].set_ylabel('end-to-end cold start (µs, log scale)', fontsize=10)
+axes[0].set_ylabel('Warm-process end-to-end latency (µs, log scale)', fontsize=10)
 axes[0].legend(loc='upper left', fontsize=8)
 fig.tight_layout()
 save(fig, '14_strategy_endtoend_stacked')
