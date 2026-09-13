@@ -12,12 +12,13 @@ paper submodule carries a copy under `paper/figures/`. Provenance authority:
 
 | Figure | Paper label | Script | Output | Input source | Cell scope | Metric | Abs/rel | Status |
 |---|---|---|---|---|---|---|---|---|
-| 18 | `fig:capability` | `figures/18_capability_matrix.py` | `figures/18_capability_matrix.png` | none (hand-coded capability matrix) | prior-art positioning | qualitative ✓/◐/✗ | n/a | current-valid (byte-identical to committed) |
+| 18 | `fig:capability` | `figures/18_capability_matrix.py` | `figures/18_capability_matrix.png` | none (hand-coded capability matrix) | prior-art positioning | qualitative ✓/◐/✗ | n/a | **no longer included by `paper/main.tex`** (PNG retained, byte-identical) |
 | 1 | `fig:layout-distribution` | `figures/01_page_distribution.py` | `figures/01_page_distribution.png` | `pipeline/preparation/layout_rewriter/runs/classify_{before,vacuum,after}.csv` | static page-type placement, 3 layouts | interior-page offsets | absolute (structural, batch-independent) | current-valid (byte-identical) |
 | 13 | `fig:firstq-bars` | `figures/13_strategy_firstq_bars.py` | `figures/13_strategy_firstq_bars.png` | `results/unified_v2/matrix/summary.csv` + `results/tiebreak_fix/master_summary.csv` | A/B/C × orig × {layers_5,2d,2e_K10,2e_K500,2f_slru}, async | **paired first-query reduction %** vs same-batch baseline | **relative** (per-cell same-batch) | **regenerated** (was v1 `results/main`) |
 | 14 | `fig:e2e-stacked` | `figures/14_strategy_endtoend_stacked.py` | `figures/14_strategy_endtoend_stacked.png` | `results/unified_v2/matrix/summary.csv` | A/B/C × orig × {baseline,layers_5,2d,2f_slru}, async | first_query + deliver + open stack; warm % vs same-batch baseline | **absolute (single batch)** | **regenerated** (was v1 `results/main`) |
 | 17 | `fig:ablation` | `figures/17_lever_ablation.py` | `figures/17_lever_ablation.png` | `results/ablation_comp_v2/uncertainty.csv` **only** | **C_mixed × orig** × {2d,leaf_rand_K10,leaf_freq_K10,2e_K10} | Δ% vs same-batch baseline (first-query and e2e_warm), 10-seed bootstrap 95% CI | **relative** | **corrected same-batch ablation** (Phase 3b: scoped to C_mixed; no longer reads `results/ablation`) |
 | 16 | `fig:ram` | `figures/16_ram_pressure_sweep.py` | `figures/16_ram_pressure_sweep.png` | `results/ram_pressure/cap_*/summary.csv` | RAM-pressure sweep, seed 1, orig | delivery % + first-query vs cgroup cap | absolute (single RAM-axis batch) | current-valid (byte-identical) |
+| 19 | `fig:portability` | `figures/19_openwhisk_effectiveness_bars.py` | `figures/19_openwhisk_effectiveness_bars.png` | `deployment/openwhisk/analysis/comparison/effectiveness_ow_vs_workstation_revised_freeze.csv` | 55 non-lp strategy×workload cells × orig; YC/YCu/YCh01/C/C_hit; workstation vs OpenWhisk standalone | relative first-query reduction $R$ vs same-platform baseline | **relative** (absolute µs not cross-platform comparable) | added 2026-09-01 (reads the revised freeze) |
 
 ## Per-cell canonical source rule (Figures 13 & 14)
 
@@ -54,13 +55,16 @@ Both 13 and 14 scripts: read canonical CSVs directly, `sys.exit` on a missing or
 duplicated source row, print the selected `(source, baseline, value)` for every
 plotted cell, use deterministic strategy/workload ordering, and hard-code no bar
 heights. Determinism verified: two consecutive runs produce byte-identical PNGs
-(md5 `ddcbdb00…` for 13, `bda7947e…` for 14 after the 2026-07-23 workload
-display-name relabel; the pre-relabel values were `1090edc1…` and `85345090…`).
+(2026-07-23 workload display-name relabel: md5 `ddcbdb00…` for 13, `bda7947e…`
+for 14; the pre-relabel values were `1090edc1…` and `85345090…`. Both were
+superseded by the 2026-08-30 strategy display-name relabel — current md5s are in
+the 2026-09-13 checksum table below).
 The 2026-07-29 terminology cleanup did **not** touch any figure's rendered
 output: the paper-visible scripts already resolve titles through
-`workload_display_name()`, so all six included PNGs (01, 13, 14, 16, 17, 18)
-remain byte-identical between `figures/out/` and `paper/figures/` at the md5s
-above. Figure 17 gained a one-line provenance comment (clarifying that its `C`
+`workload_display_name()`, so the included PNGs remained byte-identical between
+`figures/out/` and `paper/figures/` at the md5s above. (The paper-visible set has
+since changed: 18 was dropped and 19 added — see the 2026-09-13 table.)
+Figure 17 gained a one-line provenance comment (clarifying that its `C`
 CSV filter is legacy `C_mixed` == Tail-Mixed); comments do not affect the PNG.
 
 ## Selected plotted cells (Phase-3 regeneration)
@@ -123,12 +127,12 @@ byte-identical to its `figures/out/*.png` root output.
 
 | Fig | Script | root/paper md5 | dimensions | status |
 |---|---|---|---|---|
-| 1  | `01_page_distribution.py`        | `8a9abac422…` | 1035×703  | current-valid |
-| 13 | `13_strategy_firstq_bars.py`     | `ddcbdb00bc…` | 1935×643  | regenerated (workload display-name relabel, 2026-07-23) |
-| 14 | `14_strategy_endtoend_stacked.py`| `bda7947e7c…` | 1783×764  | regenerated (workload display-name relabel, 2026-07-23) |
-| 16 | `16_ram_pressure_sweep.py`       | `2c097b23ec…` | 1656×1248 | regenerated (workload display-name relabel, 2026-07-23; seed-1 RAM axis) |
-| 17 | `17_lever_ablation.py`           | `1949efebc2…` | 1485×614  | regenerated (workload display-name relabel, 2026-07-23; Tail-Mixed-only, ablation_comp_v2) |
-| 18 | `18_capability_matrix.py`        | `b81d89226a…` | 1198×697  | current-valid (qualitative) |
+| 1  | `01_page_distribution.py`        | `8a9abac422…` | 1035×703  | superseded by 2026-09-13 row below |
+| 13 | `13_strategy_firstq_bars.py`     | `ddcbdb00bc…` | 1935×643  | superseded by 2026-09-13 row below |
+| 14 | `14_strategy_endtoend_stacked.py`| `bda7947e7c…` | 1783×764  | superseded by 2026-09-13 row below |
+| 16 | `16_ram_pressure_sweep.py`       | `2c097b23ec…` | 1656×1248 | superseded by 2026-09-13 row below |
+| 17 | `17_lever_ablation.py`           | `1949efebc2…` | 1485×614  | superseded by 2026-09-13 row below |
+| 18 | `18_capability_matrix.py`        | `b81d89226a…` | 1198×697  | current-valid (qualitative); no longer included by `paper/main.tex` |
 
 Env: `/home/u03/.cache/coldstart-venv/bin/python` (matplotlib 3.10.9, numpy 2.4.6).
 No paper-visible figure script reads a legacy/non-canonical result source; the
@@ -142,3 +146,41 @@ B → Uniform-100K, C → Tail-Mixed. The CSV reads still key on the legacy IDs
 stored in the immutable results files (`workload=A/B/C`), so only the rendered
 labels changed; bar values, CI whiskers, ordering, and data sources are
 untouched. This is a pure-label regeneration, hence the new md5s above.
+
+## Re-verification — current checksums (2026-09-13)
+
+The Phase-4 table above is the 2026-07-12/07-23 freeze and is **stale**: the
+2026-08-30 pass relabelled strategies to paper-facing names (`Skel-5`, `Skel`,
+`Skel+10`, `Skel+500`, `Dump`), Figure 14 additionally dropped its cold-open(db)
+segment (2026-08-31), Figure 16 was re-plotted, Figure 18 left `paper/main.tex`,
+and Figure 19 (OpenWhisk portability) was added (2026-09-01). Current state:
+
+| Fig | Script | root/paper md5 | dimensions | re-run byte-identical? |
+|---|---|---|---|---|
+| 1  | `01_page_distribution.py`             | `0e8d229ced…` | 1035×705  | no — 2 px canvas jitter, content identical |
+| 13 | `13_strategy_firstq_bars.py`          | `0c13cc96d1…` | 1935×643  | yes |
+| 14 | `14_strategy_endtoend_stacked.py`     | `208a5e92a9…` | 1785×763  | no — 2 px canvas jitter, content identical |
+| 16 | `16_ram_pressure_sweep.py`            | `6adc990ca9…` | 1638×1248 | yes |
+| 17 | `17_lever_ablation.py`                | `5c5365cd7b…` | 1485×614  | yes |
+| 19 | `19_openwhisk_effectiveness_bars.py`  | `55f935f02a…` | 2534×787  | yes |
+| 18 | `18_capability_matrix.py`             | `b81d89226a…` | 1198×697  | yes — but **not referenced** by `paper/main.tex` |
+
+Every `paper/figures/*.png` is byte-identical to its `figures/out/*.png` root
+output. Re-run in the canonical env (matplotlib 3.10.9, numpy 2.4.6) reproduces
+13/16/17/18/19 exactly; **1 and 14 differ by 2 px of canvas size only** — those
+two committed PNGs were generated in a session with slightly different font
+metrics (2026-08-30 22:25 and 2026-08-31 08:00), their plotted values, labels and
+data sources are unchanged, and their inputs have not moved (Figure 1's
+`classify_*.csv` are from 2026-05-23). Not a data drift; regenerate them if a
+byte-exact artifact check is required.
+
+Figure 19 source: `deployment/openwhisk/analysis/comparison/effectiveness_ow_vs_workstation_revised_freeze.csv`
+(paper label `fig:portability`; 55 non-lp strategy×workload cells at orig across
+YC/YCu/YCh01/C/C_hit; metric = relative first-query reduction R vs same-platform
+baseline, so the two platforms are comparable despite different absolute µs).
+
+Figure 13 was re-verified cell-by-cell on 2026-09-13: its canonical sources
+(`results/unified_v2/matrix/summary.csv`, `results/tiebreak_fix/master_summary.csv`)
+are unchanged since 2026-07, no post-July batch supersedes its cells per
+`results/RESULT_PROVENANCE.md` §4.2, and the script reproduces the committed PNG
+byte-for-byte. **No update needed.**
