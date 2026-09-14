@@ -23,15 +23,17 @@ from collections import defaultdict
 
 import numpy as np
 
-from plot_utils import ROOT, plt, save, strat_display
+from plot_utils import ROOT, plt, save, strat_display, workload_display_name
 
 CSV = ROOT / "deployment/openwhisk/analysis/comparison/effectiveness_ow_vs_workstation_revised_freeze.csv"
 
 WL_ORDER = ["YC", "YCu", "YCh01", "C", "C_hit"]
-# Panel titles use the paper's display names (main.tex Table tab:portability),
-# not the CSV workload codes. CSV keying below stays on the raw codes.
-WL_DISPLAY = {"YC": "Scattered-Zipf", "YCu": "Uniform-100K",
-              "YCh01": "Hashed-Hotspot", "C": "Tail-Mixed", "C_hit": "Tail-Hit"}
+# Panel titles resolve through the canonical registry (config/workloads.json), which
+# consumers are required to use instead of hard-coding names. The previous hard-coded
+# map labelled YC/YCu "Scattered-Zipf"/"Uniform-100K" -- the registry display names of
+# the *controlled* workloads A/B that Figures 13/14 plot -- so one name meant two
+# different workloads across the paper. The registry records YC/YCu as external-validity
+# counterparts of A/B, explicitly "NOT equated". CSV keying stays on the raw codes.
 WS_COLOR = "#1f77b4"   # blue   = workstation
 OW_COLOR = "#ff7f0e"   # orange = OpenWhisk
 WIDTH = 0.40
@@ -63,7 +65,7 @@ def main():
         ax.axhline(0.0, color="#333333", lw=1.1, zorder=4)
         ax.axhline(0.10, color="#cccccc", lw=0.8, ls=":", zorder=2)
 
-        ax.set_title(WL_DISPLAY[wl], fontsize=11)
+        ax.set_title(workload_display_name(wl), fontsize=11)
         ax.set_xticks(x)
         labels = [strat_display(r["strategy"]) + ("*" if str(r.get("position_sensitive", "")).strip().lower() == "true" else "")
                   for r in cells]

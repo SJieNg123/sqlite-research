@@ -1,25 +1,33 @@
 """Figure 14: Warm-process end-to-end cold-start decomposition.
 
-Canonical (Phase 3). Stacked absolute microseconds require a single
-machine-state batch, so this chart plots ONLY the tie-break-unaffected
-strategies (baseline, layers_5, 2d, 2f_slru) from results/unified_v2. The
-tie-break-corrected hotspot arms (A 2e_K500, C_mixed 2e_K10) belong to a
-different batch (results/tiebreak_fix) and are reported separately in the
-paper's Table tab:corrected-arms; they are deliberately NOT stacked here.
+Single canonical batch: results/unified_v3 (2026-09-14). Stacked absolute
+microseconds require one machine state, which previously forced this chart to
+drop the frequency-ranked 2e_K* arms (their corrected values lived in the
+separate results/tiebreak_fix batch). unified_v3 measured every arm -- including
+2e_K10/2e_K500 under the corrected (-count, pageno) tie-break -- in ONE run, so
+the strategy set here now matches Figure 13.
 
 Stack per strategy (layout orig, arm async, medians):
   first_query (bottom) + deliver (top) = warm-process / integrated e2e.
 Green/red label = warm-process e2e vs the same-batch baseline.
+
+Note: the stack height is median(first_query) + median(deliver), i.e. the bar is
+the sum of the two plotted medians. The CSV also carries e2e_warm_median (the
+median of the per-repetition sums), which the paper's tables use; the two differ
+by <0.4% here and every printed label is unchanged, but they are not the same
+estimator.
 """
 import csv, sys
 from plot_utils import ROOT, save, STRATEGY_COLORS, workload_display_name
 import matplotlib.pyplot as plt
 import numpy as np
 
-UNIFIED = ROOT / "results/unified_v2/matrix/summary.csv"
+UNIFIED = ROOT / "results/unified_v3/matrix/summary.csv"
 
-ARMS      = ['baseline', 'layers_5', '2d', '2f_slru']   # tie-break-unaffected only
-ARM_LABEL = {'baseline': 'baseline', 'layers_5': 'Skel-5', '2d': 'Skel', '2f_slru': 'Dump'}
+# Aligned with Figure 13's strategy set (plus the baseline reference bar).
+ARMS      = ['baseline', 'layers_5', '2d', '2e_K10', '2e_K500', '2f_slru']
+ARM_LABEL = {'baseline': 'baseline', 'layers_5': 'Skel-5', '2d': 'Skel',
+             '2e_K10': 'Skel+10', '2e_K500': 'Skel+500', '2f_slru': 'Dump'}
 # CSV keys stay legacy (A/B/C); titles resolve to canonical display names.
 WORKLOADS = ['A', 'B', 'C']
 WL_TITLE  = {'A': workload_display_name('A'),
@@ -55,7 +63,7 @@ def get(workload, strategy):
 fig, axes = plt.subplots(1, 3, figsize=(12, 5.2), sharey=False)
 x = np.arange(len(ARMS))
 
-print("Figure 14 — plotted cells (unified_v2 absolute stack):")
+print("Figure 14 — plotted cells (unified_v3 absolute stack):")
 for ax, wl in zip(axes, WORKLOADS):
     fqs, dels = [], []
     for s in ARMS:
