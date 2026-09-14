@@ -50,9 +50,38 @@ class RegistryMapping(unittest.TestCase):
             "YD": "Latest-Aging",
             "YE": "Short-Scan Aging",
             "CHURN": "Mixed-Mutation Churn",
+            # Native-YCSB read configs. Named by the same key-space-size
+            # convention as Uniform-100K so a reader can see they are the
+            # larger, natively generated counterparts -- see
+            # test_native_read_names_do_not_collide_with_controlled.
+            "YC": "Scattered-Zipf-600K",
+            "YCu": "Uniform-600K",
+            "YCh01": "Hotspot-1%-scattered",
         }
         for legacy, disp in expected.items():
             self.assertEqual(workload_display_name(legacy), disp)
+
+    def test_native_read_names_do_not_collide_with_controlled(self):
+        # Regression guard. Figure 19 once displayed YC as "Scattered-Zipf" and
+        # YCu as "Uniform-100K" -- the display names of the CONTROLLED workloads
+        # A and B that Figures 13/14 plot -- so one name meant two different
+        # workloads in the same paper, and the external-validity argument of the
+        # portability section (controlled findings carry over to real YCSB
+        # traces) became unreadable. The registry records these pairs as
+        # counterparts explicitly "NOT equated", so their display names must
+        # stay distinct.
+        for native, controlled in [("YC", "A"), ("YCu", "B"), ("YCh01", "C")]:
+            self.assertNotEqual(
+                workload_display_name(native), workload_display_name(controlled),
+                f"{native} must not display as {controlled}'s name")
+
+    def test_old_native_display_names_still_resolve(self):
+        # Renaming the display must not break lookups that still pass the old
+        # names (docs, manifests, older result filters).
+        self.assertEqual(normalize_workload_id("YCSB-C"), normalize_workload_id("YC"))
+        self.assertEqual(normalize_workload_id("YCSB-Cu"), normalize_workload_id("YCu"))
+        self.assertEqual(
+            normalize_workload_id("YCSB-Ch-hashed-01"), normalize_workload_id("YCh01"))
 
     def test_no_alias_collision(self):
         # Every alias/canonical/display token resolves to exactly one canonical
@@ -120,7 +149,13 @@ class RegistryMapping(unittest.TestCase):
 class NativeYcsbRegistry(unittest.TestCase):
     """Native-YCSB-generated suite: identity + collision guards (freeze rev.2)."""
 
-    CORE = {"YCSB-A", "YCSB-B", "YCSB-C", "YCSB-D", "YCSB-E", "YCSB-F"}
+    # The six official core specs, keyed by canonical_id. Keyed by identity, NOT
+    # by display_name: the display name is presentation and may be reworded for
+    # the paper (native workload C now displays as "Scattered-Zipf-600K"), while
+    # standard_workload is a fact about the spec and must not move with it.
+    CORE = {"native_ycsb_a_read_update", "native_ycsb_b_read_update",
+            "native_ycsb_c_read_zipf", "native_ycsb_d_read_latest",
+            "native_ycsb_e_short_scan", "native_ycsb_f_rmw"}
 
     def test_native_de_never_normalize_to_python(self):
         # The native aging D/E and the Python reconstructions are DISTINCT
@@ -137,16 +172,16 @@ class NativeYcsbRegistry(unittest.TestCase):
         self.assertEqual(workload_metadata("YCSB-D")["category"], "native_ycsb")
 
     def test_standard_workload_flag(self):
-        # standard_workload=true iff the display is one of the six official
-        # core specs YCSB-A..F; YCSB-Cu and hotspot variants are generated
-        # custom configs (false).
+        # standard_workload=true iff the record IS one of the six official core
+        # specs (by canonical_id); the uniform and hotspot variants are
+        # generated custom configs (false).
         native = [r for r in all_records() if r.get("category") == "native_ycsb"]
         self.assertEqual(len(native), 17, "expected 17 native-suite records")
         for r in native:
-            want = r["display_name"] in self.CORE
+            want = r["canonical_id"] in self.CORE
             self.assertEqual(
                 bool(r.get("standard_workload")), want,
-                f"{r['display_name']} standard_workload should be {want}")
+                f"{r['canonical_id']} standard_workload should be {want}")
 
     def test_manifest_canonical_ids_resolve(self):
         # Every canonical_id declared in NATIVE_YCSB_MANIFEST.json must resolve

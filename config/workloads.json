@@ -137,9 +137,10 @@
 ,
     {
       "canonical_id": "native_ycsb_c_read_zipf",
-      "display_name": "YCSB-C",
+      "display_name": "Scattered-Zipf-600K",
       "legacy_aliases": [
-        "YC"
+        "YC",
+        "YCSB-C"
       ],
       "category": "native_ycsb",
       "kind": "measured_read",
@@ -157,9 +158,10 @@
     },
     {
       "canonical_id": "native_ycsb_c_read_uniform",
-      "display_name": "YCSB-Cu",
+      "display_name": "Uniform-600K",
       "legacy_aliases": [
-        "YCu"
+        "YCu",
+        "YCSB-Cu"
       ],
       "category": "native_ycsb",
       "kind": "measured_read",
@@ -177,9 +179,10 @@
     },
     {
       "canonical_id": "native_ycsb_c_hot_hashed_01",
-      "display_name": "YCSB-Ch-hashed-01",
+      "display_name": "Hotspot-1%-scattered",
       "legacy_aliases": [
-        "YCh01"
+        "YCh01",
+        "YCSB-Ch-hashed-01"
       ],
       "category": "native_ycsb",
       "kind": "measured_read",

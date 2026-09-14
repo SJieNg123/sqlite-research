@@ -169,7 +169,7 @@ and Figure 19 (OpenWhisk portability) was added (2026-09-01). Current state:
 | 14 | `14_strategy_endtoend_stacked.py`     | `b98c8a96ea…` | 1783×763  | yes (re-sourced to `unified_v3` 2026-09-14; was `208a5e92a9…`, 1785×763) |
 | 16 | `16_ram_pressure_sweep.py`            | `6adc990ca9…` | 1638×1248 | yes |
 | 17 | `17_lever_ablation.py`                | `5c5365cd7b…` | 1485×614  | yes |
-| 19 | `19_openwhisk_effectiveness_bars.py`  | `e73b11ab40…` | 2534×787  | yes (workload labels fixed 2026-09-14; was `55f935f02a…`) |
+| 19 | `19_openwhisk_effectiveness_bars.py`  | `3aeaa7a99c…` | 2534×787  | yes (workload labels fixed 2026-09-14; was `55f935f02a…`) |
 | 18 | `18_capability_matrix.py`             | `b81d89226a…` | 1198×697  | yes — but **not referenced** by `paper/main.tex` |
 
 Every `paper/figures/*.png` is byte-identical to its `figures/out/*.png` root
@@ -207,15 +207,35 @@ registry's own `external_validity_counterpart: "... NOT equated"` annotation on
 both records and against its rule that consumers "MUST resolve display names
 through `config/workload_registry.py` rather than hard-coding the mapping".
 `YCh01` was additionally shown as the invented name "Hashed-Hotspot". The script
-now calls `workload_display_name()` like every other paper-visible figure, so the
-panels read `YCSB-C` / `YCSB-Cu` / `YCSB-Ch-hashed-01` / `Tail-Mixed` /
-`Tail-Hit`. Strategy labels were already correct — all figures share
-`STRAT_DISPLAY`, and the five arms common to Figures 13/14/19 agree.
+now calls `workload_display_name()` like every other paper-visible figure.
+
+The registry's own names for those three were then reworded, because `YCSB-C` /
+`YCSB-Cu` / `YCSB-Ch-hashed-01` tell a reader nothing about the access pattern.
+They now follow the key-space-size convention already used by `Uniform-100K`,
+which makes the pairing legible without reusing the controlled workloads' names:
+
+| key | was | now | controlled counterpart |
+|---|---|---|---|
+| `YC` | `YCSB-C` | **`Scattered-Zipf-600K`** | `Scattered-Zipf` (A, 100K) |
+| `YCu` | `YCSB-Cu` | **`Uniform-600K`** | `Uniform-100K` (B) |
+| `YCh01` | `YCSB-Ch-hashed-01` | **`Hotspot-1%-scattered`** | — (`-scattered` leaves room for the `YCo*` ordered siblings as `-clustered`) |
+
+The old names stay resolvable as `legacy_aliases`, so docs, manifests and older
+result filters that still say `YCSB-C` keep working. `tests/test_workload_naming.py`
+gained two guards (display names must differ from the controlled workloads'; old
+names must still normalize) and its `standard_workload` check was re-keyed from
+`display_name` to `canonical_id` — a spec fact should not ride on a presentation
+string. 13 tests green.
+
+Strategy labels were already correct — all figures share `STRAT_DISPLAY`, and the
+five arms common to Figures 13/14/19 agree.
 
 **Still to fix in prose:** `paper/main.tex` §5.6's per-workload portability table
 (L720–724) and the discussion around it still use the old colliding names
 (`Scattered-Zipf`, `Uniform-100K`, `Hashed-Hotspot`) for the `YC`/`YCu`/`YCh01`
-rows, so the table and Figure 19 now disagree.
+rows. The table therefore still collides with Figures 13/14 and no longer matches
+Figure 19's panels; it should read `Scattered-Zipf-600K` / `Uniform-600K` /
+`Hotspot-1%-scattered`.
 
 **Not yet propagated:** `paper/main.tex` still carries the old captions (Figure
 13's hatch legend, Figure 14's "tie-break-unaffected strategies only" and
