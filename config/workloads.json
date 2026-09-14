@@ -6,8 +6,8 @@
   "workloads": [
     {
       "canonical_id": "read_zipf_scattered_100k",
-      "display_name": "Scattered-Zipf",
-      "legacy_aliases": ["A"],
+      "display_name": "Scattered-Zipf-100K",
+      "legacy_aliases": ["A", "Scattered-Zipf"],
       "category": "controlled_read",
       "kind": "measured_read",
       "generator": "workloads/gen_workload.py (type=A)",

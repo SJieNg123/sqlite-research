@@ -42,7 +42,7 @@ class RegistryMapping(unittest.TestCase):
 
     def test_documented_display_names(self):
         expected = {
-            "A": "Scattered-Zipf",
+            "A": "Scattered-Zipf-100K",
             "B": "Uniform-100K",
             "C": "Tail-Mixed",
             "C_hit": "Tail-Hit",
@@ -75,6 +75,17 @@ class RegistryMapping(unittest.TestCase):
                 workload_display_name(native), workload_display_name(controlled),
                 f"{native} must not display as {controlled}'s name")
 
+    def test_counterpart_pairs_are_symmetrically_named(self):
+        # A controlled workload and its native-YCSB counterpart differ only by
+        # key-space size in the name, so a reader can see they are a pair at a
+        # glance. The suffix earns its place by disambiguating a pair; workloads
+        # with no counterpart (Tail-Mixed, Tail-Hit, Hotspot-1%-scattered) carry
+        # no size suffix.
+        for controlled, native, stem in [("A", "YC", "Scattered-Zipf"),
+                                         ("B", "YCu", "Uniform")]:
+            self.assertEqual(workload_display_name(controlled), f"{stem}-100K")
+            self.assertEqual(workload_display_name(native), f"{stem}-600K")
+
     def test_old_native_display_names_still_resolve(self):
         # Renaming the display must not break lookups that still pass the old
         # names (docs, manifests, older result filters).
@@ -82,6 +93,7 @@ class RegistryMapping(unittest.TestCase):
         self.assertEqual(normalize_workload_id("YCSB-Cu"), normalize_workload_id("YCu"))
         self.assertEqual(
             normalize_workload_id("YCSB-Ch-hashed-01"), normalize_workload_id("YCh01"))
+        self.assertEqual(normalize_workload_id("Scattered-Zipf"), normalize_workload_id("A"))
 
     def test_no_alias_collision(self):
         # Every alias/canonical/display token resolves to exactly one canonical

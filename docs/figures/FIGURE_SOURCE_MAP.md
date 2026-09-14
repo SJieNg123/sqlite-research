@@ -165,9 +165,9 @@ and Figure 19 (OpenWhisk portability) was added (2026-09-01). Current state:
 | Fig | Script | root/paper md5 | dimensions | re-run byte-identical? |
 |---|---|---|---|---|
 | 1  | `01_page_distribution.py`             | `0e8d229ced…` | 1035×705  | no — 2 px canvas jitter, content identical |
-| 13 | `13_strategy_firstq_bars.py`          | `9978cfc4c7…` | 1935×643  | yes (re-sourced to `unified_v3` 2026-09-14; was `0c13cc96d1…`) |
-| 14 | `14_strategy_endtoend_stacked.py`     | `b98c8a96ea…` | 1783×763  | yes (re-sourced to `unified_v3` 2026-09-14; was `208a5e92a9…`, 1785×763) |
-| 16 | `16_ram_pressure_sweep.py`            | `6adc990ca9…` | 1638×1248 | yes |
+| 13 | `13_strategy_firstq_bars.py`          | `1b21c1d577…` | 1935×643  | yes (re-sourced to `unified_v3` + workload rename 2026-09-14) |
+| 14 | `14_strategy_endtoend_stacked.py`     | `7ac491ca24…` | 1783×763  | yes (re-sourced to `unified_v3` + workload rename 2026-09-14) |
+| 16 | `16_ram_pressure_sweep.py`            | `2feaafe598…` | 1638×1248 | yes (workload rename 2026-09-14; was `6adc990ca9…`) |
 | 17 | `17_lever_ablation.py`                | `5c5365cd7b…` | 1485×614  | yes |
 | 19 | `19_openwhisk_effectiveness_bars.py`  | `3aeaa7a99c…` | 2534×787  | yes (workload labels fixed 2026-09-14; was `55f935f02a…`) |
 | 18 | `18_capability_matrix.py`             | `b81d89226a…` | 1198×697  | yes — but **not referenced** by `paper/main.tex` |
@@ -229,6 +229,29 @@ string. 13 tests green.
 
 Strategy labels were already correct — all figures share `STRAT_DISPLAY`, and the
 five arms common to Figures 13/14/19 agree.
+
+**Counterpart pairs named symmetrically, 2026-09-14.** `Uniform-100K` already
+carried a key-space suffix but `Scattered-Zipf` did not, so one counterpart pair
+read as a pair and the other did not — `Scattered-Zipf` next to
+`Scattered-Zipf-600K` invited reading the former as the general case. `A` now
+displays as **`Scattered-Zipf-100K`**, giving two symmetric pairs:
+
+```
+Scattered-Zipf-100K  <->  Scattered-Zipf-600K     (controlled A / native YC)
+Uniform-100K         <->  Uniform-600K            (controlled B / native YCu)
+Tail-Mixed, Tail-Hit, Hotspot-1%-scattered        (no counterpart, no suffix)
+```
+
+The suffix earns its place by disambiguating a pair, so workloads without a
+counterpart keep bare names. `Scattered-Zipf` remains a `legacy_alias`.
+Figures 13, 14 and 16 re-rendered (17 and 19 plot no `A` panel and are
+byte-identical); `main.tex` updated in 76 places, with the two
+`Scattered-Zipf-600K` mentions left intact. `tests/test_workload_naming.py` is
+at 14, adding `test_counterpart_pairs_are_symmetrically_named`.
+
+**Unverified:** no LaTeX toolchain here, so the wider name has not been checked
+against `tab:ceiling`'s narrow `p{0.15\linewidth}` column. It is ragged-right so
+it wraps rather than overflows, but the wrap has not been seen.
 
 **Still to fix in prose:** `paper/main.tex` §5.6's per-workload portability table
 (L720–724) and the discussion around it still use the old colliding names
