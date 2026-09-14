@@ -98,6 +98,25 @@ def strat_display(s):
     """Paper short-name for a notebook codename; identity for anything unmapped."""
     return STRAT_DISPLAY.get(s, s)
 
+
+# Short panel-title annotations for the workloads the registry flags with
+# `must_annotate`. The registry states the requirement in prose ("Always mark
+# ~50% not-found and right-boundary (rightmost-leaf) probe concentration"); this
+# is the one short rendering of it that every figure shares, so the same
+# workload cannot appear under three different labels across figures.
+# Keyed by canonical_id, so any alias resolves to the same annotation.
+PANEL_ANNOTATION = {
+    "read_tail_mixed_20k": "~50% not-found, right-boundary",
+    "read_tail_hit_20k":   "pure-hit control",
+}
+
+
+def workload_panel_title(id_):
+    """Display name plus the registry-required annotation, if the workload has one."""
+    note = PANEL_ANNOTATION.get(normalize_workload_id(id_))
+    name = workload_display_name(id_)
+    return f"{name} ({note})" if note else name
+
 def load_summary(arm="async"):
     """Return {(workload, db, strategy): row} from summary.csv for one arm.
     baseline rows are stored under arm 'baseline' but exposed for every requested arm."""

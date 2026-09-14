@@ -23,7 +23,7 @@ from collections import defaultdict
 
 import numpy as np
 
-from plot_utils import ROOT, plt, save, strat_display, workload_display_name
+from plot_utils import ROOT, plt, save, strat_display, workload_panel_title
 
 CSV = ROOT / "deployment/openwhisk/analysis/comparison/effectiveness_ow_vs_workstation_revised_freeze.csv"
 
@@ -65,7 +65,7 @@ def main():
         ax.axhline(0.0, color="#333333", lw=1.1, zorder=4)
         ax.axhline(0.10, color="#cccccc", lw=0.8, ls=":", zorder=2)
 
-        ax.set_title(workload_display_name(wl), fontsize=11)
+        ax.set_title(workload_panel_title(wl), fontsize=10)
         ax.set_xticks(x)
         labels = [strat_display(r["strategy"]) + ("*" if str(r.get("position_sensitive", "")).strip().lower() == "true" else "")
                   for r in cells]

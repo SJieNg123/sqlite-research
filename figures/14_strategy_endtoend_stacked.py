@@ -18,7 +18,7 @@ by <0.4% here and every printed label is unchanged, but they are not the same
 estimator.
 """
 import csv, sys
-from plot_utils import ROOT, save, STRATEGY_COLORS, workload_display_name
+from plot_utils import ROOT, save, STRATEGY_COLORS, workload_panel_title
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -30,9 +30,7 @@ ARM_LABEL = {'baseline': 'baseline', 'layers_5': 'Skel-5', '2d': 'Skel',
              '2e_K10': 'Skel+10', '2e_K500': 'Skel+500', '2f_slru': 'Dump'}
 # CSV keys stay legacy (A/B/C); titles resolve to canonical display names.
 WORKLOADS = ['A', 'B', 'C']
-WL_TITLE  = {'A': workload_display_name('A'),
-             'B': workload_display_name('B'),
-             'C': workload_display_name('C') + ' (~50% not-found)'}
+WL_TITLE  = {w: workload_panel_title(w) for w in ('A', 'B', 'C')}
 
 
 def load(path):
@@ -92,7 +90,7 @@ for ax, wl in zip(axes, WORKLOADS):
 
     ax.set_xticks(x)
     ax.set_xticklabels([ARM_LABEL[s] for s in ARMS], fontsize=9, rotation=25, ha='right')
-    ax.set_title(WL_TITLE[wl], fontsize=11)
+    ax.set_title(WL_TITLE[wl], fontsize=10)
     ax.set_yscale('log')
     ax.set_ylim(80, max(warm) * 3.0)
     ax.grid(axis='y', alpha=0.25, which='both')

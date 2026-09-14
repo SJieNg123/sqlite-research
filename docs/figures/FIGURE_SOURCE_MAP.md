@@ -165,11 +165,11 @@ and Figure 19 (OpenWhisk portability) was added (2026-09-01). Current state:
 | Fig | Script | root/paper md5 | dimensions | re-run byte-identical? |
 |---|---|---|---|---|
 | 1  | `01_page_distribution.py`             | `0e8d229ced…` | 1035×705  | no — 2 px canvas jitter, content identical |
-| 13 | `13_strategy_firstq_bars.py`          | `1b21c1d577…` | 1935×643  | yes (re-sourced to `unified_v3` + workload rename 2026-09-14) |
-| 14 | `14_strategy_endtoend_stacked.py`     | `7ac491ca24…` | 1783×763  | yes (re-sourced to `unified_v3` + workload rename 2026-09-14) |
+| 13 | `13_strategy_firstq_bars.py`          | `e7a0ddb00c…` | 1935×643  | yes (re-sourced to `unified_v3`, workload rename + shared panel title 2026-09-14) |
+| 14 | `14_strategy_endtoend_stacked.py`     | `3a988da8de…` | 1783×763  | yes (re-sourced to `unified_v3`, workload rename + shared panel title 2026-09-14) |
 | 16 | `16_ram_pressure_sweep.py`            | `2feaafe598…` | 1638×1248 | yes (workload rename 2026-09-14; was `6adc990ca9…`) |
 | 17 | `17_lever_ablation.py`                | `5c5365cd7b…` | 1485×614  | yes |
-| 19 | `19_openwhisk_effectiveness_bars.py`  | `3aeaa7a99c…` | 2534×787  | yes (workload labels fixed 2026-09-14; was `55f935f02a…`) |
+| 19 | `19_openwhisk_effectiveness_bars.py`  | `30000ad042…` | 2534×787  | yes (workload labels + shared panel title 2026-09-14) |
 | 18 | `18_capability_matrix.py`             | `b81d89226a…` | 1198×697  | yes — but **not referenced** by `paper/main.tex` |
 
 Every `paper/figures/*.png` is byte-identical to its `figures/out/*.png` root
@@ -248,6 +248,33 @@ Figures 13, 14 and 16 re-rendered (17 and 19 plot no `A` panel and are
 byte-identical); `main.tex` updated in 76 places, with the two
 `Scattered-Zipf-600K` mentions left intact. `tests/test_workload_naming.py` is
 at 14, adding `test_counterpart_pairs_are_symmetrically_named`.
+
+**One panel title per workload, 2026-09-14.** The same workload was labelled
+three different ways: Figure 13 appended "— ~50% not-found tail-boundary",
+Figure 14 appended "(~50% not-found)", and Figure 19 showed a bare `Tail-Mixed`,
+which also silently ignored the registry's `must_annotate` requirement on that
+record ("Always mark ~50% not-found and right-boundary (rightmost-leaf) probe
+concentration"). Each figure was building its own title string.
+
+`plot_utils.workload_panel_title()` now renders it once for every figure, keyed
+by `canonical_id` so aliases resolve the same way:
+
+```
+Tail-Mixed (~50% not-found, right-boundary)
+Tail-Hit (pure-hit control)
+```
+
+`Tail-Hit` carries an annotation for the same reason — the registry flags it
+`must_annotate` too, and Figure 19 was showing it bare. Every other workload has
+no `must_annotate` and renders as its plain display name. Figure 14's panel title
+dropped to fontsize 10 (matching Figure 19) so the longer Tail-Mixed title clears
+the axes edge.
+
+The three figures plot the *same* Tail-Mixed workload — one registry record, one
+generator spec, same key range, same DB, `orig` layout. What differs is the seed
+protocol per cell, which is a measurement choice Figure 19 records in its own
+`seed_protocol` column (Figures 13/14 are single-instantiation seed 1; Figure 19
+mixes seeds 1-10, single-instantiation, seed-1-only and LOSO across its cells).
 
 **Unverified:** no LaTeX toolchain here, so the wider name has not been checked
 against `tab:ceiling`'s narrow `p{0.15\linewidth}` column. It is ragged-right so

@@ -12,7 +12,7 @@ Metric: paired first-query change vs same-batch baseline, (fq - base)/base * 100
 (negative = faster). Layout = orig, arm = async, median of 10 reps.
 """
 import csv, sys
-from plot_utils import ROOT, save, STRATEGY_COLORS, workload_display_name
+from plot_utils import ROOT, save, STRATEGY_COLORS, workload_panel_title
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -23,9 +23,7 @@ ARM_LABEL = {'layers_5': 'Skel-5', '2d': 'Skel', '2e_K10': 'Skel+10',
              '2e_K500': 'Skel+500', '2f_slru': 'Dump'}
 # CSV keys stay legacy (A/B/C); titles resolve to canonical display names.
 WORKLOADS = ['A', 'B', 'C']
-WL_TITLE  = {'A': workload_display_name('A'),
-             'B': workload_display_name('B'),
-             'C': workload_display_name('C') + ' — ~50% not-found tail-boundary'}
+WL_TITLE  = {w: workload_panel_title(w) for w in ('A', 'B', 'C')}
 
 
 def load(path):
