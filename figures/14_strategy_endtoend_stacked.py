@@ -11,11 +11,12 @@ Stack per strategy (layout orig, arm async, medians):
   first_query (bottom) + deliver (top) = warm-process / integrated e2e.
 Green/red label = warm-process e2e vs the same-batch baseline.
 
-Note: the stack height is median(first_query) + median(deliver), i.e. the bar is
-the sum of the two plotted medians. The CSV also carries e2e_warm_median (the
-median of the per-repetition sums), which the paper's tables use; the two differ
-by <0.4% here and every printed label is unchanged, but they are not the same
-estimator.
+Estimators: the bar HEIGHT is median(first_query) + median(deliver), because the
+bar is a stack of those two plotted medians. The percentage LABEL is computed
+from e2e_warm_median (the median of the per-repetition sums), which is the
+canonical column the paper's tables use. The two differ by <0.4%, invisible on a
+log axis, but they round differently in three cells, so the label follows the
+tables rather than the drawn height -- a label is a claim, the bar is a picture.
 """
 import csv, sys
 from plot_utils import ROOT, save, STRATEGY_COLORS, workload_panel_title
@@ -55,7 +56,7 @@ def get(workload, strategy):
     r = ROWS[key]
     return (float(r['fq_median']),
             float(r.get('deliver_us_median') or 0),
-            float(r.get('open_us_median') or 0))
+            float(r.get('e2e_warm_median') or 0))
 
 
 fig, axes = plt.subplots(1, 3, figsize=(12, 5.2), sharey=False)
@@ -63,11 +64,11 @@ x = np.arange(len(ARMS))
 
 print("Figure 14 — plotted cells (unified_v3 absolute stack):")
 for ax, wl in zip(axes, WORKLOADS):
-    fqs, dels = [], []
+    fqs, dels, canon = [], [], []
     for s in ARMS:
-        fq, dl, _op = get(wl, s)
-        fqs.append(fq); dels.append(dl)
-    warm     = [f + d for f, d in zip(fqs, dels)]
+        fq, dl, ew = get(wl, s)
+        fqs.append(fq); dels.append(dl); canon.append(ew)
+    warm     = [f + d for f, d in zip(fqs, dels)]   # drawn stack height
     baseline = fqs[0]
     colors = [STRATEGY_COLORS.get(s, '#3b82f6') for s in ARMS]
 
@@ -77,10 +78,10 @@ for ax, wl in zip(axes, WORKLOADS):
            linewidth=0.5, label='Deliver')
     ax.axhline(baseline, color='#9ca3af', ls='--', lw=1.0, alpha=0.7, zorder=0)
 
-    for xi, wv, s in zip(x, warm, ARMS):
+    for xi, wv, ew, s in zip(x, warm, canon, ARMS):
         if s == 'baseline':
             continue
-        wi = (wv - baseline) / baseline * 100.0
+        wi = (ew - baseline) / baseline * 100.0   # label from the canonical column
         col = '#15803d' if wi < 0 else '#dc2626'
         sign = '+' if wi >= 0 else ''
         print(f"  {wl:1s} {s:9s} fq={fqs[ARMS.index(s)]:7.1f} deliver={dels[ARMS.index(s)]:7.1f}"

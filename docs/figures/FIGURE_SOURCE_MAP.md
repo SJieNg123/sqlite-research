@@ -166,7 +166,7 @@ and Figure 19 (OpenWhisk portability) was added (2026-09-01). Current state:
 |---|---|---|---|---|
 | 1  | `01_page_distribution.py`             | `0e8d229ced…` | 1035×705  | no — 2 px canvas jitter, content identical |
 | 13 | `13_strategy_firstq_bars.py`          | `e7a0ddb00c…` | 1935×643  | yes (re-sourced to `unified_v3`, workload rename + shared panel title 2026-09-14) |
-| 14 | `14_strategy_endtoend_stacked.py`     | `3a988da8de…` | 1783×763  | yes (re-sourced to `unified_v3`, workload rename + shared panel title 2026-09-14) |
+| 14 | `14_strategy_endtoend_stacked.py`     | `6156852821…` | 1783×763  | yes (`unified_v3`, workload rename, shared panel title, canonical-estimator labels 2026-09-15) |
 | 16 | `16_ram_pressure_sweep.py`            | `2feaafe598…` | 1638×1248 | yes (workload rename 2026-09-14; was `6adc990ca9…`) |
 | 17 | `17_lever_ablation.py`                | `5c5365cd7b…` | 1485×614  | yes |
 | 19 | `19_openwhisk_effectiveness_bars.py`  | `30000ad042…` | 2534×787  | yes (workload labels + shared panel title 2026-09-14) |
@@ -286,6 +286,16 @@ it wraps rather than overflows, but the wrap has not been seen.
 rows. The table therefore still collides with Figures 13/14 and no longer matches
 Figure 19's panels; it should read `Scattered-Zipf-600K` / `Uniform-600K` /
 `Hotspot-1%-scattered`.
+
+**Estimator split resolved in Figure 14, 2026-09-15.** The bar height is
+`median(first_query) + median(deliver)` — it has to be, the bar is a stack of
+those two medians — but the percentage label now comes from `e2e_warm_median`,
+the median of the per-repetition sums, which is the canonical column the paper's
+tables read. The two differ by <0.4%, invisible on a log axis, but under
+`unified_v3` they round differently in three cells (Scattered-Zipf-100K
+`Skel-5` -14/-13, `Skel+500` +109/+110, Tail-Mixed `Skel+500` -41/-40), which
+would have put the figure and `tab:e2e-ac` one point apart. The label follows the
+tables: a label is a claim, the bar is a picture.
 
 **Not yet propagated:** `paper/main.tex` still carries the old captions (Figure
 13's hatch legend, Figure 14's "tie-break-unaffected strategies only" and
