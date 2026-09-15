@@ -297,6 +297,82 @@ tables read. The two differ by <0.4%, invisible on a log axis, but under
 would have put the figure and `tab:e2e-ac` one point apart. The label follows the
 tables: a label is a claim, the bar is a picture.
 
+**Propagated 2026-09-15.** `paper/main.tex` Section 5 now reads from
+`unified_v3` throughout: both figure captions, `tab:e2e-ac`, the
+`tab:e2e-robustness` single-workload column, the ceiling table and prose, the
+competitive-baseline cross-references and the practical-guidance table. The
+redundant `tab:corrected-arms` was deleted — both of its rows are in Figure 14
+from the same batch. Section 6's layout comparison deliberately keeps its
+layout-batch numbers: `unified_v3` ran `orig` only and cannot supply the
+`Clustered` arm, and that sentence now names its batch.
+
+**Counterpart pairs named symmetrically, 2026-09-14.** `Uniform-100K` already
+carried a key-space suffix but `Scattered-Zipf` did not, so one counterpart pair
+read as a pair and the other did not — `Scattered-Zipf` next to
+`Scattered-Zipf-600K` invited reading the former as the general case. `A` now
+displays as **`Scattered-Zipf-100K`**, giving two symmetric pairs:
+
+```
+Scattered-Zipf-100K  <->  Scattered-Zipf-600K     (controlled A / native YC)
+Uniform-100K         <->  Uniform-600K            (controlled B / native YCu)
+Tail-Mixed, Tail-Hit, Hotspot-1%-scattered        (no counterpart, no suffix)
+```
+
+The suffix earns its place by disambiguating a pair, so workloads without a
+counterpart keep bare names. `Scattered-Zipf` remains a `legacy_alias`.
+Figures 13, 14 and 16 re-rendered (17 and 19 plot no `A` panel and are
+byte-identical); `main.tex` updated in 76 places, with the two
+`Scattered-Zipf-600K` mentions left intact. `tests/test_workload_naming.py` is
+at 14, adding `test_counterpart_pairs_are_symmetrically_named`.
+
+**One panel title per workload, 2026-09-14.** The same workload was labelled
+three different ways: Figure 13 appended "— ~50% not-found tail-boundary",
+Figure 14 appended "(~50% not-found)", and Figure 19 showed a bare `Tail-Mixed`,
+which also silently ignored the registry's `must_annotate` requirement on that
+record ("Always mark ~50% not-found and right-boundary (rightmost-leaf) probe
+concentration"). Each figure was building its own title string.
+
+`plot_utils.workload_panel_title()` now renders it once for every figure, keyed
+by `canonical_id` so aliases resolve the same way:
+
+```
+Tail-Mixed (~50% not-found, right-boundary)
+Tail-Hit (pure-hit control)
+```
+
+`Tail-Hit` carries an annotation for the same reason — the registry flags it
+`must_annotate` too, and Figure 19 was showing it bare. Every other workload has
+no `must_annotate` and renders as its plain display name. Figure 14's panel title
+dropped to fontsize 10 (matching Figure 19) so the longer Tail-Mixed title clears
+the axes edge.
+
+The three figures plot the *same* Tail-Mixed workload — one registry record, one
+generator spec, same key range, same DB, `orig` layout. What differs is the seed
+protocol per cell, which is a measurement choice Figure 19 records in its own
+`seed_protocol` column (Figures 13/14 are single-instantiation seed 1; Figure 19
+mixes seeds 1-10, single-instantiation, seed-1-only and LOSO across its cells).
+
+**Unverified:** no LaTeX toolchain here, so the wider name has not been checked
+against `tab:ceiling`'s narrow `p{0.15\linewidth}` column. It is ragged-right so
+it wraps rather than overflows, but the wrap has not been seen.
+
+**Still to fix in prose:** `paper/main.tex` §5.6's per-workload portability table
+(L720–724) and the discussion around it still use the old colliding names
+(`Scattered-Zipf`, `Uniform-100K`, `Hashed-Hotspot`) for the `YC`/`YCu`/`YCh01`
+rows. The table therefore still collides with Figures 13/14 and no longer matches
+Figure 19's panels; it should read `Scattered-Zipf-600K` / `Uniform-600K` /
+`Hotspot-1%-scattered`.
+
+**Estimator split resolved in Figure 14, 2026-09-15.** The bar height is
+`median(first_query) + median(deliver)` — it has to be, the bar is a stack of
+those two medians — but the percentage label now comes from `e2e_warm_median`,
+the median of the per-repetition sums, which is the canonical column the paper's
+tables read. The two differ by <0.4%, invisible on a log axis, but under
+`unified_v3` they round differently in three cells (Scattered-Zipf-100K
+`Skel-5` -14/-13, `Skel+500` +109/+110, Tail-Mixed `Skel+500` -41/-40), which
+would have put the figure and `tab:e2e-ac` one point apart. The label follows the
+tables: a label is a claim, the bar is a picture.
+
 **Not yet propagated:** `paper/main.tex` still carries the old captions (Figure
 13's hatch legend, Figure 14's "tie-break-unaffected strategies only" and
 "not stacked here" sentences) and the 53 single-instantiation claims in

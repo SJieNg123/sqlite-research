@@ -1,5 +1,18 @@
 # Paper Numerical / Provenance Audit — `paper/main.tex`
 
+> **Superseded in part, 2026-09-15.** This file records an audit *as performed* in
+> 2026-07 and its findings are left intact. Since then Section 5's single-instantiation
+> numbers were re-sourced from `results/unified_v2` + `results/tiebreak_fix` to the single
+> batch `results/unified_v3`, so the five `unified_v2` rows and two `tiebreak_fix` rows
+> below no longer describe the current `main.tex` (each is marked `SUPERSEDED` in the CSV
+> with its new value). Nothing about the *method* of the audit changed, and no conclusion
+> moved — the re-measurement reproduced every relative result with zero sign flips.
+>
+> For current, machine-checked values use `docs/audits/PAPER_CLAIM_MANIFEST.csv`: all 50
+> `unified_v3` claims there are recomputed from the CSV on every regeneration, and as of
+> this date 50/50 match. Rows for other batches (cross-seed, RAM-pressure, cadence,
+> OpenWhisk, layout pairs) are unaffected.
+
 **Scope:** fail-closed numerical and provenance audit of every quantitative claim in
 `paper/main.tex`, checked against authoritative on-disk sources (result batches,
 freeze CSVs, stats JSONs, classifier outputs, OpenWhisk normalization manifests).

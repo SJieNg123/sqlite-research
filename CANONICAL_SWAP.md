@@ -1,5 +1,14 @@
 # CANONICAL_SWAP.md — v2 canonical batch: scope, casualties, methodology revisions
 
+> **Superseded in part, 2026-09-14.** For `orig` single-instantiation cells this document's
+> conclusion no longer holds: `results/unified_v3` measured every arm — `layers_5`, `2d`,
+> `2e_K10`, `2e_K500`, `2f_slru` — in ONE batch under the corrected tie-break, so the
+> v2 + `tiebreak_fix` per-cell split described below is retired for Section 5, and Section 5's
+> numbers were propagated to v3 on 2026-09-15. What stays valid here: §0 (machine-state drift is
+> additive, never a scalar), the casualty list for everything v3 did **not** run (the
+> `vacuum`/`ta` layout arms, RAM-pressure, cadence, size-scaling, sleep-sweep), and §2/§3 on
+> churn vs aging. See `results/RESULT_PROVENANCE.md` §4.2 and `results/unified_v3/README.md`.
+
 Guide for the §7 rewrite. `results/unified_v2` (+ `results/baselines_v2`, back-to-back,
 shared 2f_slru anchor, all n=10) is the **new canonical single-instantiation source**.
 This is NOT a global find-replace: v2's matrix does not cover every old-batch number the

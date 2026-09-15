@@ -17,8 +17,12 @@ COLS = ["claim_id", "tex_line_or_section", "quoted_claim", "claim_kind", "worklo
         "aggregation", "displayed_value", "canonical_source", "baseline_source",
         "anchor_source", "source_filter", "source_raw_value", "formula",
         "rounding_rule", "atomic_status", "narrative_scope_status", "action",
-        "notes", "compare_group"]
+        "notes", "compare_group", "display_name"]
 
+# Section 5 single-instantiation canonical since 2026-09-14: one batch, every arm,
+# corrected tie-break. UNI/TB stay for the Section 6 layout pairs, which need the
+# vacuum/ta arms that unified_v3 did not run.
+UNI3 = "results/unified_v3/matrix/summary.csv"
 UNI = "results/unified_v2/matrix/summary.csv"
 TB = "results/tiebreak_fix/master_summary.csv"
 ABL = "results/ablation_comp_v2/uncertainty.csv"
@@ -29,6 +33,11 @@ TBU = "results/tiebreak_fix/uncertainty.csv"
 SEEDS = "results/seeds/seed*/summary.csv"
 TBSEEDS = "results/tiebreak_fix/seeds/seed*/summary.csv"
 AGE = "results/aging_v2/aging_ci.csv"
+
+import sys as _sys, pathlib as _pl
+_sys.path.insert(0, str(_pl.Path(__file__).resolve().parents[1] / "config"))
+from workload_registry import workload_display_name  # noqa: E402
+_WLKEYS = {"A", "B", "C", "C_mixed", "C_hit", "Z", "YC", "YCu", "YCh01", "YD", "YE"}
 
 rows = []
 _n = [0]
@@ -44,7 +53,8 @@ def add(line, quote, kind, w, ly, s, metric, dep, scope, agg, disp, src, base, a
         "displayed_value": disp, "canonical_source": src, "baseline_source": base,
         "anchor_source": anchor, "source_filter": filt, "source_raw_value": raw,
         "formula": formula, "rounding_rule": rnd, "atomic_status": atomic,
-        "narrative_scope_status": narr, "action": action, "notes": notes, "compare_group": grp})
+        "narrative_scope_status": narr, "action": action, "notes": notes, "compare_group": grp,
+        "display_name": workload_display_name(w) if w in _WLKEYS else ""})
 
 
 def sf(w, s, arm="async", db="orig", metric=None):
@@ -56,79 +66,79 @@ def sf(w, s, arm="async", db="orig", metric=None):
 
 # ---- machine-checkable result claims ----------------------------------------
 # baseline first-query (unified_v2), appears in §2/§3/§7/§8, tab:e2e-ac header
-for w, disp in [("A", "523"), ("B", "749"), ("C_mixed", "1087")]:
+for w, disp in [("A", "503"), ("B", "733"), ("C_mixed", "1072")]:
     ww = "C" if w == "C_mixed" else w
     add("101,212,241,448,454,518", f"baseline first-query {disp} us", "abs_latency",
         w, "orig", "baseline", "first_query", "n/a", "single", "median", disp,
-        UNI, UNI, "n/a", sf(ww, "baseline", "baseline"), "fq_median", "abs:fq_median",
+        UNI3, UNI3, "n/a", sf(ww, "baseline", "baseline"), "fq_median", "abs:fq_median",
         "int", "OK", "unaffected main-matrix", "verified", "canonical baseline")
 
 # 2f_slru first-query abs + reduction
-for w, absv, red in [("A", "108", "-79"), ("B", "107", "-86"), ("C_mixed", "102", "-91")]:
+for w, absv, red in [("A", "98", "-80"), ("B", "100", "-86"), ("C_mixed", "96", "-91")]:
     ww = "C" if w == "C_mixed" else w
     add("454", f"2f_slru first-query {absv} us", "abs_latency", w, "orig", "2f_slru",
-        "first_query", "n/a", "single", "median", absv, UNI, UNI, "n/a",
+        "first_query", "n/a", "single", "median", absv, UNI3, UNI3, "n/a",
         sf(ww, "2f_slru"), "fq_median", "abs:fq_median", "int", "OK",
         "unaffected", "verified", "")
     add("454,467,478", f"2f_slru first-query reduction {red}%", "rel_improvement", w,
         "orig", "2f_slru", "first_query", "n/a", "single", "paired-vs-same-batch-baseline",
-        red, UNI, UNI, "n/a", sf(ww, "2f_slru"), "fq_median", "rel:fq_median", "int",
+        red, UNI3, UNI3, "n/a", sf(ww, "2f_slru"), "fq_median", "rel:fq_median", "int",
         "OK", "-79 to -91 span", "verified", "")
 
 # first-query ceilings (2d interior), unaffected
-for w, disp in [("A", "-30"), ("B", "-44"), ("C_mixed", "-39")]:
+for w, disp in [("A", "-29"), ("B", "-44"), ("C_mixed", "-38")]:
     ww = "C" if w == "C_mixed" else w
     add("456,467", f"interior-only first-query ceiling {disp}%", "rel_improvement", w,
-        "orig", "2d", "first_query", "n/a", "single", "paired", disp, UNI, UNI, "n/a",
+        "orig", "2d", "first_query", "n/a", "single", "paired", disp, UNI3, UNI3, "n/a",
         sf(ww, "2d"), "fq_median", "rel:fq_median", "int", "OK", "ceiling", "verified", "")
 
 # A 2e_K500 first-query -64 (CHANGED -> tiebreak); C 2e_K10 first-query -83 (CHANGED)
 add("456,467", "2e_K500 first-query -64% (A)", "rel_improvement", "A", "orig", "2e_K500",
-    "first_query", "n/a", "single", "paired", "-64", TB, TB, "n/a", sf("A", "2e_K500"),
+    "first_query", "n/a", "single", "paired", "-64", UNI3, UNI3, "n/a", sf("A", "2e_K500"),
     "fq_median", "rel:fq_median", "int", "OK", "changed->tiebreak", "verified", "")
 add("456,469,485", "2e_K10 first-query -83% (C_mixed)", "rel_improvement", "C_mixed", "orig",
-    "2e_K10", "first_query", "n/a", "single", "paired", "-83", TB, TB, "n/a",
+    "2e_K10", "first_query", "n/a", "single", "paired", "-83", UNI3, UNI3, "n/a",
     sf("C", "2e_K10"), "fq_median", "rel:fq_median", "int", "OK", "changed->tiebreak",
     "verified", "")
 
 # ---- tab:e2e-ac (unified_v2 single batch, compare_group=e2e-ac) --------------
-E2E = [("A", "layers_5", "679", "+30", "453", "-14"),
-       ("A", "2d", "678", "+30", "452", "-14"),
-       ("A", "2f_slru", "7552", "+1343", "7324", "+1300"),
-       ("C", "layers_5", "1352", "+24", "1120", "+3"),
-       ("C", "2d", "969", "-11", "735", "-32"),
-       ("C", "2f_slru", "1196", "+10", "962", "-12")]
+E2E = [("A", "layers_5", "617", "+23", "435", "-13"),
+       ("A", "2d", "620", "+23", "439", "-13"),
+       ("A", "2f_slru", "7319", "+1355", "7140", "+1319"),
+       ("C", "layers_5", "1286", "+20", "1107", "+3"),
+       ("C", "2d", "907", "-15", "729", "-32"),
+       ("C", "2f_slru", "1074", "+0", "897", "-16")]
 for w, s, sstd, pstd, swarm, pwarm in E2E:
     wl = "C_mixed" if w == "C" else w
     add("521-524", f"tab:e2e-ac {w} {s} std {sstd} ({pstd}%)", "abs_latency", wl, "orig", s,
-        "e2e_std", "standalone", "single", "median", sstd, UNI, UNI, "n/a", sf(w, s),
+        "e2e_std", "standalone", "single", "median", sstd, UNI3, UNI3, "n/a", sf(w, s),
         "e2e_median", "abs:e2e_median", "int", "OK", "unaffected single-batch", "verified",
         "", "e2e-ac")
     add("521-524", f"tab:e2e-ac {w} {s} std {pstd}%", "rel_improvement", wl, "orig", s,
-        "e2e_std", "standalone", "single", "paired", pstd, UNI, UNI, "n/a", sf(w, s),
+        "e2e_std", "standalone", "single", "paired", pstd, UNI3, UNI3, "n/a", sf(w, s),
         "e2e_median", "rel:e2e_median", "int", "OK", "", "verified", "", "")
     add("521-524", f"tab:e2e-ac {w} {s} warm {swarm} ({pwarm}%)", "abs_latency", wl, "orig", s,
-        "e2e_warm", "warm-process", "single", "median", swarm, UNI, UNI, "n/a", sf(w, s),
+        "e2e_warm", "warm-process", "single", "median", swarm, UNI3, UNI3, "n/a", sf(w, s),
         "e2e_warm_median", "abs:e2e_warm_median", "int", "OK", "unaffected single-batch",
         "verified", "", "e2e-ac")
     add("521-524", f"tab:e2e-ac {w} {s} warm {pwarm}%", "rel_improvement", wl, "orig", s,
-        "e2e_warm", "warm-process", "single", "paired", pwarm, UNI, UNI, "n/a", sf(w, s),
+        "e2e_warm", "warm-process", "single", "paired", pwarm, UNI3, UNI3, "n/a", sf(w, s),
         "e2e_warm_median", "rel:e2e_warm_median", "int", "OK", "", "verified", "", "")
 
 # ---- tab:corrected-arms (tiebreak single batch, compare_group=corrected-arms)
 add("537", "A 2e_K500 corrected 512->1079 +111%", "abs_latency", "A", "orig", "2e_K500",
-    "e2e_warm", "warm-process", "single", "median", "1079", TB, TB, "n/a", sf("A", "2e_K500"),
+    "e2e_warm", "warm-process", "single", "median", "1054", UNI3, UNI3, "n/a", sf("A", "2e_K500"),
     "e2e_warm_median", "abs:e2e_warm_median", "int", "OK", "corrected same-batch", "verified",
     "", "corrected-arms")
-add("537", "A 2e_K500 corrected +111%", "rel_improvement", "A", "orig", "2e_K500", "e2e_warm",
-    "warm-process", "single", "paired", "+111", TB, TB, "n/a", sf("A", "2e_K500"),
+add("fig:e2e-stacked", "A 2e_K500 +110% (fig 14 caption)", "rel_improvement", "A", "orig", "2e_K500", "e2e_warm",
+    "warm-process", "single", "paired", "+110", UNI3, UNI3, "n/a", sf("A", "2e_K500"),
     "e2e_warm_median", "rel:e2e_warm_median", "int", "OK", "over-provisioned leaf", "verified", "")
-add("538,548", "C_mixed 2e_K10 corrected 1071->265 -75%", "abs_latency", "C_mixed", "orig",
-    "2e_K10", "e2e_warm", "warm-process", "single", "median", "265", TB, TB, "n/a",
+add("523", "C_mixed 2e_K10 1072->260 -76%", "abs_latency", "C_mixed", "orig",
+    "2e_K10", "e2e_warm", "warm-process", "single", "median", "260", UNI3, UNI3, "n/a",
     sf("C", "2e_K10"), "e2e_warm_median", "abs:e2e_warm_median", "int", "OK",
     "corrected same-batch; single-inst", "verified", "seed-1 scoped", "corrected-arms")
-add("538,548", "C_mixed 2e_K10 corrected -75% single-inst", "rel_improvement", "C_mixed",
-    "orig", "2e_K10", "e2e_warm", "warm-process", "single", "paired", "-75", TB, TB, "n/a",
+add("523,636", "C_mixed 2e_K10 -76% single-inst", "rel_improvement", "C_mixed",
+    "orig", "2e_K10", "e2e_warm", "warm-process", "single", "paired", "-76", UNI3, UNI3, "n/a",
     sf("C", "2e_K10"), "e2e_warm_median", "rel:e2e_warm_median", "int", "single-inst only",
     "OK", "verified", "cross-seed -55 separate")
 
@@ -171,9 +181,9 @@ for s, cells in COMPROWS:
 
 # ---- tab:seeds single-workload column --------------------------------------
 # single-inst: unaffected -> unified; changed (B 2e_K10, C 2e_K10) -> tiebreak
-SEEDS_SINGLE = [("C", "2e_K10", "-75", TB), ("C", "2d", "-32", UNI), ("A", "2e_K10", "-11", UNI),
-                ("A", "2d", "-14", UNI), ("B", "2d", "-32", UNI), ("B", "2e_K10", "-30", TB),
-                ("A", "layers_5", "-14", UNI), ("B", "layers_5", "-34", UNI)]
+SEEDS_SINGLE = [("C", "2e_K10", "-76", UNI3), ("C", "2d", "-32", UNI3), ("A", "2e_K10", "-9", UNI3),
+                ("A", "2d", "-13", UNI3), ("B", "2d", "-32", UNI3), ("B", "2e_K10", "-31", UNI3),
+                ("A", "layers_5", "-13", UNI3), ("B", "layers_5", "-34", UNI3)]
 # Phase 4 fix: B 2e_K10 single-workload was -29 (superseded unified); corrected to
 # -30 (tiebreak) since B 2e_K10 is a changed cell. Now matches the paper.
 for w, s, disp, src in SEEDS_SINGLE:
