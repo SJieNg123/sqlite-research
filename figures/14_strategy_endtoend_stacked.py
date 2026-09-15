@@ -19,7 +19,7 @@ log axis, but they round differently in three cells, so the label follows the
 tables rather than the drawn height -- a label is a claim, the bar is a picture.
 """
 import csv, sys
-from plot_utils import ROOT, save, STRATEGY_COLORS, workload_panel_title
+from plot_utils import ROOT, save, workload_panel_title
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -32,6 +32,8 @@ ARM_LABEL = {'baseline': 'baseline', 'layers_5': 'Skel-5', '2d': 'Skel',
 # CSV keys stay legacy (A/B/C); titles resolve to canonical display names.
 WORKLOADS = ['A', 'B', 'C']
 WL_TITLE  = {w: workload_panel_title(w) for w in ('A', 'B', 'C')}
+FQ_COLOR      = '#d1d5db'   # first query (bottom)
+DELIVER_COLOR = '#f97316'   # deliver (top)
 
 
 def load(path):
@@ -70,13 +72,11 @@ for ax, wl in zip(axes, WORKLOADS):
         fqs.append(fq); dels.append(dl); canon.append(ew)
     warm     = [f + d for f, d in zip(fqs, dels)]   # drawn stack height
     baseline = fqs[0]
-    colors = [STRATEGY_COLORS.get(s, '#3b82f6') for s in ARMS]
 
-    ax.bar(x, fqs, color=colors, alpha=0.9, edgecolor='black', linewidth=0.5,
+    ax.bar(x, fqs, color=FQ_COLOR, alpha=0.9, edgecolor='black', linewidth=0.5,
            label='First query')
-    ax.bar(x, dels, bottom=fqs, color='#dc2626', alpha=0.95, edgecolor='black',
+    ax.bar(x, dels, bottom=fqs, color=DELIVER_COLOR, alpha=0.95, edgecolor='black',
            linewidth=0.5, label='Deliver')
-    ax.axhline(baseline, color='#9ca3af', ls='--', lw=1.0, alpha=0.7, zorder=0)
 
     for xi, wv, ew, s in zip(x, warm, canon, ARMS):
         if s == 'baseline':
