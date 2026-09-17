@@ -1,9 +1,10 @@
 """Figure 13: Paired first-query reduction by strategy, per workload.
 
-Single canonical batch: results/unified_v3 (2026-09-14). Every cell -- including
-the frequency-ranked 2e_K* arms -- was measured in ONE run with the corrected
-(-count, pageno) tie-break, so no per-cell source selection is needed and the
-former two-source split (unified_v2 + tiebreak_fix) no longer applies.
+Single canonical batch: results/unified_v4, seed01 (2026-09-17). Every cell --
+including the frequency-ranked 2e_K* arms -- was measured in ONE run with the
+corrected (-count, pageno) tie-break, so no per-cell source selection is needed.
+This is the same batch that backs the paper's four result tables, so the figure
+and the tables cannot disagree.
 
 Bars are still paired relative reductions against the batch's own baseline;
 absolute microseconds are NOT plotted.
@@ -16,7 +17,7 @@ from plot_utils import ROOT, save, STRATEGY_COLORS, workload_panel_title
 import matplotlib.pyplot as plt
 import numpy as np
 
-UNIFIED   = ROOT / "results/unified_v3/matrix/summary.csv"
+UNIFIED   = ROOT / "results/unified_v4/seed01/summary.csv"
 
 ARMS      = ['layers_5', '2d', '2e_K10', '2e_K500', '2f_slru']
 ARM_LABEL = {'layers_5': 'Skel-5', '2d': 'Skel', '2e_K10': 'Skel+10',

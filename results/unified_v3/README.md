@@ -99,12 +99,16 @@ an uncontrolled variable by design.
 
 ## Status
 
-**Canonical for Figures 13 and 14 only.** Both scripts read this batch and
-nothing else. Not yet adopted for the paper's prose or tables: the 53
-single-instantiation claims in `docs/audits/PAPER_CLAIM_MANIFEST.csv`
-(`tab:e2e-ac`, `tab:corrected-arms`, and 19 lines of `main.tex`) still cite
-`unified_v2` / `tiebreak_fix` absolute values. Those batches remain canonical
-for every claim outside the two figures until that propagation is done.
+**Superseded 2026-09-17 by `results/unified_v4`.** This batch was canonical for
+Figures 13 and 14 from 2026-09-14, and from 2026-09-15 for Section 5's
+single-instantiation numbers. It was replaced because it covers only five
+strategy arms at one seed, so the paper's four result tables still had to draw
+their cross-seed columns from `ablation_comp_v2`, `competitive`, `seeds` and
+`tiebreak_fix/seeds` — five batches across two code versions. `unified_v4` runs
+all twelve arms over ten seeds in one window, which closes that split. Its
+relative values reproduce this batch with no sign flips. Kept as the record of
+the 2026-09-14/15 propagation and as a second machine state for the cold-open
+drift documented in `results/unified_v4/README.md`.
 
 Cross-seed results (`seeds`, `tiebreak_fix/seeds`, `competitive`,
 `ablation_comp_v2`, `c_hit*`, `aging_v2`) and other-axis results

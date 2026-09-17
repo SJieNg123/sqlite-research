@@ -1,13 +1,16 @@
 # CANONICAL_SWAP.md — v2 canonical batch: scope, casualties, methodology revisions
 
-> **Superseded in part, 2026-09-14.** For `orig` single-instantiation cells this document's
-> conclusion no longer holds: `results/unified_v3` measured every arm — `layers_5`, `2d`,
-> `2e_K10`, `2e_K500`, `2f_slru` — in ONE batch under the corrected tie-break, so the
-> v2 + `tiebreak_fix` per-cell split described below is retired for Section 5, and Section 5's
-> numbers were propagated to v3 on 2026-09-15. What stays valid here: §0 (machine-state drift is
-> additive, never a scalar), the casualty list for everything v3 did **not** run (the
-> `vacuum`/`ta` layout arms, RAM-pressure, cadence, size-scaling, sleep-sweep), and §2/§3 on
-> churn vs aging. See `results/RESULT_PROVENANCE.md` §4.2 and `results/unified_v3/README.md`.
+> **Superseded in part, 2026-09-17.** For `orig` cells this document's conclusion no longer
+> holds: `results/unified_v4` measured every arm — `layers_5`, `2d`, `2e_K10`, `2e_K500`,
+> `2f_slru`, the `2f_top*` ranked dumps and the two leaf ablation arms — over ten seeds in ONE
+> batch under the corrected tie-break, so the v2 + `tiebreak_fix` per-cell split described below
+> is retired for Sections 5 and 6, single-instantiation **and** cross-seed. Sections 5 and 6 were
+> propagated to `unified_v4` on 2026-09-17 (an interim propagation to `results/unified_v3`, which
+> covered five arms at one seed, ran on 2026-09-15). What stays valid here: §0 (machine-state
+> drift is additive, never a scalar), the casualty list for everything `unified_v4` did **not**
+> run (the `vacuum`/`ta` layout arms, `layers_92`, RAM-pressure, cadence, size-scaling,
+> sleep-sweep, Tail-Hit), and §2/§3 on churn vs aging. See `results/RESULT_PROVENANCE.md` §4.2
+> and `results/unified_v4/README.md`.
 
 Guide for the §7 rewrite. `results/unified_v2` (+ `results/baselines_v2`, back-to-back,
 shared 2f_slru anchor, all n=10) is the **new canonical single-instantiation source**.

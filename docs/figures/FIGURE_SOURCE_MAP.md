@@ -14,8 +14,8 @@ paper submodule carries a copy under `paper/figures/`. Provenance authority:
 |---|---|---|---|---|---|---|---|---|
 | 18 | `fig:capability` | `figures/18_capability_matrix.py` | `figures/18_capability_matrix.png` | none (hand-coded capability matrix) | prior-art positioning | qualitative ✓/◐/✗ | n/a | **no longer included by `paper/main.tex`** (PNG retained, byte-identical) |
 | 1 | `fig:layout-distribution` | `figures/01_page_distribution.py` | `figures/01_page_distribution.png` | `pipeline/preparation/layout_rewriter/runs/classify_{before,vacuum,after}.csv` | static page-type placement, 3 layouts | interior-page offsets | absolute (structural, batch-independent) | current-valid (byte-identical) |
-| 13 | `fig:firstq-bars` | `figures/13_strategy_firstq_bars.py` | `figures/13_strategy_firstq_bars.png` | `results/unified_v3/matrix/summary.csv` **(single source)** | A/B/C × orig × {layers_5,2d,2e_K10,2e_K500,2f_slru}, async | **paired first-query reduction %** vs same-batch baseline | **relative** (same-batch) | **re-sourced 2026-09-14** to the `unified_v3` single batch; two-source split + `//` hatch removed |
-| 14 | `fig:e2e-stacked` | `figures/14_strategy_endtoend_stacked.py` | `figures/14_strategy_endtoend_stacked.png` | `results/unified_v3/matrix/summary.csv` | A/B/C × orig × {baseline,layers_5,2d,**2e_K10,2e_K500**,2f_slru}, async | first_query + deliver stack; warm % vs same-batch baseline | **absolute (single batch)** | **re-sourced 2026-09-14**; strategy set now matches Figure 13 (the `2e_K*` arms were previously unplottable) |
+| 13 | `fig:firstq-bars` | `figures/13_strategy_firstq_bars.py` | `figures/13_strategy_firstq_bars.png` | `results/unified_v4/seed01/summary.csv` **(single source)** | A/B/C × orig × {layers_5,2d,2e_K10,2e_K500,2f_slru}, async | **paired first-query reduction %** vs same-batch baseline | **relative** (same-batch) | **re-sourced 2026-09-17** to `unified_v4`, the batch the paper's four result tables also read |
+| 14 | `fig:e2e-stacked` | `figures/14_strategy_endtoend_stacked.py` | `figures/14_strategy_endtoend_stacked.png` | `results/unified_v4/seed01/summary.csv` | A/B/C × orig × {baseline,layers_5,2d,**2e_K10,2e_K500**,2f_slru}, async | first_query + deliver stack; warm % vs same-batch baseline | **absolute (single batch)** | **re-sourced 2026-09-17** to `unified_v4`, so the absolute stack and `tab:e2e-ac`'s absolute columns are the same machine state |
 | 17 | `fig:ablation` | `figures/17_lever_ablation.py` | `figures/17_lever_ablation.png` | `results/ablation_comp_v2/uncertainty.csv` **only** | **C_mixed × orig** × {2d,leaf_rand_K10,leaf_freq_K10,2e_K10} | Δ% vs same-batch baseline (first-query and e2e_warm), 10-seed bootstrap 95% CI | **relative** | **corrected same-batch ablation** (Phase 3b: scoped to C_mixed; no longer reads `results/ablation`) |
 | 16 | `fig:ram` | `figures/16_ram_pressure_sweep.py` | `figures/16_ram_pressure_sweep.png` | `results/ram_pressure/cap_*/summary.csv` | RAM-pressure sweep, seed 1, orig | delivery % + first-query vs cgroup cap | absolute (single RAM-axis batch) | current-valid (byte-identical) |
 | 19 | `fig:portability` | `figures/19_openwhisk_effectiveness_bars.py` | `figures/19_openwhisk_effectiveness_bars.png` | `deployment/openwhisk/analysis/comparison/effectiveness_ow_vs_workstation_revised_freeze.csv` | 55 non-lp strategy×workload cells × orig; YC/YCu/YCh01/C/C_hit; workstation vs OpenWhisk standalone | relative first-query reduction $R$ vs same-platform baseline | **relative** (absolute µs not cross-platform comparable) | added 2026-09-01 (reads the revised freeze) |
@@ -23,8 +23,8 @@ paper submodule carries a copy under `paper/figures/`. Provenance authority:
 ## Per-cell canonical source rule (Figures 13 & 14) — SUPERSEDED 2026-09-14
 
 > **No longer in force.** Both figures now read the single batch
-> `results/unified_v3`, which measured every arm — `2e_K10` and `2e_K500`
-> included — in one machine state under the corrected tie-break. Figure 13 no
+> `results/unified_v4` (seed01), which measured every arm — `2e_K10` and
+> `2e_K500` included — in one machine state under the corrected tie-break. Figure 13 no
 > longer mixes sources or hatches cells, and Figure 14 no longer has to drop the
 > frequency-ranked arms. Kept below as the record of what the figures did
 > between the 2026-07 tie-break fix and 2026-09-14.
@@ -165,8 +165,8 @@ and Figure 19 (OpenWhisk portability) was added (2026-09-01). Current state:
 | Fig | Script | root/paper md5 | dimensions | re-run byte-identical? |
 |---|---|---|---|---|
 | 1  | `01_page_distribution.py`             | `0e8d229ced…` | 1035×705  | no — 2 px canvas jitter, content identical |
-| 13 | `13_strategy_firstq_bars.py`          | `e7a0ddb00c…` | 1935×643  | yes (re-sourced to `unified_v3`, workload rename + shared panel title 2026-09-14) |
-| 14 | `14_strategy_endtoend_stacked.py`     | `6156852821…` | 1783×763  | yes (`unified_v3`, workload rename, shared panel title, canonical-estimator labels 2026-09-15) |
+| 13 | `13_strategy_firstq_bars.py`          | `83ec0c3ac0…` | 1935×643  | yes (re-sourced to `unified_v4` 2026-09-17; was `e7a0ddb00c…` under `unified_v3`) |
+| 14 | `14_strategy_endtoend_stacked.py`     | `0ec9464e77…` | 1783×764  | yes (re-sourced to `unified_v4` 2026-09-17; was `fa9c0f1070…` at HEAD, and the hash recorded here before 2026-09-17 was `6156852821…`, stale since the 2026-09-15 label change) |
 | 16 | `16_ram_pressure_sweep.py`            | `2feaafe598…` | 1638×1248 | yes (workload rename 2026-09-14; was `6adc990ca9…`) |
 | 17 | `17_lever_ablation.py`                | `5c5365cd7b…` | 1485×614  | yes |
 | 19 | `19_openwhisk_effectiveness_bars.py`  | `30000ad042…` | 2534×787  | yes (workload labels + shared panel title 2026-09-14) |
@@ -189,12 +189,19 @@ baseline, so the two platforms are comparable despite different absolute µs).
 
 Figure 13 was re-verified cell-by-cell on 2026-09-13 against its then-canonical
 sources (`unified_v2` + `tiebreak_fix`) and reproduced byte-for-byte. **On
-2026-09-14 both 13 and 14 were re-sourced** to the new single batch
+2026-09-14 both 13 and 14 were re-sourced** to the then-new single batch
 `results/unified_v3` (see `results/unified_v3/README.md`): Figure 13 lost its
 two-source split and `//` hatching, and Figure 14 gained `Skel+10`/`Skel+500`,
 so its strategy set now matches Figure 13's. Relative values moved by at most
 2.4 pt (first-query) and 6.4 pt (warm e2e) with **no sign flips**; absolute µs
 are ~1–9% faster and must not be mixed with `unified_v2` readings.
+
+**On 2026-09-17 both were re-sourced again** to `results/unified_v4/seed01`.
+The strategy set and every estimator are unchanged; the point was to put the
+figures in the same batch as the four result tables, which until then still drew
+their cross-seed columns from four other batches. First-query values moved by at
+most 1.6 pt (Scattered-Zipf-100K `Skel`, -29.4% -> -27.8%) with **no sign
+flips**.
 
 **Figure 19 workload-label collision, fixed 2026-09-14.** `19_openwhisk_effectiveness_bars.py`
 hard-coded its panel titles instead of resolving them through the canonical
@@ -292,12 +299,18 @@ Figure 19's panels; it should read `Scattered-Zipf-600K` / `Uniform-600K` /
 those two medians — but the percentage label now comes from `e2e_warm_median`,
 the median of the per-repetition sums, which is the canonical column the paper's
 tables read. The two differ by <0.4%, invisible on a log axis, but under
-`unified_v3` they round differently in three cells (Scattered-Zipf-100K
+`unified_v3` they rounded differently in three cells (Scattered-Zipf-100K
 `Skel-5` -14/-13, `Skel+500` +109/+110, Tail-Mixed `Skel+500` -41/-40), which
-would have put the figure and `tab:e2e-ac` one point apart. The label follows the
-tables: a label is a claim, the bar is a picture.
+would have put the figure and `tab:e2e-ac` one point apart. Under `unified_v4`
+only one cell still splits (Scattered-Zipf-100K `Skel-5` -14/-13). The label
+follows the tables: a label is a claim, the bar is a picture.
 
-**Propagated 2026-09-15.** `paper/main.tex` Section 5 now reads from
+**Propagated 2026-09-17.** `paper/main.tex` Sections 5 and 6 now read from
+`unified_v4` throughout, single-instantiation and cross-seed: both figure
+captions, all four result tables, `tab:ceiling` and the prose that quotes them.
+The 2026-09-15 `unified_v3` propagation below is superseded.
+
+**Propagated 2026-09-15.** `paper/main.tex` Section 5 then read from
 `unified_v3` throughout: both figure captions, `tab:e2e-ac`, the
 `tab:e2e-robustness` single-workload column, the ceiling table and prose, the
 competitive-baseline cross-references and the practical-guidance table. The
@@ -368,14 +381,15 @@ Figure 19's panels; it should read `Scattered-Zipf-600K` / `Uniform-600K` /
 those two medians — but the percentage label now comes from `e2e_warm_median`,
 the median of the per-repetition sums, which is the canonical column the paper's
 tables read. The two differ by <0.4%, invisible on a log axis, but under
-`unified_v3` they round differently in three cells (Scattered-Zipf-100K
+`unified_v3` they rounded differently in three cells (Scattered-Zipf-100K
 `Skel-5` -14/-13, `Skel+500` +109/+110, Tail-Mixed `Skel+500` -41/-40), which
-would have put the figure and `tab:e2e-ac` one point apart. The label follows the
-tables: a label is a claim, the bar is a picture.
+would have put the figure and `tab:e2e-ac` one point apart. Under `unified_v4`
+only one cell still splits (Scattered-Zipf-100K `Skel-5` -14/-13). The label
+follows the tables: a label is a claim, the bar is a picture.
 
-**Not yet propagated:** `paper/main.tex` still carries the old captions (Figure
-13's hatch legend, Figure 14's "tie-break-unaffected strategies only" and
-"not stacked here" sentences) and the 53 single-instantiation claims in
-`docs/audits/PAPER_CLAIM_MANIFEST.csv` still cite `unified_v2`/`tiebreak_fix`
-absolute values. The figures and the prose therefore disagree until that
-propagation is done.
+**Propagation closed, 2026-09-17.** The note that stood here said `main.tex`
+still carried the old captions (Figure 13's hatch legend, Figure 14's
+"tie-break-unaffected strategies only" and "not stacked here" sentences) and
+that the manifest still cited `unified_v2`/`tiebreak_fix`. The captions went
+with the 2026-09-15 propagation, and the manifest now cites `unified_v4` and
+verifies 132/132 against it, so the figures and the prose no longer disagree.

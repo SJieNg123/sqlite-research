@@ -8,10 +8,15 @@
 > with its new value). Nothing about the *method* of the audit changed, and no conclusion
 > moved — the re-measurement reproduced every relative result with zero sign flips.
 >
-> For current, machine-checked values use `docs/audits/PAPER_CLAIM_MANIFEST.csv`: all 50
-> `unified_v3` claims there are recomputed from the CSV on every regeneration, and as of
-> this date 50/50 match. Rows for other batches (cross-seed, RAM-pressure, cadence,
-> OpenWhisk, layout pairs) are unaffected.
+> For current, machine-checked values use `docs/audits/PAPER_CLAIM_MANIFEST.csv`.
+>
+> **Superseded again, 2026-09-17.** `main.tex` moved from `unified_v3` to the single
+> batch `results/unified_v4` for all four result tables and their cross-seed columns,
+> so every `unified_v3`, `ablation_comp_v2`, `competitive`, `seeds` and
+> `tiebreak_fix/seeds` value quoted in this file is now historical too. The manifest was
+> regenerated against `unified_v4` (132 claims, 111 recomputed, 0 fail) and is the only
+> current source. Rows for other batches (RAM-pressure, cadence, aging, OpenWhisk,
+> layout pairs, Tail-Hit) are unaffected.
 
 **Scope:** fail-closed numerical and provenance audit of every quantitative claim in
 `paper/main.tex`, checked against authoritative on-disk sources (result batches,

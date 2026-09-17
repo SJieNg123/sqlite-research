@@ -1,11 +1,12 @@
 """Figure 14: Warm-process end-to-end cold-start decomposition.
 
-Single canonical batch: results/unified_v3 (2026-09-14). Stacked absolute
-microseconds require one machine state, which previously forced this chart to
-drop the frequency-ranked 2e_K* arms (their corrected values lived in the
-separate results/tiebreak_fix batch). unified_v3 measured every arm -- including
-2e_K10/2e_K500 under the corrected (-count, pageno) tie-break -- in ONE run, so
-the strategy set here now matches Figure 13.
+Single canonical batch: results/unified_v4, seed01 (2026-09-17). Stacked
+absolute microseconds require one machine state, which previously forced this
+chart to drop the frequency-ranked 2e_K* arms (their corrected values lived in
+the separate results/tiebreak_fix batch). unified_v4 measured every arm --
+including 2e_K10/2e_K500 under the corrected (-count, pageno) tie-break -- in
+ONE run, and it is the batch the paper's four result tables also report, so the
+absolute stack here matches Table 5's absolute columns.
 
 Stack per strategy (layout orig, arm async, medians):
   first_query (bottom) + deliver (top) = warm-process / integrated e2e.
@@ -23,7 +24,7 @@ from plot_utils import ROOT, save, workload_panel_title
 import matplotlib.pyplot as plt
 import numpy as np
 
-UNIFIED = ROOT / "results/unified_v3/matrix/summary.csv"
+UNIFIED = ROOT / "results/unified_v4/seed01/summary.csv"
 
 # Aligned with Figure 13's strategy set (plus the baseline reference bar).
 ARMS      = ['baseline', 'layers_5', '2d', '2e_K10', '2e_K500', '2f_slru']
@@ -64,7 +65,7 @@ def get(workload, strategy):
 fig, axes = plt.subplots(1, 3, figsize=(12, 5.2), sharey=False)
 x = np.arange(len(ARMS))
 
-print("Figure 14 — plotted cells (unified_v3 absolute stack):")
+print("Figure 14 — plotted cells (unified_v4 absolute stack):")
 for ax, wl in zip(axes, WORKLOADS):
     fqs, dels, canon = [], [], []
     for s in ARMS:
