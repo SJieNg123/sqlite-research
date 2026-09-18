@@ -54,6 +54,7 @@ import statistics
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 # ----------------------------------------------------------------------------- config
@@ -163,6 +164,17 @@ STRATEGIES = [
 ]
 
 
+# Delivery knobs per arm. Absent == None == the original per-page path, untouched.
+# chunk_pages=0 is the uncapped "one hint per contiguous range" baseline; 32 is
+# read_ahead_kb/page_size on this host (128 KB / 4096), the largest hint the kernel
+# will honour in full.
+READAHEAD_WINDOW_PAGES = 32
+ARM_DELIVERY = {
+    "async_win":  {"mode": "coalesce", "chunk_pages": READAHEAD_WINDOW_PAGES},
+    "async_bulk": {"mode": "coalesce", "chunk_pages": 0},
+}
+
+
 def resolve_strategy(name):
     """Map a strategy name to its spec. Named entries above win; otherwise parse
     parameterized forms so N-sweeps / K-sweeps run through the same pipeline:
@@ -226,6 +238,10 @@ RE = {
     "preproc_us":     re.compile(r"warmer_us=([\d.]+)"),
     "open_us":        re.compile(r"open_us=([\d.]+)"),       # cold open+setup (excluded in warm-process model)
     "deliver_us":     re.compile(r"deliver_us=([\d.]+)"),    # iterate+prefetch syscalls (~static prefetch_elapsed)
+    # Two-phase delivery arms only; absent (-> None) on the per-page path, which the
+    # warmer leaves byte-for-byte unchanged.
+    "parse_us":       re.compile(r"parse_us=([\d.]+)"),      # CSV parse, split out of deliver_us
+    "ranges":         re.compile(r"ranges=(\d+)"),           # hints actually issued (coalesce arms)
 }
 
 
@@ -382,8 +398,17 @@ def build_hotset(pages, classify, dest, order="offset", seed=None):
 
 
 # ------------------------------------------------------------------------- execution
-def write_deliver_script(workdir, db, hotset, method, sleep_ms=0):
+def write_deliver_script(workdir, db, hotset, method, sleep_ms=0, delivery=None):
     """Tiny post-cold-script that warms <hotset> via <method> (paths baked in).
+
+    delivery=None (default) emits the byte-identical script every batch up to
+    unified_v4 used. A dict {"mode":..., "chunk_pages":...} instead adds the
+    warmer's WARM_DELIVERY/WARM_CHUNK_PAGES knobs for the coalesced-hint arms:
+    one posix_fadvise(WILLNEED) per contiguous range, optionally re-cut to
+    chunk_pages so each hint fits the kernel's readahead window. Measured on this
+    host: a single hint delivers only min(range_pages, read_ahead_kb/page_size)
+    pages, so an uncapped bulk hint under-delivers and a 32-page-chunked one does
+    not (see pipeline/engine/prefetch_warmer/src/warmer.c).
 
     sleep_ms>0 (fadvise arm only): sleep that many ms AFTER the async madvise/fadvise
     hints are issued but BEFORE the harness measures the first query, so kernel readahead
@@ -394,14 +419,18 @@ def write_deliver_script(workdir, db, hotset, method, sleep_ms=0):
     fd, path = tempfile.mkstemp(prefix=f"deliver_{method}_", suffix=".sh", dir=workdir)
     warmer_cmd = (f'{shlex.quote(str(WARMER))} '
                   f'{shlex.quote(str(db))} {shlex.quote(str(hotset))} {PAGE_SIZE}')
+    env = f"WARM_METHOD={method}"
+    if delivery is not None:
+        env += (f" WARM_DELIVERY={delivery['mode']}"
+                f" WARM_CHUNK_PAGES={delivery['chunk_pages']}")
     with os.fdopen(fd, "w") as f:
         f.write("#!/bin/sh\n")
         if method == "fadvise" and sleep_ms > 0:
             # warmer first (emits open_us/deliver_us on stderr), then let readahead land.
-            f.write(f'WARM_METHOD={method} {warmer_cmd}\n')
+            f.write(f'{env} {warmer_cmd}\n')
             f.write(f'sleep {sleep_ms / 1000.0:.3f}\n')
         else:
-            f.write(f'WARM_METHOD={method} exec {warmer_cmd}\n')
+            f.write(f'{env} exec {warmer_cmd}\n')
     os.chmod(path, 0o755)
     return path
 
@@ -441,10 +470,11 @@ def _sys_load():
     return load, mem
 
 
-def run_one(db, workload, hotset, method, recdir, args, use_drop_caches=True):
+def run_one(db, workload, hotset, method, recdir, args, use_drop_caches=True, delivery=None):
     """One harness invocation for one arm; returns parsed metrics (or None on failure)."""
     deliver = write_deliver_script(recdir, db, hotset, method,
-                                   sleep_ms=getattr(args, "deliver_sleep_ms", 0))
+                                   sleep_ms=getattr(args, "deliver_sleep_ms", 0),
+                                   delivery=delivery)
     cmd = _mem_prefix(args) + [str(BH), "--db", str(db), "--workload", str(workload),
            "--output", str(Path(recdir) / "ops.csv"),
            "--record-dir", str(recdir),
@@ -535,6 +565,7 @@ def aggregate(raw_rows, summary_path, cold_pct_max=1.0):
                     "fq_median", "fq_p95", "fq_min", "fq_stdev",
                     "delivery_pct_median", "preproc_us_median",
                     "open_us_median", "deliver_us_median",
+                    "parse_us_median", "ranges_median",
                     "e2e_median", "e2e_warm_median", "cold_pct_max"])
         def _med(rows, col):
             v = [float(r[col]) for r in rows if r.get(col)]
@@ -551,6 +582,7 @@ def aggregate(raw_rows, summary_path, cold_pct_max=1.0):
                         f"{statistics.median(deliv):.1f}" if deliv else "",
                         _med(rows, "preproc_us"),
                         _med(rows, "open_us"), _med(rows, "deliver_us"),
+                        _med(rows, "parse_us"), _med(rows, "ranges"),
                         _med(rows, "e2e_us"), _med(rows, "e2e_warm_us"),
                         f"{max(cold):.1f}" if cold else ""])
 
@@ -796,6 +828,12 @@ def add_run_parser(sub):
                     help="strategy key(s): baseline auto-runs; layers_<N>, 2d, 2e_K<K>, 2f_slru")
     ap.add_argument("--pread-reps", type=int, default=5, help="oracle arm reps (bumped 3->5 so p95 is meaningful)")
     ap.add_argument("--async-reps", type=int, default=10)
+    ap.add_argument("--async-win-reps", type=int, default=0,
+                    help="coalesced fadvise arm, each hint cut to the readahead window "
+                         f"({READAHEAD_WINDOW_PAGES} pages); 0 = arm off (default)")
+    ap.add_argument("--async-bulk-reps", type=int, default=0,
+                    help="coalesced fadvise arm, one uncapped hint per contiguous range "
+                         "(the naive whole-range WILLNEED); 0 = arm off (default)")
     ap.add_argument("--baseline-reps", type=int, default=10, help="no-prefetch baseline reps per (workload,db)")
     ap.add_argument("--no-baseline", action="store_true", help="skip the no-prefetch baseline arm")
     ap.add_argument("--outdir", default=str(ROOT / "results/main"))
@@ -903,17 +941,38 @@ def cmd_run(args):
                 build_hotset(set(classify.keys()), classify, ref)
             ref_hotsets[(w, ly)] = ref
 
+    # arm = how the pages are delivered (strategy = which pages). The two coalesced
+    # arms answer the "why not one bulk posix_fadvise(WILLNEED)?" question: async_bulk
+    # is that naive version, async_win re-cuts each range to the kernel's readahead
+    # window so the hints actually land. Both default to 0 reps, so every pre-existing
+    # invocation keeps the exact (pread, async) matrix it had. Built before the dry-run
+    # exit so --dry-run reports the real arm list and trips the lp guard below.
+    arms = [("pread", args.pread_reps), ("async", args.async_reps),
+            ("async_win", args.async_win_reps), ("async_bulk", args.async_bulk_reps)]
+    arms = [(a, k) for a, k in arms if k > 0 or a in ("pread", "async")]
+    # lp_* differ from 2f_slru ONLY in pread delivery order, and the coalesce path
+    # sorts offsets -- which would silently turn lp_shuf into lp_sorted. Fail loud
+    # rather than publish two identical arms under different names.
+    coalesced = [a for a, k in arms if a.startswith("async_")]
+    lp_cells = sorted({s["name"] for _w, _ly, s in cells if s["kind"] == "lp"})
+    if coalesced and lp_cells:
+        sys.exit(f"refusing to run {lp_cells} with coalesced arm(s) {coalesced}: "
+                 f"coalescing sorts offsets and destroys the delivery order these "
+                 f"strategies exist to measure. Run them in their own invocation "
+                 f"(--async-win-reps 0 --async-bulk-reps 0), as tools/run_unified_v5.sh does.")
+
     if args.dry_run:
         print(env_line)
         nwl = len({(w, ly) for w, ly, _ in cells})
         base = "" if args.no_baseline else f" + {nwl} baseline cells"
-        print(f"\n{len(cells)} cells x 2 arms{base}. plan:")
+        arm_names = [a for a, _k in arms]
+        print(f"\n{len(cells)} cells x {len(arms)} arms{base}. plan:")
         if not args.no_baseline:
             for w, ly in dict.fromkeys((w, ly) for w, ly, _ in cells):
                 print(f"  {w} {ly:6} {'baseline':10} hotset=0 pages   arm=[baseline] (no prefetch)")
         for w, ly, s in cells:
             _, npg = hotsets[(w, ly, s["name"])]
-            print(f"  {w} {ly:6} {s['name']:10} hotset={npg} pages  arms=[pread,async]")
+            print(f"  {w} {ly:6} {s['name']:10} hotset={npg} pages  arms={arm_names}")
         w, ly, s = cells[0]
         print("\nsample command (async arm, one rep):")
         print(f"  {BH} --db {DBS[ly]} --workload {WORKLOADS[w]} \\")
@@ -921,26 +980,28 @@ def cmd_run(args):
         print(f"    --post-cold-script <tmp: WARM_METHOD=fadvise warmer DB hotset {PAGE_SIZE}> \\")
         print(f"    --verify-hotset <hotset_{w}_{ly}_{s['name']}.csv>")
         base_note = "off" if args.no_baseline else f"{args.baseline_reps}+1warmup per (w,layout)"
-        print(f"\nreps: pread {args.pread_reps}+1warmup, async {args.async_reps}+1warmup, "
-              f"baseline {base_note}, rep-major.")
+        arm_reps = ", ".join(f"{a} {k}+1warmup" for a, k in arms)
+        print(f"\nreps: {arm_reps}, baseline {base_note}, rep-major.")
         print(f"hardening: pin cpu={args.cpu} (sched_setaffinity), warm-cpu-ms={args.warm_cpu_ms}, "
               f"readonly+require-read-first, cold-pct-max={args.cold_pct_max}.")
         return
 
-    arms = [("pread", args.pread_reps), ("async", args.async_reps)]
     # baseline = per (workload,layout), strategy-independent -> dedupe the cell list
     wl_layouts, seen_wl = [], set()
     for w, ly, _s in cells:
         if (w, ly) not in seen_wl:
             seen_wl.add((w, ly)); wl_layouts.append((w, ly))
     baseline_keep = 0 if args.no_baseline else args.baseline_reps
-    max_keep = max(args.pread_reps, args.async_reps, baseline_keep)
+    max_keep = max([k for _a, k in arms] + [baseline_keep])
     raw_rows = []
     raw_path = outdir / "raw.csv"
+    # ts is wall-clock at emit: this batch spans hours, so drift across the window has
+    # to be measurable after the fact rather than assumed small. parse_us/ranges are
+    # empty on the per-page arms, which do not emit them.
     cols = ["workload", "db", "strategy", "arm", "ra_kb", "rep", "warmup",
             "cold_pct", "delivery_pct", "first_query_us", "preproc_us",
-            "open_us", "deliver_us", "e2e_us", "e2e_warm_us",
-            "avg_us", "majflt", "minflt", "load", "memavail_kb"]
+            "open_us", "deliver_us", "parse_us", "ranges", "e2e_us", "e2e_warm_us",
+            "avg_us", "majflt", "minflt", "load", "memavail_kb", "ts"]
     rawf = open(raw_path, "w", newline="")
     rw = csv.DictWriter(rawf, fieldnames=cols)
     rw.writeheader()
@@ -962,9 +1023,11 @@ def cmd_run(args):
                "cold_pct": _fmt(m["cold_pct"]), "delivery_pct": _fmt(m["delivery_pct"]),
                "first_query_us": _fmt(fq), "preproc_us": _fmt(preproc),
                "open_us": _fmt(open_us), "deliver_us": _fmt(deliver_us),
+               "parse_us": _fmt(m.get("parse_us")), "ranges": _fmt(m.get("ranges")),
                "e2e_us": _fmt(e2e), "e2e_warm_us": _fmt(e2e_warm), "avg_us": _fmt(m["avg_us"]),
                "majflt": _fmt(m["majflt"]), "minflt": _fmt(m["minflt"]),
-               "load": load, "memavail_kb": mem}
+               "load": load, "memavail_kb": mem,
+               "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
         rw.writerow(row); rawf.flush(); raw_rows.append(row)
         sys.stderr.write(
             f"[rep{rep} {'warm' if warmup=='1' else 'keep'}] {w} {ly} "
@@ -991,7 +1054,8 @@ def cmd_run(args):
                 if rep > 1 + keep:
                     continue
                 method = "pread" if arm == "pread" else "fadvise"
-                m = run_one(db, wl, hotset, method, recdir, args)
+                m = run_one(db, wl, hotset, method, recdir, args,
+                            delivery=ARM_DELIVERY.get(arm))
                 if m is None:
                     continue
                 emit(m, w, ly, s["name"], arm, rep, warmup)
