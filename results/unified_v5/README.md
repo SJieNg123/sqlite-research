@@ -125,6 +125,12 @@ strategy over `Dump` on absolute `e2e_warm`, below 1 means we win. Per-seed medi
 | C | `2e_K10` | 0.32× | **0.62×** | 6/10 |
 | C_hit | `2f_top28` | 0.44× | **1.05×** | 2/10 |
 
+**Correction.** The `ours` column above names `2f_top14` and `2f_top28` on Uniform-100K and
+the pure-hit control. Those are `Dump-N`, the ported Pre-Buffer-style baseline, not our
+strategies. Restricted to the Skel family, which is what `ours` should mean, `unified_v6`
+gives 0.27x, 0.28x, 0.62x and **1.15x**, so the pure-hit control is a clearer loss than the
+1.05x printed here. See `results/unified_v6/README.md`.
+
 As effects against the same-seed baseline, median of per-seed medians:
 
 | workload | Dump pread | Dump async | Dump **async_win** | Dump async_bulk | our best, `async_win` |
@@ -226,6 +232,12 @@ There is deliberately no cross-seed `raw.csv`. `tools/stats_uncertainty.py` pool
 files by design, and a merged one would be 4 MB of duplicate with a schema no consumer wants.
 
 ## Status
+
+**Superseded by `results/unified_v6` on 2026-09-23.** v6 re-ran this whole matrix in one
+continuous window with the `2f_topN` family added to the layout and size axes, the gap this
+batch left open. It reproduces every one of the 376 shared cells with a median move of 1.8
+points and no substantive sign flip, so the results below stand as an independent
+confirmation rather than as the canonical source. Quote v6.
 
 Supersedes `results/unified_v4` for every `orig` claim, and additionally covers the
 `vacuum`/`ta`/`1gb` layout and size axes, `layers_92`, and the full `C_hit` set, none of which
