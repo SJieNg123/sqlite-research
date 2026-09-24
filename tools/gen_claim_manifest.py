@@ -24,18 +24,24 @@ COLS = ["claim_id", "tex_line_or_section", "quoted_claim", "claim_kind", "worklo
 # tab:competitive and tab:seeds all read it, so the four tables are mutually
 # comparable. UNI/TB stay for the Section 6 layout pairs, which need the
 # vacuum/ta arms that unified_v4 did not run.
-UNI3 = "results/unified_v4/seed01/summary.csv"
-UNI4U = "results/unified_v4/uncertainty.csv"
-UNI4SEEDS = "results/unified_v4/seed*/summary.csv"
-UNI = "results/unified_v2/matrix/summary.csv"
-TB = "results/tiebreak_fix/master_summary.csv"
-ABL = "results/ablation_comp_v2/uncertainty.csv"
-COMP = "results/competitive/uncertainty.csv"
-CHIT = "results/c_hit/uncertainty.csv"
-CHIT2 = "results/c_hit_v2/uncertainty.csv"
-TBU = "results/tiebreak_fix/uncertainty.csv"
-SEEDS = "results/seeds/seed*/summary.csv"
-TBSEEDS = "results/tiebreak_fix/seeds/seed*/summary.csv"
+# unified_v6 (2026-09-23) is canonical for every local axis: A/B/C/C_hit on orig
+# with five arms, plus A/B/C on vacuum/ta/1gb with twelve strategies, all in one
+# continuous window at one committed code version. It therefore replaces every
+# batch these constants used to name, including the layout pairs that previously
+# needed unified_v2/tiebreak_fix and the C_hit control that had its own batch.
+# See results/RESULT_PROVENANCE.md 4.2.
+UNI3 = "results/unified_v6/seed01/summary.csv"
+UNI4U = "results/unified_v6/uncertainty.csv"
+UNI4SEEDS = "results/unified_v6/seed*/summary.csv"
+UNI = "results/unified_v6/seed01/summary.csv"
+TB = "results/unified_v6/seed01/summary.csv"
+ABL = "results/unified_v6/uncertainty.csv"
+COMP = "results/unified_v6/uncertainty.csv"
+CHIT = "results/unified_v6/uncertainty.csv"
+CHIT2 = "results/unified_v6/uncertainty.csv"
+TBU = "results/unified_v6/uncertainty.csv"
+SEEDS = "results/unified_v6/seed*/summary.csv"
+TBSEEDS = "results/unified_v6/seed*/summary.csv"
 AGE = "results/aging_v2/aging_ci.csv"
 
 import sys as _sys, pathlib as _pl
@@ -70,7 +76,7 @@ def sf(w, s, arm="async", db="orig", metric=None):
 
 # ---- machine-checkable result claims ----------------------------------------
 # baseline first-query (unified_v2), appears in §2/§3/§7/§8, tab:e2e-ac header
-for w, disp in [("A", "500"), ("B", "732"), ("C_mixed", "1067")]:
+for w, disp in [("A", "492"), ("B", "734"), ("C_mixed", "1013")]:
     ww = "C" if w == "C_mixed" else w
     add("101,212,241,448,454,518", f"baseline first-query {disp} us", "abs_latency",
         w, "orig", "baseline", "first_query", "n/a", "single", "median", disp,
@@ -78,7 +84,7 @@ for w, disp in [("A", "500"), ("B", "732"), ("C_mixed", "1067")]:
         "int", "OK", "unaffected main-matrix", "verified", "canonical baseline")
 
 # 2f_slru first-query abs + reduction
-for w, absv, red in [("A", "99", "-80"), ("B", "100", "-86"), ("C_mixed", "94", "-91")]:
+for w, absv, red in [("A", "96", "-80"), ("B", "97", "-87"), ("C_mixed", "91", "-91")]:
     ww = "C" if w == "C_mixed" else w
     add("454", f"2f_slru first-query {absv} us", "abs_latency", w, "orig", "2f_slru",
         "first_query", "n/a", "single", "median", absv, UNI3, UNI3, "n/a",
@@ -90,15 +96,15 @@ for w, absv, red in [("A", "99", "-80"), ("B", "100", "-86"), ("C_mixed", "94", 
         "OK", "-79 to -91 span", "verified", "")
 
 # first-query ceilings (2d interior), unaffected
-for w, disp in [("A", "-28"), ("B", "-44"), ("C_mixed", "-38")]:
+for w, disp in [("A", "-33"), ("B", "-45"), ("C_mixed", "-36")]:
     ww = "C" if w == "C_mixed" else w
     add("456,467", f"interior-only first-query ceiling {disp}%", "rel_improvement", w,
         "orig", "2d", "first_query", "n/a", "single", "paired", disp, UNI3, UNI3, "n/a",
         sf(ww, "2d"), "fq_median", "rel:fq_median", "int", "OK", "ceiling", "verified", "")
 
 # A 2e_K500 first-query -64 (CHANGED -> tiebreak); C 2e_K10 first-query -83 (CHANGED)
-add("456,467", "2e_K500 first-query -64% (A)", "rel_improvement", "A", "orig", "2e_K500",
-    "first_query", "n/a", "single", "paired", "-64", UNI3, UNI3, "n/a", sf("A", "2e_K500"),
+add("456,467", "2e_K500 first-query -63% (A)", "rel_improvement", "A", "orig", "2e_K500",
+    "first_query", "n/a", "single", "paired", "-63", UNI3, UNI3, "n/a", sf("A", "2e_K500"),
     "fq_median", "rel:fq_median", "int", "OK", "changed->tiebreak", "verified", "")
 add("456,469,485", "2e_K10 first-query -83% (C_mixed)", "rel_improvement", "C_mixed", "orig",
     "2e_K10", "first_query", "n/a", "single", "paired", "-83", UNI3, UNI3, "n/a",
@@ -106,12 +112,12 @@ add("456,469,485", "2e_K10 first-query -83% (C_mixed)", "rel_improvement", "C_mi
     "verified", "")
 
 # ---- tab:e2e-ac (unified_v2 single batch, compare_group=e2e-ac) --------------
-E2E = [("A", "layers_5", "581", "+16", "433", "-13"),
-       ("A", "2d", "624", "+25", "446", "-11"),
-       ("A", "2f_slru", "7325", "+1366", "7148", "+1330"),
-       ("C", "layers_5", "1291", "+21", "1108", "+4"),
-       ("C", "2d", "909", "-15", "728", "-32"),
-       ("C", "2f_slru", "1000", "-6", "856", "-20")]
+E2E = [("A", "layers_5", "644", "+31", "451", "-8"),
+       ("A", "2d", "647", "+32", "414", "-16"),
+       ("A", "2f_slru", "7306", "+1386", "7076", "+1339"),
+       ("C", "layers_5", "1326", "+31", "1099", "+8"),
+       ("C", "2d", "905", "-11", "719", "-29"),
+       ("C", "2f_slru", "1030", "+2", "846", "-16")]
 for w, s, sstd, pstd, swarm, pwarm in E2E:
     wl = "C_mixed" if w == "C" else w
     add("521-524", f"tab:e2e-ac {w} {s} std {sstd} ({pstd}%)", "abs_latency", wl, "orig", s,
@@ -129,16 +135,16 @@ for w, s, sstd, pstd, swarm, pwarm in E2E:
         "e2e_warm", "warm-process", "single", "paired", pwarm, UNI3, UNI3, "n/a", sf(w, s),
         "e2e_warm_median", "rel:e2e_warm_median", "int", "OK", "", "verified", "", "")
 
-# ---- tab:corrected-arms (tiebreak single batch, compare_group=corrected-arms)
-add("537", "A 2e_K500 corrected 512->1079 +111%", "abs_latency", "A", "orig", "2e_K500",
-    "e2e_warm", "warm-process", "single", "median", "1029", UNI3, UNI3, "n/a", sf("A", "2e_K500"),
-    "e2e_warm_median", "abs:e2e_warm_median", "int", "OK", "corrected same-batch", "verified",
-    "", "corrected-arms")
+# ---- tab:corrected-arms ------------------------------------------------------
+# The absolute A 2e_K500 e2e_warm cell is no longer inventoried. Its table was
+# removed from the paper, and the only Skel+500 figure still printed is the
+# percentage, which the next claim covers. A manifest entry for a value the paper
+# does not display cannot be checked against the paper and would pass vacuously.
 add("fig:e2e-stacked", "A 2e_K500 +110% (fig 14 caption)", "rel_improvement", "A", "orig", "2e_K500", "e2e_warm",
-    "warm-process", "single", "paired", "+106", UNI3, UNI3, "n/a", sf("A", "2e_K500"),
+    "warm-process", "single", "paired", "+115", UNI3, UNI3, "n/a", sf("A", "2e_K500"),
     "e2e_warm_median", "rel:e2e_warm_median", "int", "OK", "over-provisioned leaf", "verified", "")
-add("523", "C_mixed 2e_K10 1067->262 -75%", "abs_latency", "C_mixed", "orig",
-    "2e_K10", "e2e_warm", "warm-process", "single", "median", "262", UNI3, UNI3, "n/a",
+add("523", "C_mixed 2e_K10 1013->253 -75%", "abs_latency", "C_mixed", "orig",
+    "2e_K10", "e2e_warm", "warm-process", "single", "median", "253", UNI3, UNI3, "n/a",
     sf("C", "2e_K10"), "e2e_warm_median", "abs:e2e_warm_median", "int", "OK",
     "corrected same-batch; single-inst", "verified", "seed-1 scoped", "corrected-arms")
 add("523,636", "C_mixed 2e_K10 -75% single-inst", "rel_improvement", "C_mixed",
@@ -151,9 +157,9 @@ add("523,636", "C_mixed 2e_K10 -75% single-inst", "rel_improvement", "C_mixed",
 # print as "0" and make a robust regression look like it straddles zero, so that
 # one row is displayed and checked to one decimal.
 ABLROWS = [("2d", "-44", "-47", "-41", "-37", "int"),
-           ("leaf_rand_K10", "-2", "-4.0", "-0.1", "6", "round1"),
-           ("leaf_freq_K10", "-12", "-22", "-1", "-4", "int"),
-           ("2e_K10", "-64", "-76", "-52", "-55", "int")]
+           ("leaf_rand_K10", "-1", "-3", "1", "7", "int"),
+           ("leaf_freq_K10", "-10", "-21", "1", "-2", "int"),
+           ("2e_K10", "-66", "-77", "-54", "-57", "int")]
 for s, fq, lo, hi, warm, cirule in ABLROWS:
     add("583-586", f"ablation {s} fq {fq}% [{lo},{hi}]", "conf_interval", "C_mixed", "orig", s,
         "first_query", "n/a", "cross", "10-seed bootstrap", fq, UNI4U, UNI4U, "n/a",
@@ -169,10 +175,10 @@ for s, fq, lo, hi, warm, cirule in ABLROWS:
 # ---- tab:competitive --------------------------------------------------------
 # A/B columns: results/competitive; C column: ablation_comp_v2 (except 2f_top500 = competitive)
 COMPROWS = [
-    ("2e_K10", [("A", UNI4U, "-38", "-52", "-24"), ("B", UNI4U, "-26", "-32", "-17"), ("C", UNI4U, "-55", "-68", "-43")]),
-    ("2f_top14", [("A", UNI4U, "-31", "-42", "-22"), ("B", UNI4U, "-27", "-34", "-17"), ("C", UNI4U, "-55", "-67", "-43")]),
-    ("2f_top500", [("A", UNI4U, "83", "35", "155"), ("B", UNI4U, "44", "26", "60"), ("C", UNI4U, "-9", "-13", "-5")]),
-    ("2f_slru", [("A", UNI4U, "767", "677", "903"), ("B", UNI4U, "722", "641", "827"), ("C", UNI4U, "-10", "-14", "-5")]),
+    ("2e_K10", [("A", UNI4U, "-38", "-52", "-25"), ("B", UNI4U, "-25", "-31", "-15"), ("C", UNI4U, "-57", "-68", "-46"), ("C_hit", UNI4U, "-29", "-36", "-20")]),
+    ("2f_top14", [("A", UNI4U, "-31", "-42", "-22"), ("B", UNI4U, "-26", "-33", "-15"), ("C", UNI4U, "-57", "-68", "-46"), ("C_hit", UNI4U, "-30", "-37", "-22")]),
+    ("2f_top500", [("A", UNI4U, "81", "36", "149"), ("B", UNI4U, "41", "24", "57"), ("C", UNI4U, "-10", "-14", "-6"), ("C_hit", UNI4U, "14", "-1", "29")]),
+    ("2f_slru", [("A", UNI4U, "770", "681", "907"), ("B", UNI4U, "724", "649", "826"), ("C", UNI4U, "-9", "-13", "-5"), ("C_hit", UNI4U, "72", "49", "102")]),
 ]
 for s, cells in COMPROWS:
     for w, src, mean, lo, hi in cells:
@@ -186,11 +192,36 @@ for s, cells in COMPROWS:
             "e2e_warm", "warm-process", "cross", "10-seed bootstrap", f"[{lo},{hi}]", src, src,
             "n/a", sf(w, s, metric="e2e_warm_us"), "ci", "uci", "int", "OK", "", "verified", "")
 
+# ---- tab:competitive, window-chunked block ---------------------------------
+# Same cells under one posix_fadvise per 32-page readahead window instead of one
+# per page. Selection is identical, only delivery differs, which is the point of
+# the pairing: it is what moves the dump from losing everywhere to winning on the
+# two tail workloads.
+WINROWS = [
+    ("2e_K10",    [("A", "-45", "-59", "-32"), ("B", "-32", "-38", "-24"), ("C", "-62", "-75", "-49"), ("C_hit", "-34", "-40", "-26")]),
+    ("2f_top14",  [("A", "-39", "-49", "-31"), ("B", "-33", "-39", "-25"), ("C", "-62", "-75", "-50"), ("C_hit", "-34", "-40", "-26")]),
+    ("2f_top500", [("A", "29", "11", "47"),    ("B", "22", "6", "36"),     ("C", "-66", "-68", "-65"), ("C_hit", "-24", "-36", "-12")]),
+    ("2f_slru",   [("A", "150", "125", "189"), ("B", "137", "115", "168"), ("C", "-66", "-68", "-65"), ("C_hit", "-41", "-49", "-31")]),
+]
+for s, cells in WINROWS:
+    for w, mean, lo, hi in cells:
+        wl = "C_mixed" if w == "C" else w
+        add("618-621", f"competitive window-chunked {s} {w} {mean}% [{lo},{hi}]", "conf_interval",
+            wl, "orig", s, "e2e_warm", "warm-process", "cross", "10-seed bootstrap", mean,
+            UNI4U, UNI4U, "n/a", sf(w, s, arm="async_win", metric="e2e_warm_us"), "mean_pct",
+            "umean", "int", "OK", "OK", "verified",
+            "window-chunked delivery block; same selection as the per-page block above")
+        add("618-621", f"competitive window-chunked {s} {w} CI [{lo},{hi}]", "conf_interval",
+            wl, "orig", s, "e2e_warm", "warm-process", "cross", "10-seed bootstrap",
+            f"[{lo},{hi}]", UNI4U, UNI4U, "n/a",
+            sf(w, s, arm="async_win", metric="e2e_warm_us"), "ci", "uci", "int", "OK", "",
+            "verified", "")
+
 # ---- tab:seeds single-workload column --------------------------------------
 # single-inst: unaffected -> unified; changed (B 2e_K10, C 2e_K10) -> tiebreak
-SEEDS_SINGLE = [("C", "2e_K10", "-75", UNI3), ("C", "2d", "-32", UNI3), ("A", "2e_K10", "-9", UNI3),
-                ("A", "2d", "-11", UNI3), ("B", "2d", "-32", UNI3), ("B", "2e_K10", "-30", UNI3),
-                ("A", "layers_5", "-13", UNI3), ("B", "layers_5", "-35", UNI3)]
+SEEDS_SINGLE = [("C", "2e_K10", "-75", UNI3), ("C", "2d", "-29", UNI3), ("A", "2e_K10", "-8", UNI3),
+                ("A", "2d", "-16", UNI3), ("B", "2d", "-33", UNI3), ("B", "2e_K10", "-31", UNI3),
+                ("A", "layers_5", "-8", UNI3), ("B", "layers_5", "-35", UNI3)]
 # Phase 4 fix: B 2e_K10 single-workload was -29 (superseded unified); corrected to
 # -30 (tiebreak) since B 2e_K10 is a changed cell. Now matches the paper.
 for w, s, disp, src in SEEDS_SINGLE:
@@ -204,10 +235,10 @@ for w, s, disp, src in SEEDS_SINGLE:
 
 # ---- tab:seeds cross-seed means (per-seed paired aggregation) ----------------
 # changed -> tiebreak seeds; unaffected -> results/seeds
-SEEDS_CROSS = [("C", "2e_K10", "-55", UNI4SEEDS, "same batch"), ("C", "2d", "-37", UNI4SEEDS, "same batch"),
+SEEDS_CROSS = [("C", "2e_K10", "-57", UNI4SEEDS, "same batch"), ("C", "2d", "-37", UNI4SEEDS, "same batch"),
                ("A", "2e_K10", "-38", UNI4SEEDS, "same batch"), ("A", "2d", "-27", UNI4SEEDS, "same batch"),
-               ("B", "2d", "-26", UNI4SEEDS, "same batch"), ("B", "2e_K10", "-26", UNI4SEEDS, "same batch"),
-               ("A", "layers_5", "-5", UNI4SEEDS, "same batch"), ("B", "layers_5", "-2", UNI4SEEDS, "same batch")]
+               ("B", "2d", "-26", UNI4SEEDS, "same batch"), ("B", "2e_K10", "-25", UNI4SEEDS, "same batch"),
+               ("A", "layers_5", "-5", UNI4SEEDS, "same batch"), ("B", "layers_5", "-1", UNI4SEEDS, "same batch")]
 for w, s, disp, glob, tag in SEEDS_CROSS:
     wl = "C_mixed" if w == "C" else w
     add("645-652", f"tab:seeds {w} {s} cross-seed mean {disp}%", "rel_improvement", wl, "orig",
@@ -216,28 +247,28 @@ for w, s, disp, glob, tag in SEEDS_CROSS:
         "cross-seed column; per-seed paired", "verified", tag)
 
 # cross-seed CIs that HAVE a canonical uncertainty file (tiebreak / ablation_comp_v2)
-add("645", "tab:seeds C 2e_K10 cross CI [-68,-43]", "conf_interval", "C_mixed", "orig",
-    "2e_K10", "e2e_warm", "warm-process", "cross", "bootstrap 95% CI", "[-68,-43]", UNI4U, UNI4U,
+add("645", "tab:seeds C 2e_K10 cross CI [-68,-46]", "conf_interval", "C_mixed", "orig",
+    "2e_K10", "e2e_warm", "warm-process", "cross", "bootstrap 95% CI", "[-68,-46]", UNI4U, UNI4U,
     "n/a", sf("C", "2e_K10", metric="e2e_warm_us"), "ci", "uci", "int", "OK", "", "verified", "")
-add("650", "tab:seeds B 2e_K10 cross CI [-32,-17]", "conf_interval", "B", "orig", "2e_K10",
-    "e2e_warm", "warm-process", "cross", "bootstrap 95% CI", "[-32,-17]", UNI4U, UNI4U, "n/a",
+add("650", "tab:seeds B 2e_K10 cross CI [-31,-15]", "conf_interval", "B", "orig", "2e_K10",
+    "e2e_warm", "warm-process", "cross", "bootstrap 95% CI", "[-31,-15]", UNI4U, UNI4U, "n/a",
     sf("B", "2e_K10", metric="e2e_warm_us"), "ci", "uci", "int", "OK", "", "verified", "")
 
 # ---- C_hit control ---------------------------------------------------------
-add("606", "C_hit 2e_K10 ~-27%", "rel_improvement", "C_hit", "orig", "2e_K10", "e2e_warm",
-    "warm-process", "cross", "10-seed bootstrap", "-27", CHIT2, CHIT2, "n/a",
+add("606", "C_hit 2e_K10 ~-29%", "rel_improvement", "C_hit", "orig", "2e_K10", "e2e_warm",
+    "warm-process", "cross", "10-seed bootstrap", "-29", CHIT2, CHIT2, "n/a",
     sf("C_hit", "2e_K10", metric="e2e_warm_us"), "mean_pct", "umean", "int", "OK",
     "C_hit corrected -> c_hit_v2; orig-only", "verified", "")
-add("606", "C_hit 2d -28.5%", "rel_improvement", "C_hit", "orig", "2d", "e2e_warm",
-    "warm-process", "cross", "10-seed bootstrap", "-28.5", CHIT, CHIT, "n/a",
+add("606", "C_hit 2d -28%", "rel_improvement", "C_hit", "orig", "2d", "e2e_warm",
+    "warm-process", "cross", "10-seed bootstrap", "-28", CHIT, CHIT, "n/a",
     sf("C_hit", "2d", metric="e2e_warm_us"), "mean_pct", "umean", "round1", "OK",
     "C_hit unaffected -> c_hit; orig-only", "verified", "")
-add("606", "C_hit 2f_top14 -30.6%", "rel_improvement", "C_hit", "orig", "2f_top14", "e2e_warm",
-    "warm-process", "cross", "10-seed bootstrap", "-30.6", CHIT, CHIT, "n/a",
+add("606", "C_hit 2f_top14 -30%", "rel_improvement", "C_hit", "orig", "2f_top14", "e2e_warm",
+    "warm-process", "cross", "10-seed bootstrap", "-30", CHIT, CHIT, "n/a",
     sf("C_hit", "2f_top14", metric="e2e_warm_us"), "mean_pct", "umean", "round1", "OK",
     "orig-only", "verified", "")
-add("606", "C_hit learned -29.0%", "rel_improvement", "C_hit", "orig", "learned_markov_14",
-    "e2e_warm", "warm-process", "cross", "10-seed bootstrap", "-29.0", CHIT, CHIT, "n/a",
+add("606", "C_hit learned -30%", "rel_improvement", "C_hit", "orig", "learned_markov_14",
+    "e2e_warm", "warm-process", "cross", "10-seed bootstrap", "-30", CHIT, CHIT, "n/a",
     sf("C_hit", "learned_markov_14", metric="e2e_warm_us"), "mean_pct", "umean", "round1", "OK",
     "orig-only", "verified", "")
 
@@ -252,23 +283,28 @@ for w, s, ck, disp in [("YD", "2e_K10_static", "0", "-50"), ("YD", "2e_K10_stati
         "stationarity-dependent", "verified", "")
 
 # ---- layout comparison (line 630) ------------------------------------------
-add("630", "layout A orig 2d 452 us", "abs_latency", "A", "orig", "2d", "e2e_warm",
-    "warm-process", "single", "median", "452", UNI, UNI, "n/a", sf("A", "2d"),
+add("630", "layout A orig 2d 414 us", "abs_latency", "A", "orig", "2d", "e2e_warm",
+    "warm-process", "single", "median", "414", UNI, UNI, "n/a", sf("A", "2d"),
     "e2e_warm_median", "abs:e2e_warm_median", "int", "OK", "same-batch per-workload pair",
     "verified", "")
-add("630", "layout B orig 2d 509 us", "abs_latency", "B", "orig", "2d", "e2e_warm",
-    "warm-process", "single", "median", "509", UNI, UNI, "n/a", sf("B", "2d"),
-    "e2e_warm_median", "abs:e2e_warm_median", "int", "OK", "", "verified", "")
-add("630", "layout C_mixed orig 2e_K10 265 us", "abs_latency", "C_mixed", "orig", "2e_K10",
-    "e2e_warm", "warm-process", "single", "median", "265", TB, TB, "n/a", sf("C", "2e_K10"),
+# The sentence quotes the BEST warm-process latency per layout, not a fixed
+# strategy. On Uniform-100K at seed 1 that is layers_5 (475 us) under unified_v6,
+# where it was 2d under the older layout batch, so the claim is pinned to the arm
+# the sentence actually reports rather than to a strategy that is no longer best.
+add("630", "layout B orig best (layers_5) 475 us", "abs_latency", "B", "orig", "layers_5",
+    "e2e_warm", "warm-process", "single", "median", "475", UNI, UNI, "n/a", sf("B", "layers_5"),
+    "e2e_warm_median", "abs:e2e_warm_median", "int", "OK", "best-of-strategies cell",
+    "verified", "best arm changed from 2d to layers_5 between batches")
+add("630", "layout C_mixed orig 2e_K10 253 us", "abs_latency", "C_mixed", "orig", "2e_K10",
+    "e2e_warm", "warm-process", "single", "median", "253", TB, TB, "n/a", sf("C", "2e_K10"),
     "e2e_warm_median", "abs:e2e_warm_median", "int", "OK", "corrected batch", "verified", "")
 
 # ---- documented (structural / cited / qualitative / range) ------------------
 # These are inventoried for completeness; not recomputed from our result CSVs.
 DOC = [
     ("52,121,129,718", "2d warm e2e roughly 25-30% (headline range)", "range", "all", "2d",
-     "e2e_warm", "summary of tab:seeds/C_hit A-27 B-26 Chit-28.5", "derived from cross-seed"),
-    ("52,718", "2f_slru deliver 0.8 to 7 ms", "range", "all", "2f_slru", "deliver",
+     "e2e_warm", "summary of tab:seeds/C_hit A-27 B-26 Chit-28", "derived from cross-seed"),
+    ("52,718", "2f_slru deliver 0.2 to 7 ms", "range", "all", "2f_slru", "deliver",
      "tab:overhead deliver range", "range"),
     ("52", "A -27% to -38% skew bonus", "range", "A", "2d/2e_K10", "e2e_warm",
      "tab:seeds A 2d -27, 2e_K10 -38", "derived"),
