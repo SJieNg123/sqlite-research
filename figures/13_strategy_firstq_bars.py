@@ -1,6 +1,6 @@
 """Figure 13: Paired first-query reduction by strategy, per workload.
 
-Single canonical batch: results/unified_v4, seed01 (2026-09-17). Every cell --
+Single canonical batch: results/unified_v6, seed01 (2026-09-23). Every cell --
 including the frequency-ranked 2e_K* arms -- was measured in ONE run with the
 corrected (-count, pageno) tie-break, so no per-cell source selection is needed.
 This is the same batch that backs the paper's four result tables, so the figure
@@ -17,7 +17,7 @@ from plot_utils import ROOT, save, STRATEGY_COLORS, workload_panel_title
 import matplotlib.pyplot as plt
 import numpy as np
 
-UNIFIED   = ROOT / "results/unified_v4/seed01/summary.csv"
+UNIFIED   = ROOT / "results/unified_v6/seed01/summary.csv"
 
 ARMS      = ['layers_5', '2d', '2e_K10', '2e_K500', '2f_slru']
 ARM_LABEL = {'layers_5': 'Skel-5', '2d': 'Skel', '2e_K10': 'Skel+10',
@@ -72,7 +72,7 @@ for ax, wl in zip(axes, WORKLOADS):
                 va='top' if v < 0 else 'bottom', fontsize=8, fontweight='bold')
     ax.axhline(0, color='#374151', lw=1.0)
     ax.set_xticks(x)
-    ax.set_xticklabels([ARM_LABEL[s] for s in ARMS], fontsize=9, rotation=25, ha='right')
+    ax.set_xticklabels([ARM_LABEL[s] for s in ARMS], fontsize=8.5, rotation=0, ha='center')
     ax.set_title(WL_TITLE[wl], fontsize=11)
     ax.set_ylim(-100, 12)
     ax.grid(axis='y', alpha=0.3)
