@@ -10,12 +10,24 @@ whether a **reused** execution environment can still find its data cold.
 
 ## What each invocation records
 
-Before anything reads the file, the handler measures whole-file residency with
-the same `residency.py` the OpenWhisk campaign uses. On an environment's first
-invocation it then reads the whole database once, so later invocations start
-from as warm a cache as the memory size allows and read nothing further.
-Residency in a reused environment can therefore only hold or fall, and any fall
-is what the idle interval took away.
+Lambda leaves no way to read page-cache residency without touching the data.
+`diag.py` established this on the live runtime: seccomp blocks `mincore`
+outright, the 5.10 kernel predates `cachestat`, and `/var/task` is squashfs,
+which rejects `RWF_NOWAIT`. So residency is measured by **timing reads**, which
+separate cleanly there: a miss costs about 650 to 970 us, a hit 3 to 6 us.
+
+Each invocation first reads 100 pages spread evenly over the database and
+counts those under 100 us as resident. squashfs decompresses whole blocks of up
+to 1 MB and caches every page in the block, so the samples sit about 1.03 MB
+apart and no read can warm another sample. Every raw latency is kept in
+`lat_us`, so the threshold can be re-drawn afterwards.
+
+Probing re-reads every sampled page it finds missing, so each invocation ends
+with all samples resident. What the next invocation measures is therefore how
+much of the data read at the previous invocation survived one idle interval,
+which is the scenario of a function that reads its data and then goes idle. An
+environment's first invocation also reads the whole database once, so the
+first interval starts from as warm a cache as the memory size allows.
 
 Three states, told apart by `env_id`, which is generated once per execution
 environment:
@@ -23,8 +35,8 @@ environment:
 | state | `cold_start` | `resident_pct` | meaning |
 |---|---|---|---|
 | A | true | whatever deployment left | new environment, an ordinary cold start |
-| B | false | about `resident_after_warm_pct` | warm environment, warm data |
-| **C** | **false** | **well below it** | **warm environment, cold data: the phenomenon** |
+| B | false | near 100 | warm environment, warm data |
+| **C** | **false** | **well below 100** | **warm environment, cold data: the phenomenon** |
 
 Each record also carries `idle_s`, `env_age_s`, `mem_mb`, `log_stream` (AWS's own
 per-environment id, a cross-check on `env_id`) and `MemTotal`, `MemAvailable`
@@ -36,7 +48,8 @@ and `Cached` from `/proc/meminfo`.
 deployment/lambda/build.sh
 ```
 
-Writes `build/residency_probe.zip` (handler, `residency.py`, `test.db` and a
+Writes `build/residency_probe.zip` (handler, `diag.py`, `residency.py` for
+`diag.py`, `test.db` and a
 `MANIFEST.txt` with the git commit and SHA-256 of each file) and copies
 `deploy.sh` beside it. The zip is above the console's 50 MB direct-upload limit,
 so it goes through CloudShell.
@@ -73,6 +86,7 @@ cell. Override with `MEMS="..." IDLES="..."`.
 
 ```
 ./deploy.sh collect     # -> residency_<utc>.csv, then Actions -> Download file
+./deploy.sh diag        # re-run the runtime capability probe on one function
 ./deploy.sh stop        # delete the schedules: nothing is invoked any more
 ./deploy.sh teardown    # also delete functions, roles and bucket
 ```
@@ -108,8 +122,10 @@ and CloudWatch Logs free-tier allowances.
 
 ## Scope
 
-Residency is whole-file, and invocations after the first issue no queries,
-which is what the advisor asked for: it isolates what idle time removes. It does
-not measure query latency, and it does not separate interior pages from leaves.
-Absolute numbers from Lambda are a separate batch and are not compared with the
-workstation batches, the same rule the OpenWhisk campaign follows.
+Residency is sampled, 100 pages per invocation, so each figure carries a
+sampling error of about 5 points near 50%. It is measured on data the previous
+invocation read, not on the whole file. It does not measure query latency, and
+it does not separate interior pages from leaves. The method differs from the
+`mincore` probe the OpenWhisk campaign uses because Lambda forbids `mincore`,
+and absolute numbers from Lambda are a separate batch that is not compared with
+the workstation batches.

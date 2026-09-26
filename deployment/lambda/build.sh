@@ -18,7 +18,7 @@ OUT="$HERE/build/residency_probe.zip"
 
 rm -rf "$HERE/build"
 mkdir -p "$STAGE"
-cp "$HERE/lambda_function.py" "$STAGE/"
+cp "$HERE/lambda_function.py" "$HERE/diag.py" "$STAGE/"
 cp "$RES" "$STAGE/residency.py"
 cp "$DB" "$STAGE/test.db"
 
@@ -28,11 +28,11 @@ dirty=$(git -C "$ROOT" status --porcelain -- deployment/lambda "$RES" | head -1)
 {
   echo "built_utc   $(date -u +%FT%TZ)"
   echo "git_head    $(git -C "$ROOT" rev-parse --short HEAD)${dirty:+ (uncommitted changes in deployment/lambda or residency.py)}"
-  ( cd "$STAGE" && sha256sum lambda_function.py residency.py test.db )
+  ( cd "$STAGE" && sha256sum lambda_function.py diag.py residency.py test.db )
 } > "$STAGE/MANIFEST.txt"
 
 chmod 644 "$STAGE"/*
-( cd "$STAGE" && zip -q -X "$OUT" lambda_function.py residency.py test.db MANIFEST.txt )
+( cd "$STAGE" && zip -q -X "$OUT" lambda_function.py diag.py residency.py test.db MANIFEST.txt )
 cp "$HERE/deploy.sh" "$HERE/build/"
 
 unz=$(du -cb "$STAGE"/* | tail -1 | cut -f1)

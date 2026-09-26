@@ -8,6 +8,9 @@
 #                          its own fixed-rate EventBridge schedule
 #   ./deploy.sh collect    every RESIDENCY record from CloudWatch Logs into
 #                          residency_<utc>.csv (works before and after teardown)
+#   ./deploy.sh diag       push the current zip to one function (DIAG_FN, default
+#                          coldprobe-m1024-i1) and invoke its capability probe once,
+#                          in the fresh environment the code update forces
 #   ./deploy.sh stop       delete the schedules, so nothing is invoked any more
 #   ./deploy.sh teardown   stop, then delete the functions, roles and bucket.
 #                          Log groups are kept so collect still works.
@@ -24,8 +27,8 @@ shopt -s inherit_errexit
 cd "$(dirname "$0")"
 
 CMD="${1:-}"
-case "$CMD" in deploy|collect|stop|teardown) ;; *)
-  echo "usage: $0 deploy|collect|stop|teardown"; exit 2 ;;
+case "$CMD" in deploy|collect|diag|stop|teardown) ;; *)
+  echo "usage: $0 deploy|collect|diag|stop|teardown"; exit 2 ;;
 esac
 
 MEMS="${MEMS:-128 256 512 1024}"
@@ -109,8 +112,13 @@ cmd_deploy() {
         aws lambda wait function-active-v2 --function-name "$fn"
       fi
 
-      # No retries: a retried invocation would land seconds after a failed one
-      # and break the idle interval the cell exists to hold fixed.
+      # No retries at either layer. A retried invocation lands seconds after the
+      # original and re-warms the sampled pages, which breaks the idle interval
+      # the cell exists to hold fixed. The scheduler's own retry is off in the
+      # target below, but Scheduler invokes asynchronously, and Lambda retries
+      # async invocations twice by default on top of that.
+      aws lambda put-function-event-invoke-config --function-name "$fn" \
+        --maximum-retry-attempts 0 --maximum-event-age-in-seconds 60 >/dev/null
       farn=$(aws lambda get-function --function-name "$fn" --query Configuration.FunctionArn --output text)
       target="{\"Arn\":\"$farn\",\"RoleArn\":\"$sarn\",\"Input\":\"{}\",\"RetryPolicy\":{\"MaximumRetryAttempts\":0}}"
       if aws scheduler get-schedule --name "$fn" >/dev/null 2>&1; then
@@ -149,6 +157,17 @@ with open(sys.argv[2], "w", newline="") as f:
     w.writerows(rows)
 print(f"{len(rows)} records -> {sys.argv[2]}")
 PY
+}
+
+cmd_diag() {
+  local fn="${DIAG_FN:-$PREFIX-m1024-i1}"
+  [ -f "$ZIP" ] || { echo "missing $ZIP"; exit 1; }
+  aws s3 cp "$ZIP" "s3://$BUCKET/$KEY" --only-show-errors
+  aws lambda update-function-code --function-name "$fn" --s3-bucket "$BUCKET" --s3-key "$KEY" >/dev/null
+  aws lambda wait function-updated-v2 --function-name "$fn"
+  aws lambda invoke --function-name "$fn" --cli-binary-format raw-in-base64-out \
+    --payload '{"diag": true}' diag.json >/dev/null
+  python3 -m json.tool diag.json
 }
 
 cmd_stop() {
