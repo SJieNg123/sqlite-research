@@ -4,12 +4,12 @@
 # Run in AWS CloudShell, which already has the AWS CLI, python3 and your
 # credentials, next to residency_probe.zip from build.sh:
 #
-#   ./deploy.sh deploy     one function per (memory, idle) cell, each invoked by
-#                          its own fixed-rate EventBridge schedule
+#   ./deploy.sh deploy     one function per (probe mode, memory, idle) cell, each
+#                          invoked by its own fixed-rate EventBridge schedule
 #   ./deploy.sh collect    every RESIDENCY record from CloudWatch Logs into
 #                          residency_<utc>.csv (works before and after teardown)
 #   ./deploy.sh diag       push the current zip to one function (DIAG_FN, default
-#                          coldprobe-m1024-i1) and invoke its capability probe once,
+#                          <prefix>-reread-m1024-i1) and invoke its capability probe once,
 #                          in the fresh environment the code update forces
 #   ./deploy.sh stop       delete the schedules, so nothing is invoked any more
 #   ./deploy.sh teardown   stop, then delete the functions, roles and bucket.
@@ -19,9 +19,15 @@
 # functions never share an execution environment, so all cells run at the same
 # time without one cell's invocations keeping another cell's environment warm.
 #
-# Override the matrix with  MEMS="128 1024" IDLES="5 30" ./deploy.sh deploy
-# (IDLES in minutes). Every cell is its own function, so a smaller matrix is
-# just fewer functions, not a different experiment.
+# Two probe modes (see lambda_function.py). reread runs at every idle in IDLES.
+# once runs only at ONCE_IDLES, because from 15 minutes up every invocation is a
+# cold start and a probe of data left alone inside a live environment has nothing
+# to measure. Override with MEMS="..." IDLES="..." ONCE_IDLES="..." (minutes).
+#
+# PREFIX names one batch: every function, schedule, role, bucket and log group
+# carries it, and collect/stop/teardown act only on it. A new batch therefore
+# gets a new PREFIX so its records cannot mix with an earlier one's, and an old
+# batch is still reachable with PREFIX=<old> ./deploy.sh teardown.
 set -euo pipefail
 shopt -s inherit_errexit
 cd "$(dirname "$0")"
@@ -32,9 +38,10 @@ case "$CMD" in deploy|collect|diag|stop|teardown) ;; *)
 esac
 
 MEMS="${MEMS:-128 256 512 1024}"
-IDLES="${IDLES:-1 5 15 30 60}"
+IDLES="${IDLES:-1 5 10 15 30 60}"
+ONCE_IDLES="${ONCE_IDLES:-1 5 10}"
 ZIP="${ZIP:-residency_probe.zip}"
-PREFIX=coldprobe
+PREFIX="${PREFIX:-coldprobe-b2}"
 KEY=residency_probe.zip
 LROLE="$PREFIX-lambda"
 SROLE="$PREFIX-scheduler"
@@ -46,7 +53,14 @@ REGION="${AWS_REGION:-$(aws configure get region || true)}"
 ACCOUNT="$(aws sts get-caller-identity --query Account --output text)"
 BUCKET="$PREFIX-$ACCOUNT-$REGION"
 
-fname() { echo "$PREFIX-m$1-i$2"; }
+fname() { echo "$PREFIX-$1-m$2-i$3"; }   # <mode> <memory> <idle>
+cells() {                                 # one "mode mem idle" line per cell
+  local m i
+  for m in $MEMS; do
+    for i in $IDLES;      do echo "reread $m $i"; done
+    for i in $ONCE_IDLES; do echo "once $m $i"; done
+  done
+}
 rate()  { if [ "$1" = 1 ]; then echo "rate(1 minute)"; else echo "rate($1 minutes)"; fi; }
 
 # A role is refused for a few seconds after it is created, until IAM propagates it.
@@ -90,17 +104,18 @@ cmd_deploy() {
   aws iam put-role-policy --role-name "$SROLE" --policy-name invoke-probe --policy-document \
     "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"lambda:InvokeFunction\",\"Resource\":\"arn:aws:lambda:$REGION:$ACCOUNT:function:$PREFIX-*\"}]}"
 
-  local m i fn farn target
-  for m in $MEMS; do
-    for i in $IDLES; do
-      fn=$(fname "$m" "$i")
-      echo "== $fn   memory $m MB, $(rate "$i")"
+  local mode m i fn farn target envv
+  # The cell list rides on fd 3, so no aws call in the loop can consume it from stdin.
+  while read -r mode m i <&3; do
+      fn=$(fname "$mode" "$m" "$i")
+      envv="Variables={IDLE_MIN=$i,PROBE_MODE=$mode}"
+      echo "== $fn   $mode probe, memory $m MB, $(rate "$i")"
       if aws lambda get-function --function-name "$fn" >/dev/null 2>&1; then
         aws lambda update-function-code --function-name "$fn" \
           --s3-bucket "$BUCKET" --s3-key "$KEY" >/dev/null
         aws lambda wait function-updated-v2 --function-name "$fn"
         aws lambda update-function-configuration --function-name "$fn" \
-          --memory-size "$m" --timeout 60 --environment "Variables={IDLE_MIN=$i}" >/dev/null
+          --memory-size "$m" --timeout 60 --environment "$envv" >/dev/null
         aws lambda wait function-updated-v2 --function-name "$fn"
       else
         # x86_64 to match the architecture of every local batch in the paper.
@@ -108,7 +123,7 @@ cmd_deploy() {
           --runtime python3.12 --architectures x86_64 \
           --handler lambda_function.lambda_handler --role "$larn" \
           --code "S3Bucket=$BUCKET,S3Key=$KEY" \
-          --memory-size "$m" --timeout 60 --environment "Variables={IDLE_MIN=$i}" >/dev/null
+          --memory-size "$m" --timeout 60 --environment "$envv" >/dev/null
         aws lambda wait function-active-v2 --function-name "$fn"
       fi
 
@@ -128,8 +143,7 @@ cmd_deploy() {
         retry aws scheduler create-schedule --name "$fn" --schedule-expression "$(rate "$i")" \
           --flexible-time-window Mode=OFF --target "$target" >/dev/null
       fi
-    done
-  done
+  done 3< <(cells)
   echo "== deployed. Records accumulate in CloudWatch Logs; run './deploy.sh collect' any time."
 }
 
@@ -160,7 +174,7 @@ PY
 }
 
 cmd_diag() {
-  local fn="${DIAG_FN:-$PREFIX-m1024-i1}"
+  local fn="${DIAG_FN:-$PREFIX-reread-m1024-i1}"
   [ -f "$ZIP" ] || { echo "missing $ZIP"; exit 1; }
   aws s3 cp "$ZIP" "s3://$BUCKET/$KEY" --only-show-errors
   aws lambda update-function-code --function-name "$fn" --s3-bucket "$BUCKET" --s3-key "$KEY" >/dev/null

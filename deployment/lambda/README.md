@@ -16,18 +16,30 @@ outright, the 5.10 kernel predates `cachestat`, and `/var/task` is squashfs,
 which rejects `RWF_NOWAIT`. So residency is measured by **timing reads**, which
 separate cleanly there: a miss costs about 650 to 970 us, a hit 3 to 6 us.
 
-Each invocation first reads 100 pages spread evenly over the database and
-counts those under 100 us as resident. squashfs decompresses whole blocks of up
-to 1 MB and caches every page in the block, so the samples sit about 1.03 MB
-apart and no read can warm another sample. Every raw latency is kept in
-`lat_us`, so the threshold can be re-drawn afterwards.
+Two probe modes run as separate functions in the same batch, so they never
+share an execution environment:
 
-Probing re-reads every sampled page it finds missing, so each invocation ends
-with all samples resident. What the next invocation measures is therefore how
-much of the data read at the previous invocation survived one idle interval,
-which is the scenario of a function that reads its data and then goes idle. An
-environment's first invocation also reads the whole database once, so the
-first interval starts from as warm a cache as the memory size allows.
+- **`reread`** times the same 100 pages, spread evenly about 1.03 MB apart, at
+  every invocation. Probing re-reads any page it finds missing, so each
+  invocation measures how much of the data read at the previous invocation
+  survived one idle interval: data the function keeps using.
+- **`once`** times 4 pages per invocation, each in a 1 MB region that no probe
+  in this environment has touched before. squashfs blocks are at most 1 MB and
+  aligned to the start of the file, so a read in one region cannot warm
+  another. Every region is measured at most once per environment, in an order
+  seeded by `env_id`, so the result is how much of the data read only by the
+  cold-start warming read is still cached: data the function read once and left
+  alone. The 102 regions last about 24 invocations, after which the record
+  carries no sample rather than a reused one. The pilot showed `reread` cannot
+  see this case, and that at 128 MB about half the database does not fit.
+
+Every raw latency is kept (`lat_us`, and `regions` in `once` mode), so the
+100 us threshold can be re-drawn afterwards.
+
+An environment's first invocation also reads the whole database once, then
+probes again (`resident_after_warm_pct`). In `once` mode that second probe is
+the direct measure of how much of the database the page cache can hold at the
+function's memory size.
 
 Three states, told apart by `env_id`, which is generated once per execution
 environment:
@@ -58,29 +70,43 @@ so it goes through CloudShell.
 
 1. In the console, pick the region first, then open CloudShell from the top bar.
 2. **Actions → Upload file**: `build/residency_probe.zip`, then `build/deploy.sh`.
-3. Smoke-test one cell before the full matrix:
+3. If an earlier batch is still running, remove it first so it stops
+   invoking. The pilot used the prefix `coldprobe`:
    ```
    chmod +x deploy.sh
-   MEMS=1024 IDLES=1 ./deploy.sh deploy
+   PREFIX=coldprobe ./deploy.sh teardown
+   ```
+4. Smoke-test one cell of each mode before the full matrix:
+   ```
+   MEMS=128 IDLES=1 ONCE_IDLES=1 ./deploy.sh deploy
    # wait about 3 minutes
    ./deploy.sh collect
    head -3 residency_*.csv
    ```
-   Expect `cold_start` true on the first row, then false with `idle_s` near 60.
-4. Full matrix:
+   Expect `cold_start` true on each function's first row, then false with
+   `idle_s` near 60. `once` rows carry 4 samples and a `regions` list.
+5. Full matrix, which also updates the two smoke-test cells:
    ```
    ./deploy.sh deploy
    ```
 
-The schedules run on AWS, so closing CloudShell does not stop anything.
+The schedules run on AWS, so closing CloudShell does not stop anything. The
+batch starts when the full deploy finishes: rows written before then belong to
+the smoke test and are dropped in analysis.
 
 ## Matrix and run length
 
-Default: memory `128 256 512 1024` MB by idle `1 5 15 30 60` minutes, 20
-functions running in parallel. Separate functions never share an execution
-environment, so the cells do not interfere. The 60-minute cell needs about 10
-hours to collect 10 samples, so an overnight run of about 12 hours covers every
-cell. Override with `MEMS="..." IDLES="..."`.
+Default: memory `128 256 512 1024` MB, with `reread` at idle `1 5 10 15 30 60`
+minutes and `once` at idle `1 5 10`: 24 + 12 = 36 functions running in
+parallel. `once` stops at 10 minutes because from 15 up every invocation is a
+cold start, so there is no live environment to hold data in. Idle 10 sits in
+the 5 to 15 minute gap where the pilot found environments being reclaimed.
+Override with `MEMS`, `IDLES` and `ONCE_IDLES`.
+
+All cells must run in **one batch**: one deploy, one code version, one window.
+`PREFIX` names the batch (default `coldprobe-b2`) and every resource and log
+group carries it, so `collect` can never mix two batches. The 60-minute cell
+needs about 10 hours for 10 samples, so run about 14 hours.
 
 ## Collect and stop
 
@@ -104,10 +130,12 @@ until AWS reclaims the whole environment. That would show up as state B until
 informative, not a failure: it would mean cold data in a warm environment comes
 from memory pressure, not from idle time.
 
-That is why memory is the second axis. The memory setting sizes the execution
-environment, and the page cache competes with the Python runtime for it. At
-128 MB the 103 MB database cannot all stay resident alongside the runtime, which
-is the setting most likely to produce state C.
+Memory was the second axis on the expectation that a small setting would force
+the page cache out. The run refuted that: the guest sees more memory than the
+function is configured with (191 MB of `MemTotal` at 128 MB). At 256 MB and
+above the database stays fully cached. At 128 MB about 50 MB of it does not fit,
+and because the probe keeps re-reading its own samples it cannot see which
+pages went. See `results/lambda/pilot/README.md`.
 
 Two readings of the CSV follow directly. Across a function's rows sorted by
 `ts`, an `env_id` change marks where AWS reclaimed the environment, and the gap
@@ -116,15 +144,15 @@ in `ts` across it is how long the environment survived idle. Within one
 
 ## Cost
 
-About 3,800 invocations over 12 hours for the default matrix, most under 100 ms,
-plus one 103 MB object in S3. This sits inside the Lambda, EventBridge Scheduler
+About 9,000 invocations over 14 hours for the default matrix, most under
+100 ms, plus one 103 MB object in S3. This sits inside the Lambda, EventBridge Scheduler
 and CloudWatch Logs free-tier allowances.
 
 ## Scope
 
-Residency is sampled, 100 pages per invocation, so each figure carries a
-sampling error of about 5 points near 50%. It is measured on data the previous
-invocation read, not on the whole file. It does not measure query latency, and
+Residency is sampled. A `reread` figure rests on 100 pages, about 5 points of
+sampling error near 50%. A `once` figure rests on 4, so it is only meaningful
+pooled across invocations and environments, which the analysis does. It does not measure query latency, and
 it does not separate interior pages from leaves. The method differs from the
 `mincore` probe the OpenWhisk campaign uses because Lambda forbids `mincore`,
 and absolute numbers from Lambda are a separate batch that is not compared with
