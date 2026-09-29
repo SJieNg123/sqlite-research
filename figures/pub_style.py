@@ -22,6 +22,11 @@ def apply(font_size=15, axes_linewidth=2):
     plt.rcParams.update({
         "font.family": "DejaVu Sans",  # the skill's fallback; Arial/Helvetica not installed
         "font.size": font_size,
+        # plot_utils pins these to absolute sizes (10/12/9 pt), which font.size does
+        # not reach, so they must be set here or axis titles stay at 10 pt.
+        "axes.labelsize": font_size - 1,
+        "axes.titlesize": font_size,
+        "legend.fontsize": font_size - 2,
         "axes.spines.right": False,
         "axes.spines.top": False,
         "axes.linewidth": axes_linewidth,
