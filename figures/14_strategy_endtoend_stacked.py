@@ -26,11 +26,16 @@ from e2e_warm_median (the median of the per-repetition sums), which is the
 canonical column the paper's tables use. The two differ by <0.4%, invisible on a
 log axis, but they round differently in three cells, so the label follows the
 tables rather than the drawn height -- a label is a claim, the bar is a picture.
+
+Styled with pub_style.py, the scientific-figure-making (figures4papers) house style.
 """
 import csv, sys
 from plot_utils import ROOT, save, workload_panel_title
 import matplotlib.pyplot as plt
 import numpy as np
+
+from pub_style import apply
+apply()
 
 UNIFIED = ROOT / "results/unified_v6/seed01/summary.csv"
 
@@ -41,7 +46,8 @@ ARM_LABEL = {'baseline': 'baseline', 'layers_5': 'Skel-5', '2d': 'Skel',
 # CSV keys stay legacy (A/B/C); titles resolve to canonical display names.
 WORKLOADS = ['A', 'B', 'C']
 WL_TITLE  = {w: workload_panel_title(w) for w in ('A', 'B', 'C')}
-FQ_COLOR      = '#d1d5db'   # first query (bottom), baseline bar
+PALETTE_RED   = '#B64342'
+FQ_COLOR      = '#CFCECE'   # first query (bottom), baseline bar  (skill: neutral)
 DELIVER_COLOR = '#f97316'   # deliver (top)
 # Two delivery mechanisms side by side. Hue encodes the COMPONENT (grey = first
 # query, orange = deliver) and lightness encodes the MECHANISM (light = per-page,
@@ -49,8 +55,8 @@ DELIVER_COLOR = '#f97316'   # deliver (top)
 # block does not move and the orange block does, and a fill pattern competes with
 # that reading instead of supporting it.
 DELIV_ARMS = ['async', 'async_win']
-ARM_FQ     = {'async': '#d1d5db', 'async_win': '#9ca3af'}
-ARM_DELIV  = {'async': '#fdba74', 'async_win': '#ea580c'}
+ARM_FQ     = {'async': '#CFCECE', 'async_win': '#767676'}   # skill neutrals
+ARM_DELIV  = {'async': '#E9A6A1', 'async_win': '#B64342'}   # skill red_2 / red_strong
 ARM_TITLE  = {'async': 'per-page hint', 'async_win': 'window-chunked hint'}
 
 
@@ -79,7 +85,7 @@ def get(workload, strategy, arm='async'):
             float(r.get('e2e_warm_median') or 0))
 
 
-fig, axes = plt.subplots(1, 3, figsize=(15.5, 5.2), sharey=False)
+fig, axes = plt.subplots(1, 3, figsize=(17, 6.2), sharey=False)
 x = np.arange(len(ARMS))
 W = 0.38                      # paired-bar width
 
@@ -91,20 +97,20 @@ for ax, wl in zip(axes, WORKLOADS):
         if s == 'baseline':
             fq, dl, ew = get(wl, s)
             ax.bar([x[ARMS.index(s)]], [fq], width=W, color=FQ_COLOR, alpha=0.9,
-                   edgecolor='black', linewidth=0.5)
+                   edgecolor='black', linewidth=1.2)
             tops.append(fq)
             continue
         for j, arm in enumerate(DELIV_ARMS):
             fq, dl, ew = get(wl, s, arm)
             xi = x[ARMS.index(s)] + (j - 0.5) * W
             ax.bar([xi], [fq], width=W, color=ARM_FQ[arm], alpha=0.95,
-                   edgecolor='black', linewidth=0.5)
+                   edgecolor='black', linewidth=1.2)
             ax.bar([xi], [dl], width=W, bottom=[fq], color=ARM_DELIV[arm], alpha=0.95,
-                   edgecolor='black', linewidth=0.5)
+                   edgecolor='black', linewidth=1.2)
             warm = fq + dl
             tops.append(warm)
             wi = (ew - baseline) / baseline * 100.0
-            col = '#15803d' if wi < 0 else '#dc2626'
+            col = '#2E7D32' if wi < 0 else PALETTE_RED  # improvement green / regression red
             sign = '+' if wi >= 0 else ''
             print(f"  {wl:5s} {s:9s} {arm:9s} fq={fq:7.1f} deliver={dl:7.1f}"
                   f" warm={warm:7.1f} ({sign}{wi:.0f}%)")
@@ -114,16 +120,16 @@ for ax, wl in zip(axes, WORKLOADS):
             # its taller neighbour.
             # The window-chunked label is nudged a hair right, off its taller
             # per-page neighbour and toward the gap between groups.
-            xlab = xi + (0.04 if arm == 'async_win' else 0.0)
+            xlab = xi + (0.10 if arm == 'async_win' else 0.0)
             ax.text(xlab, warm * 1.07, f'{sign}{wi:.0f}%', ha='center', va='bottom',
-                    fontsize=6.0, fontweight='bold', color=col)
+                    fontsize=8.5, fontweight='bold', color=col)
 
     ax.set_xticks(x)
-    ax.set_xticklabels([ARM_LABEL[s] for s in ARMS], fontsize=8.5, rotation=0, ha='center')
-    ax.set_title(WL_TITLE[wl], fontsize=10)
+    ax.set_xticklabels([ARM_LABEL[s] for s in ARMS], fontsize=11, rotation=0, ha='center')
+    ax.tick_params(axis='x', length=0)
+    ax.set_title(WL_TITLE[wl], fontsize=14.5)
     ax.set_yscale('log')
     ax.set_ylim(70, max(tops) * 3.2)
-    ax.grid(axis='y', alpha=0.25, which='both')
     ax.set_axisbelow(True)
 
 from matplotlib.patches import Patch
@@ -135,10 +141,10 @@ handles = [Patch(facecolor=ARM_FQ['async'], edgecolor='black',
                  label=f"First query, {ARM_TITLE['async_win']}"),
            Patch(facecolor=ARM_DELIV['async_win'], edgecolor='black',
                  label=f"Deliver, {ARM_TITLE['async_win']}")]
-axes[0].set_ylabel('Warm-process end-to-end latency (µs, log scale)', fontsize=10)
+axes[0].set_ylabel('Warm-process end-to-end latency\n(µs, log scale)')
 # The legend gets its own strip above the panels. Inside panel A it would sit in
 # the same headroom the two label rows occupy.
 fig.tight_layout(rect=(0, 0, 1, 0.92))
-fig.legend(handles=handles, loc='upper center', ncol=4, fontsize=8.5,
+fig.legend(handles=handles, loc='upper center', ncol=4, fontsize=12.5,
            frameon=False, bbox_to_anchor=(0.5, 1.0))
 save(fig, '14_strategy_endtoend_stacked')
