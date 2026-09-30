@@ -6,6 +6,10 @@ so it cannot see data read once and then left alone, which is what matters at
 128 MB. The citable run is batch `coldprobe-b2`, which repeats every cell here
 alongside the new `once` probe in one window at one code version.
 
+**Superseded figure:** this pilot's "about half the database does not fit at
+128 MB" was inferred from page-cache size. Batch `coldprobe-b2` measured it
+directly at about 30%. See `../b2/README.md`.
+
 The advisor's second suggestion, run on AWS Lambda. A function carrying the
 reference database measures, on every invocation, how much of the data it read
 at its previous invocation is still in the page cache, at fixed idle intervals.
