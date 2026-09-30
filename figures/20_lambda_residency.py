@@ -107,7 +107,7 @@ for k, (mode, label, color) in enumerate(series):
             ax_b.text(xi, v + (hi[0] if xi == xs[0] else 1) + 2, f"{v:.0f}%", ha="center",
                       va="bottom", fontsize=12, fontweight="bold")
 ax_b.annotate("~30% of the DB\ncold in a live\n128 MB environment", xy=(xm[0] + wb / 2, 80),
-              xytext=(-0.5, 146), fontsize=11.5, color=PALETTE["red_strong"], fontweight="bold",
+              xytext=(-0.5, 142.7), fontsize=11.5, color=PALETTE["red_strong"], fontweight="bold",
               va="top", arrowprops=dict(arrowstyle="->", color=PALETTE["red_strong"], lw=1.5))
 ax_b.set_xticks(xm); ax_b.set_xticklabels([f"{m} MB" for m in MEMS]); ax_b.tick_params(axis="x", length=0)
 ax_b.set_xlabel("Function memory")
