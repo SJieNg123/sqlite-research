@@ -10,6 +10,10 @@ definition, drawn as the reference line at y=0).
 Data (master batch, authoritative): results/main/summary.csv, async arm,
 layout=orig, median of 10 reps (warmup dropped).
 """
+import sys, pathlib
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))   # plot_utils lives in figures/
+import plot_utils
+plot_utils.OUT = pathlib.Path(__file__).resolve().parent / "out"         # archived output stays in archive/out
 from plot_utils import save, load_summary, STRAT_ORDER, STRAT_LABELS
 import matplotlib.pyplot as plt
 import numpy as np

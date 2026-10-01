@@ -186,7 +186,7 @@ is a real failure, confirmed by its 772 µs first query.
 
 ## What moved against the paper
 
-From `tools/compare_unified_v4.py --batch results/unified_v5`, on the shared `async` cells:
+From `tools/archive/compare_unified_v4.py --batch results/unified_v5`, on the shared `async` cells:
 
 | table | cell | before | after |
 |---|---|---|---|

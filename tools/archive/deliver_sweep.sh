@@ -6,7 +6,7 @@
 # Question (R3 W5): is the reported async delivery loss (fq_async - fq_pread) a tight-timing
 # artifact that vanishes once readahead is given time? Sweep T to find out.
 set -euo pipefail
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/../.."   # tools/archive/ -> repo root
 OUT=results/deliver_sweep
 mkdir -p "$OUT"
 SEED=1

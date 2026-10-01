@@ -1,5 +1,5 @@
 #!/bin/bash
-# Pre-flight gate for tools/run_unified_v5.sh: prove every frozen hotset input the
+# Pre-flight gate for tools/archive/run_unified_v5.sh: prove every frozen hotset input the
 # batch will touch is present BEFORE the first drop-caches, so a missing file costs
 # seconds instead of surfacing three hours in.
 #
@@ -13,7 +13,7 @@ set -uo pipefail
 cd /home/u03/sqlite-research-project-sharing || exit 1
 
 SEEDS="${*:-1 2 3 4 5 6 7 8 9 10}"
-source tools/unified_v5_matrix.sh
+source tools/archive/unified_v5_matrix.sh
 
 fails=0
 check() {   # check <label> <extra run_experiment.py args...>

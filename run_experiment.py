@@ -959,7 +959,7 @@ def cmd_run(args):
         sys.exit(f"refusing to run {lp_cells} with coalesced arm(s) {coalesced}: "
                  f"coalescing sorts offsets and destroys the delivery order these "
                  f"strategies exist to measure. Run them in their own invocation "
-                 f"(--async-win-reps 0 --async-bulk-reps 0), as tools/run_unified_v5.sh does.")
+                 f"(--async-win-reps 0 --async-bulk-reps 0), as tools/archive/run_unified_v5.sh does.")
 
     if args.dry_run:
         print(env_line)

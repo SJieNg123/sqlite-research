@@ -18,7 +18,7 @@
 # so the two arms differ by about 70x in delivered pages at nearly equal cost.
 #
 # Hotsets are NOT regenerated: the frozen per-seed inputs are already post
-# tie-break-fix, exactly as tools/run_unified_v4.sh:12-17 records. The only new
+# tie-break-fix, exactly as tools/archive/run_unified_v4.sh:12-17 records. The only new
 # inputs are freqdump_C_hit_orig_N{100,500}_seed*, generated from the existing
 # frozen hotpages_c_hit_seed* by the same gen_freqdump.py call tools/run_chit.sh
 # uses, so C_hit carries the same 14-strategy set as A/B/C.
@@ -44,7 +44,7 @@ cd /home/u03/sqlite-research-project-sharing || exit 1
 
 SEEDS="${*:-1 2 3 4 5 6 7 8 9 10}"
 OUT=results/unified_v5
-source tools/unified_v5_matrix.sh
+source tools/archive/unified_v5_matrix.sh
 mkdir -p "$OUT"
 LOG="$OUT/batch.log"
 ts() { date -u +%FT%TZ; }
@@ -57,7 +57,7 @@ echo "=== famC: $WL_C x $DBS_C x $STRATS_C ===" | tee -a "$LOG"
 
 # Gate first: never start a three-hour run with a missing input.
 echo "--- input gate $(ts) ---" | tee -a "$LOG"
-if ! tools/check_unified_v5_inputs.sh $SEEDS >>"$LOG" 2>&1; then
+if ! tools/archive/check_unified_v5_inputs.sh $SEEDS >>"$LOG" 2>&1; then
   echo "!!! INPUT GATE FAILED -- see $LOG. Nothing measured." | tee -a "$LOG"; exit 1
 fi
 echo "--- input gate OK $(ts) ---" | tee -a "$LOG"

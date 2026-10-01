@@ -118,8 +118,8 @@ single directly comparable chart:
 
 | Script | Reads | Status |
 |---|---|---|
-| `figures/13b_strategy_firstq_lines.py` | `results/main` (v1) | **unused variant** — not in main.tex; not regenerated |
-| `figures/13c_strategy_firstq_improvement.py` | `results/main` (v1) | **unused variant** — not in main.tex |
+| `figures/archive/13b_strategy_firstq_lines.py` | `results/main` (v1) | **unused variant** — not in main.tex; not regenerated |
+| `figures/archive/13c_strategy_firstq_improvement.py` | `results/main` (v1) | **unused variant** — not in main.tex |
 | `figures/18_competitive_baseline.py` | `results/competitive` | **unused legacy** — the paper's Fig 18 is `18_capability_matrix`, not this |
 | `figures/02–12, 15` | various (`results/main`, sweeps) | not referenced by the current `paper/main.tex` |
 

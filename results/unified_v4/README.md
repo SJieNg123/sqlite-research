@@ -28,7 +28,7 @@ Two concrete defects followed from the mixing, and both are closed by this batch
 ## Scope
 
 ```
-tools/run_unified_v4.sh 1 2 3 4 5 6 7 8 9 10
+tools/archive/run_unified_v4.sh 1 2 3 4 5 6 7 8 9 10
   -> run_experiment.py run --seed <s> --db orig --workload A,B,C \
        --strategy layers_5,2d,2e_K10,2e_K500,2f_top14,2f_top28,2f_top100,\
                   2f_top500,2f_slru,leaf_freq_K10,leaf_rand_K10 \
