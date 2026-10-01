@@ -77,7 +77,7 @@ arms reproduced (Tail-Mixed `2e_K10` first-query -82.8% -> -83.1%, warm e2e
 
 ## Absolute microseconds moved — do not mix with unified_v2
 
-Everything is faster, in the additive-CPU-path shape that `CANONICAL_SWAP.md` §1
+Everything is faster, in the additive-CPU-path shape that `docs/audits/CANONICAL_SWAP.md` §1
 describes (I/O-bound baseline barely moves; the ~100 us CPU path moves most):
 
 | | unified_v2 | unified_v3 | delta |

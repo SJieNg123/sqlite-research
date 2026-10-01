@@ -32,7 +32,7 @@ else (docs, matrices, agent notes) is derived from these.
 | `deployment/openwhisk/config/artifacts.native_ycsb.json` | **Frozen replay pin** (`schema 1`, `replay_only`, `never_regenerate`) | Canonical workload id, seeds 1..10, strategies `[baseline,2d]`, handle-modes `[warm,standalone]`, the 12 native read configs, secondary headlines YCu/YCh01 |
 | `deployment/openwhisk/ws2/matrix.example.json` | **OpenWhisk schedule template** | The scoped OpenWhisk matrix shape (workloads/strategies/seeds/handle-modes/first_operation_ids/repetitions) |
 | `config/workloads.json` + `config/workload_registry.py` | Workload single-source-of-truth | The 12 native read configs (+ writes, + legacy A/B/C/C_hit/Z/YD/YE/CHURN); which have seed families |
-| `overall_strategies.md`, `strategies_explained.md`, `strategies/README.md`, `strategies/*/PREFETCH_*.md`, `DESIGN_learned.md`, `DESIGN_lp.md`, `CANONICAL_SWAP.md` | Narrative provenance | *What* each strategy is and *how it was measured* natively; research role of each arm |
+| `overall_strategies.md`, `strategies_explained.md`, `strategies/README.md`, `strategies/*/PREFETCH_*.md`, `docs/design/DESIGN_learned.md`, `docs/design/DESIGN_lp.md`, `docs/audits/CANONICAL_SWAP.md` | Narrative provenance | *What* each strategy is and *how it was measured* natively; research role of each arm |
 
 There is **no** single file that enumerates "the full OpenWhisk strategy matrix." The
 OpenWhisk-facing matrix is deliberately narrow (`baseline`, `2d`) and lives in
@@ -228,7 +228,7 @@ the first query to *select*.
 ### 11. `lp_sorted` / `lp_shuf` / `lp_desc` (prior-work, libprefetch)
 - **Role:** **prior-work** baseline — libprefetch. Content is **identical to `2f_slru`**
   (the whole resident set); the arms differ **only in delivery ORDER** (sorted /
-  shuffled / descending). See `DESIGN_lp.md`.
+  shuffled / descending). See `docs/design/DESIGN_lp.md`.
 - **Selection (kind `lp`):** same page set as `slru`; the variant only re-orders the
   delivery sequence.
 - **Delivery:** the resident set, in a specified order; the measured quantity is
@@ -647,7 +647,7 @@ head-to-head" = `results/native_headtohead`.
 | `2f_slru` | slru | — | FOIL (first-query trap) | yes (figs 13/14/15/18; STRAT_ORDER) | `run_experiment.py:162` |
 | `learned_markov_14`,`learned_markov_28` | learned_markov | 14/28 | PRIOR_WORK (Chen 1st-order Markov, LOSO) | yes (**native h2h table**; not a paper figure) | `run_experiment.py:201`; **UNFROZEN** `.gitignore:216` |
 | `frequency_14`,`frequency_28` | frequency | 14/28 | PRIOR_WORK analysis twin | **NO — defined but never run** (no results CSV) | `run_experiment.py:204`; **UNFROZEN** `.gitignore:217` |
-| `lp_sorted`,`lp_shuf` | lp | order | PRIOR_WORK (libprefetch; metric `deliver_us`) | yes (native h2h; **separate metric axis**) | `run_experiment.py:210,212`; `DESIGN_lp.md` |
+| `lp_sorted`,`lp_shuf` | lp | order | PRIOR_WORK (libprefetch; metric `deliver_us`) | yes (native h2h; **separate metric axis**) | `run_experiment.py:210,212`; `docs/design/DESIGN_lp.md` |
 | `lp_desc` | lp | order | DEBUG — **defined but never run** | no | `run_experiment.py:214` |
 | `layers_{1..64}` (dense) | layers | dense | SENSITIVITY (plateau curve) | curve lines only (figs 04/11/09) | regex `run_experiment.py:175`; `results/nsweep_dense` |
 | `*_static` (`2d_static`, `2e_K10_static`, …) | delivery-mode × strategy | — | SENSITIVITY (aging/churn robustness — **separate experiment axis**) | figs 07/12 | `churn.py`; `results/aging*` |

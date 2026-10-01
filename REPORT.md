@@ -1229,7 +1229,7 @@ Tail-Mixed（WS 僅 1.8 MB ≈ 量測下限）**無法以 cgroup 施壓 → 其 
 
 #### 6.2.6 Prior-art baseline arms（在同一 harness 重現 libprefetch / learned 核心）
 
-為了把本研究的定位釘在既有做法之上，我們在**同一 harness** 重現兩條 prior-art lineage 的**核心**（重現核心、剝除編排、非跑對方系統本尊；資料 `results/baselines_v2`，方法見 `DESIGN_lp.md` / `DESIGN_learned.md`）：
+為了把本研究的定位釘在既有做法之上，我們在**同一 harness** 重現兩條 prior-art lineage 的**核心**（重現核心、剝除編排、非跑對方系統本尊；資料 `results/baselines_v2`，方法見 `docs/design/DESIGN_lp.md` / `docs/design/DESIGN_learned.md`）：
 
 - **libprefetch（VanDeBogart+09）的 delivery-order 核心**（`lp_sorted`/`lp_shuf`）：hotset 內容≡`2f_slru`、只差 warmer pread **遞送順序**。主度量 Δdeliver（fq 為 control、兩 arm 相等）：**NVMe 上 offset 排序遞送快 10–16×**（Scattered-Zipf 15.6× / Uniform-100K 15.1× / Tail-Mixed 10.5×），效應**全在 deliver、fq 不變**。診斷（rusage File system inputs）顯示兩 arm 讀**相同裝置位元組（~18 MB ≈ working set）**,排除了「讀取資料量不同」。此結果**與 sequential readahead + 隱式 request coalescing 一致**（offset 排序遞送快 10–16×）——但因**未取 block trace / request-count**,我們不單獨宣稱已證明 request 數量、request 大小或 coalescing 機制本身。async(fadvise) 無此效應 → 懲罰專屬同步 pread（正是 libprefetch 模型）。這把「libprefetch 的 seek 收益在 NVMe 上消失」精確化為「**推測由 readahead + 隨機讀懲罰承載,但同樣只在 deliver 項、不進 first-query**」。
 

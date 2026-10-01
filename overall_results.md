@@ -372,7 +372,7 @@
 
 ## Prior-art baselines v2（在同一 harness 重現 libprefetch / learned 核心）
 
-> 資料 `results/baselines_v2`（canonical v2 批，A/B/C × orig，n=10；機器狀態見 [overall_strategies.md](overall_strategies.md) 錨點註記，絕對 µs 批內比）。方法見 repo `DESIGN_lp.md` / `DESIGN_learned.md`。**重現核心、剝除編排、非跑本尊。**
+> 資料 `results/baselines_v2`（canonical v2 批，A/B/C × orig，n=10；機器狀態見 [overall_strategies.md](overall_strategies.md) 錨點註記，絕對 µs 批內比）。方法見 repo `docs/design/DESIGN_lp.md` / `docs/design/DESIGN_learned.md`。**重現核心、剝除編排、非跑本尊。**
 
 ### libprefetch delivery-order（`lp_sorted` / `lp_shuf`）— Δdeliver（pread）
 

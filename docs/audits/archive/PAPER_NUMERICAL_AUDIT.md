@@ -167,7 +167,7 @@ All edits are wording/provenance only. **No number was altered.**
 
 3. **L860 — drift "10–15%, attributable to SSD internal state and CPU thermal."**
    The **cause is supported** (`REPORT.md:1312`: SSD internal SLC/wear + CPU
-   boost/thermal + background load; `CANONICAL_SWAP.md:9`: additive CPU-path
+   boost/thermal + background load; `docs/audits/CANONICAL_SWAP.md:9`: additive CPU-path
    offset), so this is **NEEDS_QUALIFICATION, not CAUSAL_OVERCLAIM.** The one
    nuance: 10–15% is the **Dump-anchor fast-path** figure; because the offset is
    *additive*, general cross-session **cell** drift can reach 30–70% on fast paths.
