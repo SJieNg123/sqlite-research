@@ -143,6 +143,36 @@ Head to head with the mechanism held fixed, using the Skel family alone as ours:
 The pure-hit control is the one workload where the full dump wins, which is expected where
 every query hits and the question of which pages to fetch carries least weight.
 
+## Re-derivation 2026-10-05: the coalesced arms now pay for parsing
+
+**The two tables above predate this and overstate window chunking.** The warmer reads the
+hotset CSV before issuing hints. The per-page path keeps that read inside `deliver_us`; the
+two-phase arms (`async_win`, `async_bulk`) bill it to `parse_us`, about 60 us and nearly
+constant. `e2e_warm_us` was `deliver_us + first_query_us`, so those arms were charged about
+60 us less than per-page for the same work. With parse added back, `2e_K10` on A costs
+33 + 63 = 96 us against per-page's 98: chunking a small set saves nothing, and the apparent
+saving was parse alone.
+
+`run_experiment.py` now computes `e2e_warm_us = deliver_us + parse_us + first_query_us`, and
+`tools/rederive_e2e_warm.py results/unified_v6` applied that definition here. It rewrote
+`e2e_warm_us` on the 952 `async_win`/`async_bulk` rows of each seed (in `main/raw.csv` and the
+merged `raw.csv`) and regenerated every `summary.csv` and `uncertainty.csv` with the batch's own
+code path. No measured column changed, and the per-page, pread and baseline rows are
+byte-identical. Before the rewrite, regenerating from the untouched raw files reproduced every
+summary and `uncertainty.csv` byte for byte, and a second run of the tool changes nothing.
+`e2e_us`, the external-warmer boundary, always included parse and is unaffected.
+
+Warm-process means on `orig`, ten seeds, `async_win` before → after (per-page for reference):
+
+| strategy | A | B | C | C_hit |
+|---|---|---|---|---|
+| Skel | −33.9 → **−26.3** (−27.1) | −32.6 → **−25.4** (−26.2) | −43.3 → **−36.8** (−36.8) | −35.2 → **−28.2** (−27.9) |
+| Skel+10 | −44.6 → **−36.8** (−37.5) | −32.0 → **−24.7** (−24.7) | −62.1 → **−55.5** (−57.1) | −33.9 → **−26.8** (−28.9) |
+| Dump | +150.4 → **+197.8** (+769.6) | +137.5 → **+178.7** (+723.6) | −66.5 → **−56.1** (−9.2) | −41.5 → **−23.9** (+72.2) |
+
+Small sets now read the same under both mechanisms. The chunked full dump no longer beats the
+small sets on the tail workloads: it ties `2e_K10` on C and trails `2d` on C_hit.
+
 ## Result 3: two layout claims fail, in both batches
 
 - **`main.tex:505`'s "baseline raised by 26%" is wrong.** Clustered *lowers* the cold baseline

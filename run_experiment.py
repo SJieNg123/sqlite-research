@@ -1015,8 +1015,11 @@ def cmd_run(args):
             open_us, deliver_us = m.get("open_us"), m.get("deliver_us")
         e2e = (preproc + fq) if (preproc is not None and fq is not None) else None
         # warm-process / integrated model: handle already open -> drop cold open(db),
-        # preproc = deliver only (~ static effective_first_query).
-        e2e_warm = (deliver_us + fq) if (deliver_us is not None and fq is not None) else None
+        # preproc = deliver only (~ static effective_first_query). The two-phase arms
+        # bill reading the hotset to parse_us instead of deliver_us, while perpage keeps
+        # it inside deliver_us, so add it back or the two mechanisms are charged unequally.
+        parse_us = m.get("parse_us") or 0.0
+        e2e_warm = (deliver_us + parse_us + fq) if (deliver_us is not None and fq is not None) else None
         load, mem = _sys_load()
         row = {"workload": w, "db": ly, "strategy": strat, "arm": arm,
                "ra_kb": ra_kb, "rep": rep, "warmup": warmup,
