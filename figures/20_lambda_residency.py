@@ -11,9 +11,10 @@ Three panels, one per finding:
   (b) memory decides how much stays cached inside a live environment: data the
       function keeps using stays cached everywhere, but data read once and left
       alone is only about 70% cached at 128 MB, against 100% from 256 MB up
-  (c) one cache miss costs about 19 ms at 128 MB against under 1 ms elsewhere,
-      because squashfs decompression is CPU-bound and Lambda allocates CPU by
-      memory
+  (c) the first miss of a burst costs about 0.9 ms at every memory size, but at
+      128 MB each later one waits about 19 ms (median): squashfs decompression
+      is CPU-bound and Lambda allocates CPU by memory, so the quota runs out
+      after about one miss
 
 Styled with pub_style.py, the scientific-figure-making (figures4papers) house style.
 """
@@ -116,17 +117,28 @@ ax_b.set_ylim(0, 150); ax_b.set_yticks([0, 25, 50, 75, 100])
 ax_b.set_title("(b) Memory decides what stays cached", loc="left")
 ax_b.legend(loc="upper right", fontsize=11.5)
 
-# ---- (c) cost of one cache miss ----------------------------------------------
-miss = [st.median(v for r in rows if r["cold"] and r["m"] == m for v in r["lat"]) / 1000 for m in MEMS]
-ax_c.bar(xm, miss, 0.6, color=[MEM_COLOR[m] for m in MEMS], edgecolor="black", linewidth=1)
-for xi, v in zip(xm, miss):
-    ax_c.text(xi, v * 1.12, f"{v:.1f} ms" if v >= 10 else f"{v:.2f} ms", ha="center",
-              va="bottom", fontsize=12, fontweight="bold")
+# ---- (c) cost of a miss: the first of a burst, and each one after it ---------
+# The reread probe at an environment's first invocation is 100 back-to-back misses
+# (none of these reads hit). The first costs about 0.9 ms at every memory size;
+# later ones queue behind the CPU share Lambda allocates by memory, so the median
+# alone would hide that a quarter of them wait at 256 MB too: whiskers are the IQR.
+burst = {m: [r["lat"] for r in rows if r["mode"] == "reread" and r["cold"] and r["m"] == m] for m in MEMS}
+for k, (label, lo_i, hi_i) in enumerate([("first miss", 0, 1), ("each later miss", 1, None)]):
+    med, lo, hi = [], [], []
+    for m in MEMS:
+        v = sorted(x for lat in burst[m] for x in lat[lo_i:hi_i])
+        q1, q2, q3 = (v[int(p * (len(v) - 1))] / 1000 for p in (0.25, 0.5, 0.75))
+        med.append(q2); lo.append(q2 - q1); hi.append(q3 - q2)
+    ax_c.bar(xm + (k - 0.5) * wb, med, wb, color="white" if k == 0 else [MEM_COLOR[m] for m in MEMS],
+             edgecolor="black", linewidth=1, label=label, yerr=[lo, hi],
+             error_kw=dict(ecolor=PALETTE["ink"], capsize=4, lw=1.5))
 ax_c.set_yscale("log"); ax_c.set_ylim(0.3, 80)
+ax_c.set_yticks([0.5, 1, 2, 5, 10, 20, 50]); ax_c.set_yticklabels(["0.5", "1", "2", "5", "10", "20", "50"])
 ax_c.set_xticks(xm); ax_c.set_xticklabels([f"{m} MB" for m in MEMS]); ax_c.tick_params(axis="x", length=0)
 ax_c.set_xlabel("Function memory")
-ax_c.set_ylabel("One cache miss, median (ms, log)")
-ax_c.set_title("(c) What one miss costs", loc="left")
+ax_c.set_ylabel("Latency of one miss (ms, log)")
+ax_c.set_title("(c) What a miss costs", loc="left")
+ax_c.legend(loc="upper right", fontsize=11.5)
 
 fig.tight_layout(pad=1.5, rect=(0, 0.045, 1, 1))
 fig.text(0.995, 0.005, f"AWS Lambda, batch coldprobe-b2, 13.8 h, {len(rows):,} invocations",
