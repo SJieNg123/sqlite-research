@@ -225,6 +225,10 @@ def resolve_strategy(name):
         return {"name": name, "kind": "lp", "order": "shuffle", "seed": LP_SHUF_SEED}
     if name == "lp_desc":                                # optional: direction-insensitivity check
         return {"name": name, "kind": "lp", "order": "offset-desc"}
+    # Profile-free baseline: every page of the file. Delivered window-chunked (async_win)
+    # or synchronously by MAP_POPULATE (populate arm); see results/pilot_whole_file_delivery.
+    if name == "whole_file":
+        return {"name": name, "kind": "whole"}
     raise ValueError(f"unknown strategy: {name}")
 
 # --------------------------------------------------------------------------- parsing
@@ -356,6 +360,8 @@ def select_pages(strat, w, layout, classify):
             if test in tr:
                 sys.exit(f"{kind}: LEAKAGE -- test seed {test} in train_seeds {tr}")
         return _resident_pages(_require_hotset(src))
+    if kind == "whole":               # every page of the file, no profile
+        return set(classify)
     if kind == "lp":                  # libprefetch-style: CONTENT == 2f_slru resident set;
         # the strategy's delivery order (strat["order"]) is applied later, in build_hotset,
         # NOT here -- selection and delivery are kept strictly separate.
@@ -834,6 +840,9 @@ def add_run_parser(sub):
     ap.add_argument("--async-bulk-reps", type=int, default=0,
                     help="coalesced fadvise arm, one uncapped hint per contiguous range "
                          "(the naive whole-range WILLNEED); 0 = arm off (default)")
+    ap.add_argument("--populate-reps", type=int, default=0,
+                    help="synchronous MAP_POPULATE of the whole file (whole_file strategy "
+                         "only); 0 = arm off (default)")
     ap.add_argument("--baseline-reps", type=int, default=10, help="no-prefetch baseline reps per (workload,db)")
     ap.add_argument("--no-baseline", action="store_true", help="skip the no-prefetch baseline arm")
     ap.add_argument("--outdir", default=str(ROOT / "results/main"))
@@ -948,8 +957,15 @@ def cmd_run(args):
     # invocation keeps the exact (pread, async) matrix it had. Built before the dry-run
     # exit so --dry-run reports the real arm list and trips the lp guard below.
     arms = [("pread", args.pread_reps), ("async", args.async_reps),
-            ("async_win", args.async_win_reps), ("async_bulk", args.async_bulk_reps)]
+            ("async_win", args.async_win_reps), ("async_bulk", args.async_bulk_reps),
+            ("populate", args.populate_reps)]
     arms = [(a, k) for a, k in arms if k > 0 or a in ("pread", "async")]
+    # populate maps the whole file whatever the hotset says, so on any other strategy it
+    # would silently measure the whole file under that strategy's name.
+    partial = sorted({s["name"] for _w, _ly, s in cells if s["kind"] != "whole"})
+    if args.populate_reps > 0 and partial:
+        sys.exit(f"refusing to run the populate arm with {partial}: MAP_POPULATE maps the "
+                 f"whole file, so only whole_file is meaningful under it.")
     # lp_* differ from 2f_slru ONLY in pread delivery order, and the coalesce path
     # sorts offsets -- which would silently turn lp_shuf into lp_sorted. Fail loud
     # rather than publish two identical arms under different names.
@@ -1056,7 +1072,7 @@ def cmd_run(args):
             for arm, keep in arms:
                 if rep > 1 + keep:
                     continue
-                method = "pread" if arm == "pread" else "fadvise"
+                method = arm if arm in ("pread", "populate") else "fadvise"
                 m = run_one(db, wl, hotset, method, recdir, args,
                             delivery=ARM_DELIVERY.get(arm))
                 if m is None:

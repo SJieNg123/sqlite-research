@@ -11,8 +11,12 @@
  *
  * env:
  *   WARM_MODE     = warm (default) | off        (off = baseline; same binary)
- *   WARM_METHOD   = pread (default) | fadvise    (pread guarantees residency;
- *                                                 fadvise is best-effort hint)
+ *   WARM_METHOD   = pread (default) | fadvise | populate
+ *                                                (pread guarantees residency;
+ *                                                 fadvise is best-effort hint;
+ *                                                 populate maps the WHOLE file with
+ *                                                 MAP_POPULATE and ignores the hotset:
+ *                                                 the synchronous profile-free baseline)
  *   WARM_DELIVERY = perpage (default) | split | coalesce
  *   WARM_CHUNK_PAGES = 0 (default, uncapped) | N   (coalesce only: split a merged
  *                     range into hints of at most N pages)
@@ -56,6 +60,8 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <time.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
 
 /* Upper bound on one pread in coalesce mode; a merged range can be many MB. */
 #define PREAD_CHUNK_BYTES (1u << 20)
@@ -85,7 +91,8 @@ int main(int argc, char *argv[]) {
     const char *method = getenv("WARM_METHOD");
     const char *delivery = getenv("WARM_DELIVERY");
     int do_warm = !(mode && strcmp(mode, "off") == 0);
-    int use_pread = !(method && strcmp(method, "fadvise") == 0);
+    int use_populate = (method && strcmp(method, "populate") == 0);
+    int use_pread = !(method && strcmp(method, "fadvise") == 0) && !use_populate;
 
     const char *chunk_env = getenv("WARM_CHUNK_PAGES");
     const char *seq_env = getenv("WARM_FADV_SEQ");
@@ -102,6 +109,10 @@ int main(int argc, char *argv[]) {
             fprintf(stderr, "warmer: unknown WARM_DELIVERY=%s (perpage|split|coalesce)\n", delivery);
             return 2;
         }
+    }
+    if (use_populate && deliv != 0) {
+        fprintf(stderr, "warmer: WARM_METHOD=populate maps the whole file; it takes no WARM_DELIVERY\n");
+        return 2;
     }
 
     long long t0 = now_ns();
@@ -141,7 +152,17 @@ int main(int argc, char *argv[]) {
 
         t_open_done = now_ns();                            /* end of open/setup term */
 
-        if (deliv == 0) {
+        if (use_populate) {
+            /* The whole file, faulted in before mmap returns. The hotset is not read:
+             * this is the profile-free baseline, so warmed counts every page. */
+            struct stat st;
+            void *p = MAP_FAILED;
+            if (fstat(fd, &st) == 0)
+                p = mmap(NULL, (size_t)st.st_size, PROT_READ, MAP_SHARED | MAP_POPULATE, fd, 0);
+            if (p == MAP_FAILED) { perror("mmap populate"); free(scratch); fclose(f); close(fd); return 1; }
+            munmap(p, (size_t)st.st_size);
+            warmed = (int)((st.st_size + page_size - 1) / page_size);
+        } else if (deliv == 0) {
             /* Original single pass -- unchanged. Do not "tidy" this: every batch in
              * results/ was measured by exactly this loop. */
             char line[256];
@@ -250,7 +271,7 @@ int main(int argc, char *argv[]) {
                     "method=%s mode=%s delivery=%s%s\n",
             (t1 - t0) / 1000.0, (t_open_done - t0) / 1000.0, deliver_us, parse_field,
             warmed, range_field,
-            use_pread ? "pread" : "fadvise",
+            use_populate ? "populate" : (use_pread ? "pread" : "fadvise"),
             do_warm ? "warm" : "off",
             deliv == 0 ? "perpage" : (deliv == 1 ? "split" : "coalesce"),
             knob_field);
