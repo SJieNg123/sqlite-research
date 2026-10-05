@@ -80,8 +80,10 @@ def get(workload, strategy, arm='async'):
     if key not in ROWS:
         sys.exit(f"FATAL: missing row {key} in {UNIFIED}")
     r = ROWS[key]
+    # Per-page bills reading the hotset to deliver_us; the chunked arm reports it as
+    # parse_us. Add it back so both deliver blocks, like e2e_warm, carry the same work.
     return (float(r['fq_median']),
-            float(r.get('deliver_us_median') or 0),
+            float(r.get('deliver_us_median') or 0) + float(r.get('parse_us_median') or 0),
             float(r.get('e2e_warm_median') or 0))
 
 
