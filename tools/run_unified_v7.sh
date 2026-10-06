@@ -20,6 +20,9 @@
 #   top15/  family D -- C_hit x orig x 2f_top15 x 4 arms, no baseline      (new)
 #   whole/  family E -- A,B,C,C_hit x orig x whole_file x async_win,populate, no baseline (new)
 # Families B, D and E use family A's baseline: same seed, same window, merged per seed.
+# Every invocation passes --discard-records: the harness's per-run ops/log records (about
+# 16 GB per seed, never read back) filled the NVMe during attempts 1 and 2 and made cold reads
+# stall for milliseconds after a few hours (results/unified_v7_attempt{1,2}, now record-free).
 # About 5,260 raw rows per seed, roughly 5 hours for 10 seeds.
 #
 # Usage: tools/run_unified_v7.sh [seed-list]   (default "1 2 3 4 5 6 7 8 9 10")
@@ -57,7 +60,8 @@ fam() {   # fam <seed> <label> <subdir> <run_experiment.py args...>
   local s="$1" label="$2" sub="$3"; shift 3
   local pad; pad=$(printf '%02d' "$s")
   echo "--- seed $s $label $(ts) ---" | tee -a "$LOG"
-  if ! python3 run_experiment.py run --seed "$s" --outdir "$OUT/seed${pad}/$sub" "$@" >>"$LOG" 2>&1; then
+  if ! python3 run_experiment.py run --seed "$s" --outdir "$OUT/seed${pad}/$sub" --discard-records \
+       "$@" >>"$LOG" 2>&1; then
     echo "!!! seed $s $label FAILED $(ts) -- STOP" | tee -a "$LOG"; exit 1
   fi
 }

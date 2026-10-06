@@ -504,6 +504,21 @@ def run_one(db, workload, hotset, method, recdir, args, use_drop_caches=True, de
             os.unlink(deliver)
         except OSError:
             pass
+        _discard_records(recdir, args)
+
+
+def _discard_records(recdir, args):
+    """--discard-records: delete the harness's per-run records (ops-N.csv, about 3 MB, and
+    run-*.log) as soon as it returns. `run` parses every metric from the harness output and
+    never reads them back, and kept they fill the NVMe it measures: unified_v7 attempts 1
+    and 2 wrote about 16 GB per seed, and cold reads stalled for milliseconds once the drive
+    had absorbed a few hours of it. Deleted within a second, the data never leaves the page
+    cache."""
+    if not getattr(args, "discard_records", False):
+        return
+    for pattern in ("ops*.csv", "run-*.log"):
+        for p in Path(recdir).glob(pattern):
+            p.unlink(missing_ok=True)
 
 
 def run_baseline(db, workload, recdir, args, verify_hotset=None):
@@ -530,6 +545,8 @@ def run_baseline(db, workload, recdir, args, verify_hotset=None):
     except (subprocess.TimeoutExpired, FileNotFoundError) as e:
         sys.stderr.write(f"  ERROR baseline {e}\n")
         return None
+    finally:
+        _discard_records(recdir, args)
 
 
 # ------------------------------------------------------------------------ aggregation
@@ -840,6 +857,9 @@ def add_run_parser(sub):
     ap.add_argument("--async-bulk-reps", type=int, default=0,
                     help="coalesced fadvise arm, one uncapped hint per contiguous range "
                          "(the naive whole-range WILLNEED); 0 = arm off (default)")
+    ap.add_argument("--discard-records", action="store_true",
+                    help="delete the harness's per-run ops/log records after each run "
+                         "(they are never read back and otherwise fill the measured disk)")
     ap.add_argument("--populate-reps", type=int, default=0,
                     help="synchronous MAP_POPULATE of the whole file (whole_file strategy "
                          "only); 0 = arm off (default)")
