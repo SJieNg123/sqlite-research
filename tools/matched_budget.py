@@ -19,10 +19,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 MARGIN = 5.0
 PAIRS = {"A": ("2e_K10", "2f_top28", 28), "B": ("2e_K10", "2f_top28", 28),
-         "C": ("2e_K10", "2f_top14", 14)}
+         "C": ("2e_K10", "2f_top14", 14),
+         # Tail-Hit joins wherever the batch measured Dump-15 (unified_v7 on), as PREREG.md says
+         "C_hit": ("2e_K10", "2f_top15", 15)}
 ARMS = ("async", "async_win")
 METRICS = (("e2e_warm_median", "primary"), ("e2e_median", "secondary"))
-NAME = {"A": "Scattered-Zipf-100K", "B": "Uniform-100K", "C": "Tail-Mixed",
+NAME = {"A": "Scattered-Zipf-100K", "B": "Uniform-100K", "C": "Tail-Mixed", "C_hit": "Tail-Hit",
         "async": "per-page", "async_win": "window-chunked"}
 
 _spec = importlib.util.spec_from_file_location("su", ROOT / "tools/stats_uncertainty.py")
@@ -41,16 +43,21 @@ def verdict(lo, hi):
 
 
 def check_sizes(seed_dir, w, ours, theirs, n):
-    """Assert both hotsets hold n pages, when the untracked work/ directory exists."""
-    work = seed_dir / "main" / "work"
-    if not work.is_dir():
-        return False
+    """Assert both hotsets hold n pages, when the untracked work/ directories exist."""
     for s in (ours, theirs):
-        with open(work / f"hotset_{w}_orig_{s}.csv") as f:
+        found = sorted(seed_dir.glob(f"*/work/hotset_{w}_orig_{s}.csv"))
+        if not found:
+            return False
+        with open(found[0]) as f:
             pages = sum(1 for _ in f) - 1
         if pages != n:
             raise SystemExit(f"{seed_dir.name} {w} {s}: {pages} pages, expected {n}")
     return True
+
+
+def pairs(rows, sd):
+    """The PAIRS whose matched set this seed measured."""
+    return {w: p for w, p in PAIRS.items() if (sd.name, w, p[1], "async") in rows}
 
 
 def main():
@@ -61,16 +68,19 @@ def main():
     rows = {}
     checked = 0
     for sd in seeds:
-        with open(sd / "main" / "summary.csv") as f:
+        with open(sd / "summary.csv") as f:          # all families, merged per seed
             for r in csv.DictReader(f):
                 if r["db"] == "orig":
                     rows[(sd.name, r["workload"], r["strategy"], r["arm"])] = r
-        for w, (ours, theirs, n) in PAIRS.items():
+        for w, (ours, theirs, n) in pairs(rows, sd).items():
             checked += check_sizes(sd, w, ours, theirs, n)
+    active = pairs(rows, seeds[0])
+    if any(pairs(rows, sd) != active for sd in seeds):
+        raise SystemExit("seeds differ in which matched sets they measured")
 
     out = []
     for metric, role in METRICS:
-        for w, (ours, theirs, n) in PAIRS.items():
+        for w, (ours, theirs, n) in active.items():
             for arm in ARMS:
                 d = []
                 for sd in seeds:
@@ -96,7 +106,7 @@ def main():
     md = [f"# Matched budget, {batch.name}",
           f"\nRule: results/matched_budget/PREREG.md. d = Skel+10 minus Dump-N, in % of the "
           f"same-seed baseline; negative = Skel+10 faster. Mean over {len(seeds)} instances, "
-          f"95% bootstrap CI. Page counts asserted on {checked} of {len(seeds) * len(PAIRS)} "
+          f"95% bootstrap CI. Page counts asserted on {checked} of {len(seeds) * len(active)} "
           f"seed-workload pairs.\n"]
     for metric, role in METRICS:
         md += [f"\n## {metric} ({role})\n", "| workload | arm | pages | mean d | 95% CI | Skel+10 faster | verdict |",
