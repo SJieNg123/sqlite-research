@@ -1,7 +1,7 @@
 """Figure 14: Warm-process end-to-end cold-start decomposition.
 
-Single canonical batch: results/unified_v6, seed01 (2026-09-23). Stacked
-absolute microseconds require one machine state, and unified_v6 measured every
+Single canonical batch: results/unified_v7, seed01 (2026-10-08). Stacked
+absolute microseconds require one machine state, and unified_v7 measured every
 arm in ONE continuous window, so the absolute stack here matches the paper's
 result tables.
 
@@ -16,7 +16,7 @@ tower collapses and the targeted arms barely change. Green/red label = e2e_warm
 vs the same-batch baseline, which is the leftmost bar of each panel.
 
 Caveat carried from the batch: seed01's Scattered-Zipf baseline is a genuine
-instantiation outlier (492 us against 828-1024 on the other nine seeds), so the
+instantiation outlier (514 us against 828-1036 on the other nine seeds), so the
 Dump percentage here reads worse than the cross-seed figure. The absolute stack
 is unaffected, and the labels match Table 5, which quotes the same seed.
 
@@ -37,7 +37,7 @@ import numpy as np
 from pub_style import apply
 apply()
 
-UNIFIED = ROOT / "results/unified_v6/seed01/summary.csv"
+UNIFIED = ROOT / "results/unified_v7/seed01/summary.csv"
 
 # Aligned with Figure 13's strategy set (plus the baseline reference bar).
 ARMS      = ['baseline', 'layers_5', '2d', '2e_K10', '2e_K500', '2f_slru']
@@ -91,7 +91,7 @@ fig, axes = plt.subplots(1, 3, figsize=(17, 6.2), sharey=False)
 x = np.arange(len(ARMS))
 W = 0.38                      # paired-bar width
 
-print("Figure 14 - plotted cells (unified_v6 seed01, async vs async_win):")
+print("Figure 14 - plotted cells (unified_v7 seed01, async vs async_win):")
 for ax, wl in zip(axes, WORKLOADS):
     baseline = get(wl, 'baseline')[0]
     tops = []

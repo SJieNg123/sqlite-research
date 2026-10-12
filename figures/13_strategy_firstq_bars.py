@@ -1,6 +1,6 @@
 """Figure 13: Paired first-query reduction by strategy, per workload.
 
-Single canonical batch: results/unified_v6, seed01 (2026-09-23). Every cell --
+Single canonical batch: results/unified_v7, seed01 (2026-10-08). Every cell --
 including the frequency-ranked 2e_K* arms -- was measured in ONE run with the
 corrected (-count, pageno) tie-break, so no per-cell source selection is needed.
 This is the same batch that backs the paper's four result tables, so the figure
@@ -23,7 +23,7 @@ import numpy as np
 from pub_style import PALETTE, apply
 apply()
 
-UNIFIED   = ROOT / "results/unified_v6/seed01/summary.csv"
+UNIFIED   = ROOT / "results/unified_v7/seed01/summary.csv"
 ARMS      = ['layers_5', '2d', '2e_K10', '2e_K500', '2f_slru']
 ARM_LABEL = {'layers_5': 'Skel-5', '2d': 'Skel', '2e_K10': 'Skel+10',
              '2e_K500': 'Skel+500', '2f_slru': 'Dump'}
