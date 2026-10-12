@@ -167,6 +167,10 @@ results*_matrix.log
 results/*/work/
 results/*/regen_work/
 
+# discarded unified_v7 launches, kept locally for reference only; results/unified_v7/README.md
+# records why each was stopped and they are not to be cited
+results/unified_v7_attempt*/
+
 # tools/md_to_pdf.py outputs (written next to the source .md = repo root)
 REPORT.pdf
 _md2pdf_cjk.ttf
