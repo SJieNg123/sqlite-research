@@ -770,3 +770,78 @@ UNCHANGED = [u for u in UNCHANGED if "PENDING" not in u[2] and "ratio about" not
     (r".", r"5~ms grace period|also reaches 100\\%|about 100~\\textmu s",
      "results/unified_v5/grace_check: Dump first query 97 to 104 us, median 100, over both modes and sleeps 0/5/20 ms"),
 ]
+
+
+# ------------------------------- whole-file baselines and the 10x definition (2026-10-13)
+# TODO L200: the two profile-free whole-file baselines that unified_v7 measured (whole_file
+# under async_win and populate). TODO L408: the 10x paragraph states what a direction is and
+# gives the Skel+500 intervals.
+WF = ("async_win", "populate")
+
+
+def wf_ms(v, arm, i=None):
+    """Whole-file dispatch in ms (median over instances, page-list read included) over ALL4."""
+    vals = [P.rd(v.med(w, "whole_file", arm, "deliver_us_median", add=("parse_us_median",)) / 1000, 0)
+            for w in ALL4]
+    return same(*vals) if i is None else (min if i == 0 else max)(vals, key=float)
+
+
+def wf_x(v, arm, i):
+    """Warm-process end-to-end latency as a multiple of the baseline, higher in every instance."""
+    for w in ALL4:
+        assert v.u(w, "whole_file", arm) > 0 and nsign(v, w, "whole_file", arm) == 10, f"{w} {arm}"
+    return lohi([P.ratio(v.u(w, "whole_file", arm)) for w in ALL4], i)
+
+
+def wf_fq(v, i):
+    return lohi([-v.u(w, "whole_file", a, metric="first_query_us") for w in ALL4 for a in WF], i)
+
+
+def wf_floor(v):
+    """'reach the first-query latency of Dump': within one point of per-page Dump everywhere."""
+    for w in ALL4:
+        for a in WF:
+            assert nsign(v, w, "whole_file", a, "first_query_us") == 10, f"{w} {a} first query"
+            assert abs(v.u(w, "whole_file", a, metric="first_query_us")
+                       - v.u(w, "2f_slru", metric="first_query_us")) <= 1, f"{w} {a} off the Dump floor"
+    return ""
+
+
+def ref_size_only(v):
+    assert all(k[1] == "orig" for k in v.unc if k[2] == "whole_file"), "whole_file measured beyond orig"
+    return ""
+
+
+_WF_MS = (("15", "wf_ms(v,'async_win')"), ("102", "wf_ms(v,'populate',0)"), ("103", "wf_ms(v,'populate',1)"))
+_WF_X = (("16", "wf_x(v,'async_win',0)"), ("18", "wf_x(v,'async_win',1)"),
+         ("111", "wf_x(v,'populate',0)"), ("124", "str(wf_x(v,'populate',1)) + wf_floor(v)"))
+WF_NEW = [
+    ("tab-wholefile", T(r"\strat{File} & Every page of the database file, window-chunked hints & none & 26{,}331 & 15~ms window-chunked \\"
+                        "\n" r"\strat{Populate} & Every page of the database file, synchronous \texttt{mmap(MAP\_POPULATE)} & none & 26{,}331 & 102 to 103~ms \\",
+                        *_WF_MS)),
+    ("s5-wholefile", T(r"\strat{File} and \strat{Populate} reach the first-query latency of \strat{Dump}, 88\% to 90\% below baseline across instances, because every page the query touches is resident. Loading all 26{,}331 pages costs 15~ms window-chunked and 102 to 103~ms under \texttt{MAP\_POPULATE}, so warm-process end-to-end latency rises 16 to $18\times$ and 111 to $124\times$, respectively, in all ten instances of every workload.",
+                       ("88", "str(wf_fq(v,0)) + wf_floor(v)"), ("90", "wf_fq(v,1)"), *_WF_MS, *_WF_X)),
+    ("guid-wholefile", T(r"Loading the whole file is no substitute: it matches the dump's first-query latency but raises end-to-end latency 16 to $18\times$ window-chunked and 111 to $124\times$ with \texttt{MAP\_POPULATE}.",
+                         *_WF_X)),
+    ("lim-wholefile", "The whole-file baselines, including the synchronous \\texttt{MAP\\_POPULATE}, were measured "
+                      "at the reference size only.«ref_size_only(v)»"),
+]
+# what the manuscript said before these baselines were measured
+OLD_LITERAL.update({c: "They do not cover a whole-file \\texttt{readahead(2)} call or an eagerly populated "
+                       "mapping (\\texttt{MAP\\_POPULATE})." for c, _t in WF_NEW})
+
+_s7 = dict(CLAIMS)["s7-10x"]
+_DIR = "keep their direction under per-page delivery."
+_K500 = ("«inc(v.u('A','2e_K500'))»\\% above baseline to "
+         "«inc(v.u('A','2e_K500',db='1gb')) + neutral_same_sign(v,'A','2e_K500')»\\% above.")
+assert _s7.count(_DIR) == 1 and _s7.count(_K500) == 1
+WF_REWORD = {"s7-10x": _s7.replace(
+    _DIR, "keep their direction, the sign of the ten-instance mean change, under per-page delivery.").replace(
+    _K500, "«inc(v.u('A','2e_K500'))»\\% above baseline (95\\% CI $[«r0(v.ulo('A','2e_K500'))»,"
+           "«r0(v.uhi('A','2e_K500'))»]$) to «inc(v.u('A','2e_K500',db='1gb')) + neutral_same_sign(v,'A','2e_K500')»"
+           "\\% above ($[«r0(v.ulo('A','2e_K500',db='1gb'))»,«r0(v.uhi('A','2e_K500',db='1gb'))»]$).")}
+CLAIMS = [(c, WF_REWORD.get(c, t)) for c, t in CLAIMS] + WF_NEW
+UNCHANGED += [
+    (r"^Two baselines need neither a profile", ALL,
+     "results/pilot_whole_file_delivery (32 pages) and database geometry, no batch number"),
+]
