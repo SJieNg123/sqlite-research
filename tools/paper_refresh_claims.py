@@ -845,3 +845,29 @@ UNCHANGED += [
     (r"^Two baselines need neither a profile", ALL,
      "results/pilot_whole_file_delivery (32 pages) and database geometry, no batch number"),
 ]
+
+
+# ------------------------------------------------------ cache-reset mechanism (2026-10-13)
+# TODO L243: the protocol paragraph names the eviction mechanism and says the cold gate
+# excluded no repetition. The gate number is the batch's, the rest is harness code.
+def cold0(v):
+    """'post-reset residency was 0% in every repetition': every kept rep of every seed."""
+    vals = [r["cold_pct"] for r in v._raw()]
+    assert vals and all(c != "" and float(c) == 0 for c in vals), "a repetition was not fully cold"
+    return "0"
+
+
+RESET_NEW = [
+    ("s4-coldgate", "In the unified batch, post-reset residency was «cold0(v)»\\% in every repetition, "
+                    "so none was excluded."),
+]
+OLD_LITERAL.update({"s4-coldgate": "We exclude a cell if post-reset residency exceeds 1\\%, and every "
+                                   "reported cell incurs major page faults."})
+CLAIMS = CLAIMS + RESET_NEW
+_RESET_LINE = r"^Before each workstation measurement, a privileged test harness"
+assert sum(u[0] == _RESET_LINE for u in UNCHANGED) == 1
+UNCHANGED = [u for u in UNCHANGED if u[0] != _RESET_LINE] + [
+    (r"^Before each workstation measurement, the test harness evicts",
+     r"writes 3 to|more than 1\\% of the selected pages|below 1\\% of the cold baseline",
+     "drop_caches value (harness helper), pre-set cold-gate threshold, separate CPU-cache measurement"),
+]
