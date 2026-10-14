@@ -871,3 +871,87 @@ UNCHANGED = [u for u in UNCHANGED if u[0] != _RESET_LINE] + [
      r"writes 3 to|more than 1\\% of the selected pages|below 1\\% of the cold baseline",
      "drop_caches value (harness helper), pre-set cold-gate threshold, separate CPU-cache measurement"),
 ]
+
+
+# --------------------------------------------------- Figure reversal re-plot (2026-10-14)
+# TODO L279: both rows of the figure are now ten-instance means, so the sentences that quoted
+# its seed-1 values quote ten-instance ones, and the caption's statements are asserted.
+REV_SETS = ("layers_5", "2d", "2e_K10", "2f_top14", "2e_K500", "2f_top500", "2f_slru")
+FLOOR = (("2f_slru", "async"), ("2f_slru", "async_win"), ("whole_file", "async_win"), ("whole_file", "populate"))
+
+
+def rev_fq(v, w):
+    """First-query mean change of every cell the figure draws for workload w."""
+    cells = [(s, a) for s in REV_SETS for a in ("async", "async_win")] + [("whole_file", a) for a in WF]
+    return {c: v.u(w, c[0], c[1], metric="first_query_us") for c in cells}
+
+
+def at_floor(v, w, cells):
+    fq = rev_fq(v, w)
+    lo = min(fq.values())
+    for c in cells:
+        assert fq[c] - lo <= 1, f"{w} {c} is not at the first-query floor"
+
+
+def dump_floor(v):
+    """'the dump sits at the floor ..., level with the whole-file baselines'."""
+    for w in ABC:
+        at_floor(v, w, FLOOR)
+    return ""
+
+
+def rev_caption(v):
+    for w in ABC:
+        assert all(x < 0 for x in rev_fq(v, w).values()), f"{w}: a set does not shorten the first query"
+        at_floor(v, w, FLOOR)
+    for w in ("A", "B"):
+        for s, a in FLOOR:
+            assert v.ulo(w, s, a) > 0, f"{w} {s} {a} is not above baseline end to end"
+        for s in ("2d", "2e_K10"):
+            for a in ("async", "async_win"):
+                assert v.uhi(w, s, a) < 0, f"{w} {s} {a} is not below baseline end to end"
+    return ""
+
+
+_TEN_FQ = "lohi([-v.u(w,{s},metric='first_query_us') for w in ABC{f}],{i})"
+REV_REWORD = {
+    "fig-rev-cap": "Every set shortens the first query, and the full dump and the whole-file baselines bring it "
+                   "to its floor. On the two broad workloads their dispatch puts them above the baseline end to "
+                   "end under either mechanism, whereas \\strat{Skel} and \\strat{Skel+10} stay below it.«rev_caption(v)»",
+    "s5-fq": T(r"the full working-set dump sits at the floor on all three workloads (Figure~\ref{fig:reversal}, top), level with the whole-file baselines.§0 Across instances it reduces cold-query latency by 88\% to 90\%, to 96 to 99~\textmu s. The targeted sets reduce it by 36\% to 65\%",
+        ("§0", "dump_floor(v)"),
+        ("88", _TEN_FQ.format(s="'2f_slru'", f="", i=0)), ("90", _TEN_FQ.format(s="'2f_slru'", f="", i=1)),
+        ("96", "us(min(v.med(w,'2f_slru','async','fq_median') for w in ABC))"),
+        ("99", "us(max(v.med(w,'2f_slru','async','fq_median') for w in ABC))"),
+        ("36", _TEN_FQ.format(s="s", f=" for s in ('2d','2e_K10','2f_top14')", i=0)),
+        ("65", _TEN_FQ.format(s="s", f=" for s in ('2d','2e_K10','2f_top14')", i=1))),
+}
+_s7s = dict(CLAIMS)["s7-sampling"]
+_OUTLIER = _s7s[_s7s.index("The single instance in Table~\\ref{tab:e2e-ac} and Figure~\\ref{fig:reversal}"):]
+REV_REWORD["s7-sampling"] = _s7s.replace(_OUTLIER, T(
+    r"The single instance in Table~\ref{tab:e2e-ac} is an instantiation outlier on Scattered-Zipf-100K: its 514~\textmu s baseline is far below the cross-instance median of 892~\textmu s, so its \strat{Skel} change of $-12$\% understates the cross-instance $-28$\%.",
+    ("514", "us(v.base1('A'))"), ("892", "us(v.med('A','baseline'))"),
+    ("-12", "under(v.e1('A','2d'), v.u('A','2d'))"), ("-28", "s0(v.u('A','2d'))")))
+assert REV_REWORD["s7-sampling"] != _s7s
+OLD_LITERAL.update({
+    "fig-rev-cap": "Bars and labels show one workload instance (seed~1)",
+    "s5-fq": "It reduces cold-query latency by 81\\% to 91\\%, from baselines of 514 to 1{,}074~\\textmu s to 97 to 99~\\textmu s.",
+    "s7-sampling": "and its Uniform-100K \\strat{Skel-5} change of $-36$\\% overstates the cross-instance $-1$\\%.",
+})
+CLAIMS = [(c, REV_REWORD.get(c, t)) for c, t in CLAIMS]
+
+
+# ------------------------------------------------------------ artifact paragraph (2026-10-14)
+# TODO L283: the batch name and the code commit it ran on, as the batch README records them.
+def batch_commit(v):
+    m = re.search(r"with the batch code of ([0-9a-f]{7,40})", (v.dir / "README.md").read_text())
+    assert m, f"{v.dir}/README.md names no batch code commit"
+    return m.group(1)[:7]
+
+
+ARTIFACT_NEW = [
+    ("s4-artifact", "come from one batch, unified\\_«v.tag», measured in one contiguous window with commit "
+                    "\\texttt{«batch_commit(v)»} of the artifact."),
+]
+OLD_LITERAL.update({"s4-artifact": "\n\\todo{Provenance, updated 29 Sep."})
+CLAIMS = CLAIMS + ARTIFACT_NEW
