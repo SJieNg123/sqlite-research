@@ -955,3 +955,11 @@ ARTIFACT_NEW = [
 ]
 OLD_LITERAL.update({"s4-artifact": "\n\\todo{Provenance, updated 29 Sep."})
 CLAIMS = CLAIMS + ARTIFACT_NEW
+
+
+# ------------------------------------------------------ Figure portability (2026-10-15)
+# TODO L453 (2): the scatter's caption counts OpenWhisk cells, not unified-batch numbers.
+UNCHANGED += [
+    (r"^\\caption\{First-query effectiveness \$R\$ on the workstation against \$R\$ inside OpenWhisk", ALL,
+     "OpenWhisk campaigns (revised-freeze comparison table), no batch number"),
+]

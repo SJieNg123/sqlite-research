@@ -17,7 +17,8 @@
 # Every output is a committed file, so after a run `git status` lists exactly what did not
 # reproduce. Figure 1 is a conceptual drawing with no data (paper/figures/gen_problem.py
 # writes its SVG). Figures 16 and 20 come from their own batches (results/ram_pressure,
-# results/lambda/b2), read from their committed tables.
+# results/lambda/b2), and Figure portability from the OpenWhisk comparison table, each read
+# from its committed file.
 # Needs Python 3 with matplotlib and the Linux Libertine O fonts. Standard library otherwise.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -68,6 +69,7 @@ python3 tools/matched_budget.py "$D" > /dev/null
 echo "== 5. figures"
 python3 paper/figures/gen_headline.py "$B"
 python3 paper/figures/gen_reversal.py "$B"
+python3 paper/figures/gen_portability_scatter.py    # OpenWhisk comparison table, not the batch
 python3 figures/16_ram_pressure_sweep.py && cp figures/out/16_ram_pressure_sweep.png paper/figures/
 python3 figures/20_lambda_residency.py && cp figures/out/20_lambda_residency.png paper/figures/
 
