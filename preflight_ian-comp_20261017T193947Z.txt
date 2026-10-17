@@ -1,0 +1,84 @@
+ow_host_preflight  2026-10-17T19:39:47Z  host=ian-comp  user=sjie
+repo /home/sjie/sqlite-research  HEAD=eaf8a00  branch=main
+  dirty: ?? preflight_ian-comp_20261017T193947Z.txt
+  PASS  clone contains the unified_v7 batch code (24e9496)
+
+== 1. privilege
+  id: uid=1004(sjie) gid=1005(sjie) groups=1005(sjie),124(docker),1004(student)
+  sudo: not available (expected)
+  PASS  setuid /usr/local/sbin/drop-caches exists
+  /proc/sys/vm/drop_caches: not writable (expected)
+
+== 2. system
+  kernel: Linux 7.0.0-38-generic x86_64
+  os: Ubuntu 24.04.4 LTS
+  cpu: AMD Ryzen 7 7700 8-Core Processor  cores=16
+  memory: MemTotal: 31994292 kB MemAvailable: 29418616 kB 
+  cpufreq cpu2: driver=amd-pstate-epp governor=performance epp=performance max_khz=5392872
+  boost=1 intel_no_turbo=n/a thp=always [madvise] never
+  load: 0.00 0.01 0.00
+  PASS  core 2 exists for the harness pin
+  WARN  1 running containers: stop OpenWhisk during the run
+  top CPU users:
+     0.5 MainThread
+     0.2 code-6d62b1d5da
+     0.1 cloudflared
+     0.1 sshd
+     0.0 gnome-shell
+
+== 3. storage
+  repo on /dev/nvme0n1p5 (ext4), disk=nvme0n1 model=Predator SSD GM7 2TB
+  read_ahead_kb=128 max_sectors_kb=128 max_hw_sectors_kb=128 scheduler=[none] mq-deadline  rotational=0
+  free: 533G
+  PASS  read_ahead_kb=128, window W=32 pages as on the workstation
+
+== 4. data identity
+  test.db size=107851776 sha256=2504a6b15f4b202b11234549ab1d46e22eb808e0b03a5731236083122237fdd1
+  PASS  test.db is the workstation's file
+  PASS  workloads A, B, C seeds 1 to 10 match
+  frozen v7 hotsets 2d: 30 of 30
+  frozen v7 hotsets 2e_K10: 30 of 30
+  frozen v7 hotsets 2f_top14: 30 of 30
+  frozen v7 hotsets 2f_slru: 30 of 30
+
+== 5. toolchain
+  gcc: gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+  python3: Python 3.12.3  git: git version 2.43.0  git-lfs: git-lfs/3.4.1 (GitHub; linux amd64; go 1.22.2)
+  PASS  benchmark_harness builds (12 s)
+  PASS  warmer builds
+
+== 6. cold-cache probe (unprivileged)
+  trial 1
+    warm (every page read through the mapping)   resident 100.000%
+    A  madvise COLD+PAGEOUT+DONTNEED             resident   0.000%  (1.1 ms)
+    A+B  then posix_fadvise(DONTNEED)            resident   0.000%  (0.1 ms)
+    B alone  posix_fadvise(DONTNEED), still mapped resident 100.000%  (0.5 ms)
+  trial 2
+    warm (every page read through the mapping)   resident 100.000%
+    A  madvise COLD+PAGEOUT+DONTNEED             resident   0.000%  (2.2 ms)
+    A+B  then posix_fadvise(DONTNEED)            resident   0.000%  (0.3 ms)
+    B alone  posix_fadvise(DONTNEED), still mapped resident 100.000%  (0.5 ms)
+  trial 3
+    warm (every page read through the mapping)   resident 100.000%
+    A  madvise COLD+PAGEOUT+DONTNEED             resident   0.000%  (2.2 ms)
+    A+B  then posix_fadvise(DONTNEED)            resident   0.000%  (0.3 ms)
+    B alone  posix_fadvise(DONTNEED), still mapped resident 100.000%  (0.5 ms)
+  PASS  madvise then posix_fadvise(DONTNEED) reaches 0.000% in every trial
+
+== 7. CPU clock on core 2 after a 10 ms spin
+  idle 3021308 kHz, after spin 5339082 kHz, cpuinfo_max 5392872 kHz
+  after spin = 99% of max
+
+== summary
+  PASS  clone contains the unified_v7 batch code (24e9496)
+  PASS  setuid /usr/local/sbin/drop-caches exists
+  PASS  core 2 exists for the harness pin
+  WARN  1 running containers: stop OpenWhisk during the run
+  PASS  read_ahead_kb=128, window W=32 pages as on the workstation
+  PASS  test.db is the workstation's file
+  PASS  workloads A, B, C seeds 1 to 10 match
+  PASS  benchmark_harness builds (12 s)
+  PASS  warmer builds
+  PASS  madvise then posix_fadvise(DONTNEED) reaches 0.000% in every trial
+
+written to /home/sjie/sqlite-research/preflight_ian-comp_20261017T193947Z.txt
