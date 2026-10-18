@@ -17,6 +17,8 @@
 # Then commit and push results/ow_native_e2e/ with batch.log (the last line prints the commands).
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
+# run_experiment.py defaults ROOT to the workstation path; point it at this clone
+export EXPERIMENT_ROOT="$(pwd)"
 SEEDS="${*:-1 2 3 4 5 6 7 8 9 10}"
 OUT=results/ow_native_e2e
 WL="A,B,C"
