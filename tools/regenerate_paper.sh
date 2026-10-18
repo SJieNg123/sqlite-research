@@ -22,6 +22,7 @@
 # Needs Python 3 with matplotlib and the Linux Libertine O fonts. Standard library otherwise.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+export EXPERIMENT_ROOT="$(pwd)"     # run_experiment.py otherwise defaults ROOT to the workstation path
 B=${1:-unified_v7}
 D=results/$B
 TAG=${B#unified_}
