@@ -11,6 +11,7 @@
 #   3. results/<batch>/uncertainty.{csv,md}          tools/stats_uncertainty.py
 #   4. results/matched_budget/<batch>.{csv,md}       tools/matched_budget.py; its page-count
 #      check reads the matched hotsets, the only work/ files committed (git add -f)
+#   4b. results/ow_native_e2e: summaries, uncertainty and host_comparison (the second host)
 #   5. the data figures in paper/figures/            each figure's script
 #   6. every number in the text and tables           tools/paper_refresh.py check + inventory
 #
@@ -29,20 +30,23 @@ TAG=${B#unified_}
 FAMILIES="main lp layout top15 whole"
 export SOURCE_DATE_EPOCH=0          # PDF figures carry no build time, so reruns are byte-stable
 
-echo "== 1. per-family summaries from raw.csv ($D)"
-python3 - "$D" <<'PY'
+aggregate() {   # aggregate <dir> <glob>: summary.csv beside every raw.csv, with run_experiment.aggregate
+python3 - "$1" "$2" <<'PY'
 import csv, importlib.util, sys
 from pathlib import Path
 spec = importlib.util.spec_from_file_location("run_experiment", "run_experiment.py")
 rx = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(rx)
 n = 0
-for raw in sorted(Path(sys.argv[1]).glob("seed[0-9][0-9]/*/raw.csv")):
+for raw in sorted(Path(sys.argv[1]).glob(sys.argv[2])):
     with open(raw) as f:
         rx.aggregate(list(csv.DictReader(f)), raw.with_name("summary.csv"))
     n += 1
-print(f"   {n} family summaries")
+print(f"   {n} summaries under {sys.argv[1]}")
 PY
+}
+echo "== 1. per-family summaries from raw.csv ($D)"
+aggregate "$D" "seed[0-9][0-9]/*/raw.csv"
 
 echo "== 2. family and seed merges"
 first=1
@@ -66,6 +70,12 @@ python3 tools/stats_uncertainty.py --seeds "$D"/seed[0-9][0-9] \
 
 echo "== 4. matched-budget comparison"
 python3 tools/matched_budget.py "$D" > /dev/null
+
+echo "== 4b. second-host native run (results/ow_native_e2e) against the workstation"
+aggregate results/ow_native_e2e "seed[0-9][0-9]/raw.csv"
+python3 tools/stats_uncertainty.py --seeds results/ow_native_e2e/seed[0-9][0-9] \
+  --out results/ow_native_e2e/uncertainty.csv --md results/ow_native_e2e/uncertainty.md > /dev/null
+python3 tools/compare_hosts_e2e.py > /dev/null
 
 echo "== 5. figures"
 python3 paper/figures/gen_headline.py "$B"

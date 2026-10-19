@@ -963,3 +963,104 @@ UNCHANGED += [
     (r"^\\caption\{First-query effectiveness \$R\$ on the workstation against \$R\$ inside OpenWhisk", ALL,
      "OpenWhisk campaigns (revised-freeze comparison table), no batch number"),
 ]
+
+
+# ------------------------------------------------------ second-host native run (2026-10-19)
+# TODO L453 (1): these numbers come from results/ow_native_e2e, the native run on the
+# OpenWhisk host, through tools/compare_hosts_e2e.py, and not from the unified batch.
+import csv  # noqa: E402
+import json  # noqa: E402
+
+OW_DIR = P.ROOT / "results/ow_native_e2e"
+
+
+def _ow_json():
+    return json.loads((OW_DIR / "host_comparison.json").read_text())
+
+
+def _ow_u(w, s, arm="async", metric="e2e_warm_us", field="mean_pct"):
+    with open(OW_DIR / "uncertainty.csv") as f:
+        for r in csv.DictReader(f):
+            if (r["workload"], r["db"], r["strategy"], r["arm"], r["metric"]) == (w, "orig", s, arm, metric):
+                return float(r[field])
+    raise KeyError(f"ow_native_e2e: no {w} {s} {arm} {metric}")
+
+
+def ow_count(key, metric="e2e_warm_us"):
+    return _ow_json()["counts"][metric][key]
+
+
+def ow_reversal(host):
+    """The single reversed pair: Tail-Mixed, window-chunked, Skel vs Dump, Dump faster on the
+    workstation and slower on the second host. Magnitude in points of the baseline."""
+    rev = _ow_json()["reversed"]
+    assert len(rev) == 1, f"{len(rev)} reversed pairs"
+    r = rev[0]
+    assert (r["metric"], r["workload"], r["arm"], r["first"], r["second"]) == \
+        ("e2e_warm_us", "C", "async_win", "Skel", "Dump"), f"reversed pair is {r}"
+    assert r["ws_mean_d"] > 0 > r["ow_mean_d"], "direction of the reversal changed"
+    return str(abs(P.r0(r["ws_mean_d" if host == "ws" else "ow_mean_d"])))
+
+
+def ow_fq_holds():
+    assert ow_count("reversed", "first_query_us") == 0, "a first-query pair reverses"
+    return ""
+
+
+def ow_dump_slowest():
+    for w in ABC:
+        for a in ("async", "async_win"):
+            d = _ow_u(w, "2f_slru", a)
+            assert all(d > _ow_u(w, s, a) for s in ("2d", "2e_K10", "2f_top14")), f"{w} {a}: Dump not slowest"
+    return ""
+
+
+def ow_dump_x(i):
+    return lohi([P.ratio(_ow_u(w, "2f_slru")) for w in ("A", "B")], i)
+
+
+def ow_half():
+    """'a cold miss costs about half as much': baseline first-query ratio within 0.45 to 0.55."""
+    assert all(0.45 <= x <= 0.55 for x in _ow_json()["baseline_first_query_ratio"].values()), "not about half"
+    return ""
+
+
+def ow_dispatch(i):
+    v = _ow_json()["dispatch_ratio"].values()
+    return P.rd(min(v) if i == 0 else max(v), 1)
+
+
+def ow_skel(w):
+    """Skel's end-to-end change on the second host: within noise on A and B, a reduction on C."""
+    lo, hi = _ow_u(w, "2d", field="ci_lo"), _ow_u(w, "2d", field="ci_hi")
+    if w == "C":
+        assert hi < 0, "Skel on Tail-Mixed is not a robust reduction on the second host"
+    else:
+        assert lo < 0 < hi, f"Skel on {w} is not within noise on the second host"
+    return str(P.r0(_ow_u(w, "2d")))
+
+
+def ow_broad_noise():
+    """'the interior-page gain on the two broad workloads falls within noise'."""
+    ow_skel("A"), ow_skel("B")
+    return ""
+
+
+NATIVE_NEW = [
+    ("s7-native", T(r"Of the 36 strategy pairs, six per workload and delivery mechanism, 20 keep a significant order on both hosts, 15 are ties on at least one host, and one reverses: on Tail-Mixed, window-chunked \strat{Dump} is faster than \strat{Skel} by 16 points of the baseline on the workstation but slower by 62 points on the second host. The first-query order holds without a reversal.§0 \strat{Dump} is the slowest strategy end to end in every workload and mechanism on the second host, at 31 to $34\times$ the baseline under per-page delivery on the broad workloads,§1 so the reversal of Section~\ref{sec:evaluation} is stronger there. The size of the precise sets' gain does not transfer. A cold miss on the second host costs about half as much,§2 while dispatch costs 1.1 to 2.1 times as much, so \strat{Skel} changes end-to-end latency by $-6$\% and $-7$\% on the two broad workloads, within noise, and by $-22$\% on Tail-Mixed, whose cold query is longer.",
+        ("36", "ow_count('pairs')"), ("20", "ow_count('same_order')"),
+        ("15", "ow_count('tie_both') + ow_count('tie_one')"),
+        ("16", "ow_reversal('ws')"), ("62", "ow_reversal('ow')"), ("§0", "ow_fq_holds()"),
+        ("31", "ow_dump_x(0)"), ("34", "ow_dump_x(1)"), ("§1", "ow_dump_slowest()"), ("§2", "ow_half()"),
+        ("1.1", "ow_dispatch(0)"), ("2.1", "ow_dispatch(1)"),
+        ("-6", "ow_skel('A')"), ("-7", "ow_skel('B')"), ("-22", "ow_skel('C')"))),
+    ("abs-host", "A cold miss there costs half as much, so the interior-page gain on the two broad workloads falls "
+                 "within noise.«ow_half() + ow_broad_noise()»"),
+]
+OLD_LITERAL.update({
+    "s7-native": "Because each OpenWhisk invocation opens a fresh handle, this experiment does not show that the "
+                 "end-to-end strategy ranking transfers.",
+    "abs-host": "Apache OpenWhisk tests on a second host confirm the first-query benefit; they do not test the "
+                "end-to-end ranking.",
+})
+CLAIMS = CLAIMS + NATIVE_NEW
