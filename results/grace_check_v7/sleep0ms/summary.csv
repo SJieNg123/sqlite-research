@@ -1,0 +1,5 @@
+workload,db,strategy,arm,n,ra_kb,fq_median,fq_p95,fq_min,fq_stdev,delivery_pct_median,preproc_us_median,open_us_median,deliver_us_median,parse_us_median,ranges_median,e2e_median,e2e_warm_median,cold_pct_max
+A,orig,2f_slru,async,10,128,97.13,98.44,94.85,1.02,100.0,6954.63,112.54,6841.74,,,7051.33,6938.44,0.0
+A,orig,2f_slru,async_win,10,128,96.83,98.54,95.85,0.95,83.7,2481.84,113.19,1966.32,398.61,138.00,2578.24,2465.64,0.0
+B,orig,2f_slru,async,10,128,99.24,111.27,95.19,6.44,100.0,6931.97,113.59,6818.48,,,7028.02,6914.52,0.0
+B,orig,2f_slru,async_win,10,128,98.25,99.99,95.96,1.36,86.9,2426.75,113.19,1989.65,323.44,139.00,2524.20,2410.44,0.0
