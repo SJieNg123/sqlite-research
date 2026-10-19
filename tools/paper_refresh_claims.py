@@ -1064,3 +1064,85 @@ OLD_LITERAL.update({
                 "end-to-end ranking.",
 })
 CLAIMS = CLAIMS + NATIVE_NEW
+
+
+# ------------------------------------------- hotset sizes and the grace check (2026-10-19)
+# The atomic check found sizes that no claim verified: Tail-Mixed's working set read 1.8 MB
+# (v7: 467 to 483 pages, 1.9 MB in the paper's convention of 4 KB per page over 1000), one
+# 18 MB beside four 17.7 MB, and Skel+500's "about 500" (338 pages on Tail-Mixed). They are
+# now rendered from the batch's own hotsets. The grace-period sentence now comes from
+# results/grace_check_v7 (run with the v7 code) instead of results/unified_v5/grace_check.
+def _pages(v, w, s):
+    fs = sorted(v.dir.glob(f"seed[0-9][0-9]/main/work/hotset_{w}_orig_{s}.csv"))
+    assert len(fs) == 10, f"{v.tag} {w} {s}: {len(fs)} hotset files"
+    return statistics.median(sum(1 for _ in open(f)) - 1 for f in fs)
+
+
+def mb(v, ws):
+    """Working-set size (median over instances, pages x 4 KB / 1000), one value for all of ws."""
+    return same(*[P.rd(_pages(v, w, "2f_slru") * 4 / 1000, 1) for w in ws])
+
+
+def k500_about(v):
+    for w in ("A", "B"):
+        assert abs(_pages(v, w, "2e_K500") - 500) <= 25, f"Skel+500 on {w} is not about 500 pages"
+    return "500"
+
+
+def k500_tm(v):
+    return str(P.r0(_pages(v, "C", "2e_K500")))
+
+
+GRACE = P.ROOT / "results/grace_check_v7"
+
+
+def _grace(ms):
+    with open(GRACE / f"sleep{ms}ms/summary.csv") as f:
+        return list(csv.DictReader(f))
+
+
+def grace_ms():
+    assert (GRACE / "sleep5ms/summary.csv").exists(), "no 5 ms grace run"
+    return "5"
+
+
+def grace_reach():
+    """'with a 5 ms grace period the chunked mode also reaches 100%'."""
+    vals = [float(r["delivery_pct_median"]) for r in _grace(5) if r["arm"] == "async_win"]
+    assert vals and all(x >= 99.5 for x in vals), f"chunked delivery at 5 ms: {vals}"
+    return "100"
+
+
+def grace_fq():
+    """'first-query latency is flat at about 100 us under both modes at every grace period'."""
+    fq = [float(r["fq_median"]) for ms in (0, 5, 20) for r in _grace(ms)]
+    assert len(fq) == 12 and all(90 <= x <= 110 for x in fq), f"first query not about 100 us: {fq}"
+    return "100"
+
+
+_MB = {"17.7~MB": "«mb(v,'AB')»~MB", "1.8~MB": "«mb(v,'C')»~MB"}
+
+
+def _mbify(t):
+    for lit, expr in _MB.items():
+        t = t.replace(lit, expr)
+    return t
+
+
+SIZE_NEW = [
+    ("tab-k500-size", T(r"about 500 for $K=500$ (338 on Tail-Mixed)", ("500", "k500_about(v)"), ("338", "k500_tm(v)"))),
+    ("s3-same-ws", "For the same «mb(v,'AB')»~MB working set,"),
+    ("s5-tm-ws", "on Tail-Mixed, where it contains «mb(v,'C')»~MB."),
+    ("s7-ram-dump", "The «mb(v,'AB')»~MB full dump falls"),
+    ("s7-ram-tm", "Tail-Mixed is not measured on this axis because its «mb(v,'C')»~MB working set"),
+    ("s3-grace", T(r"with a 5~ms grace period between dispatch and query, the chunked mode also reaches 100\%, and first-query latency is flat at about 100~\textmu s under both modes at every grace period",
+                   ("5", "grace_ms()"), ("100", "grace_reach()"), ("100", "grace_fq()"))),
+]
+OLD_LITERAL.update({"tab-k500-size": "14 to 28 for $K=10$; about 500 for $K=500$ &",
+                    "s3-same-ws": "For the same 18~MB working set,",
+                    "s5-tm-ws": "on Tail-Mixed, where it contains 1.8~MB.",
+                    "s7-ram-tm": "Tail-Mixed is not measured on this axis because its 1.8~MB working set"})
+CLAIMS = [(c, _mbify(t)) for c, t in CLAIMS] + SIZE_NEW
+UNCHANGED = [(lrx, r"4\{,\}400(-page| calls)|about 4\{,\}400 or 480|\$\\approx\$4400", why)
+             if why == "Dump set size (hotset)" else (lrx, srx, why)
+             for lrx, srx, why in UNCHANGED if "unified_v5/grace_check" not in why]

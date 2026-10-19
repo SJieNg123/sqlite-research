@@ -12,6 +12,7 @@
 #   4. results/matched_budget/<batch>.{csv,md}       tools/matched_budget.py; its page-count
 #      check reads the matched hotsets, the only work/ files committed (git add -f)
 #   4b. results/ow_native_e2e: summaries, uncertainty and host_comparison (the second host)
+#   4c. results/grace_check_v7: summaries of the grace-period check (v7 code)
 #   5. the data figures in paper/figures/            each figure's script
 #   6. every number in the text and tables           tools/paper_refresh.py check + inventory
 #
@@ -76,6 +77,9 @@ aggregate results/ow_native_e2e "seed[0-9][0-9]/raw.csv"
 python3 tools/stats_uncertainty.py --seeds results/ow_native_e2e/seed[0-9][0-9] \
   --out results/ow_native_e2e/uncertainty.csv --md results/ow_native_e2e/uncertainty.md > /dev/null
 python3 tools/compare_hosts_e2e.py > /dev/null
+
+echo "== 4c. grace-period check (results/grace_check_v7)"
+aggregate results/grace_check_v7 "sleep*ms/raw.csv"
 
 echo "== 5. figures"
 python3 paper/figures/gen_headline.py "$B"
