@@ -1217,3 +1217,36 @@ UNCHANGED += [
     (r"^\\caption\{The deployment boundary\.", ALL, "figure caption, no batch number"),
     (r"^\\caption\{Matched budgets:", ALL, "table caption: margin, workload names, no batch number"),
 ]
+
+
+# -------------------------------------------- text follow-ups to Tables 3 to 5 (2026-10-21)
+# Dispatch times cite Table strategies and the latency moves cite Figure reversal. The
+# boundary paragraph states the within-instance open-cost variation that Section 3 uses as the
+# ordering threshold. The Tail-Hit block of Table ablation gives the leaf-only sets.
+def slower(v, w, s):
+    """'make Tail-Hit x% slower': a robust increase (CI above zero)."""
+    assert v.ulo(w, s) > 0, f"{w} {s} is not robustly slower"
+    return inc(v.u(w, s))
+
+
+_FOLLOW = (("~ms on Tail-Hit (Figure~\\ref{fig:reversal}). \\strat{Dump} accordingly", "~ms on Tail-Hit (Table~\\ref{tab:strategies}). \\strat{Dump} accordingly"),
+           ("\\% below on Tail-Hit. The same mechanism", "\\% below on Tail-Hit (Figure~\\ref{fig:reversal}). The same mechanism"))
+
+
+def _follow(cid, t):
+    if cid == "s5-delivery":
+        for old, new in _FOLLOW:
+            assert t.count(old) == 1, old
+            t = t.replace(old, new)
+    return t
+
+
+FOLLOW_NEW = [
+    ("s5-open-within", "varies by up to «us(open_spread(v, ALL4))»~\\textmu s across sets within one instance"),
+    ("s6-th-leaves", "Alone, the ten frequent and the ten random leaves make Tail-Hit «slower(v,'C_hit','leaf_freq_K10')»\\% "
+                     "and «slower(v,'C_hit','leaf_rand_K10')»\\% slower."),
+]
+OLD_LITERAL.update({"s5-open-within": "and varies across batches, so we do not order under this boundary any two sets "
+                                      "whose end-to-end latencies differ by less than that range.",
+                    "s6-th-leaves": "ten leaves provide no supported benefit beyond the interior path.\n"})
+CLAIMS = [(c, _follow(c, t)) for c, t in CLAIMS] + FOLLOW_NEW
