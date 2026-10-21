@@ -1146,3 +1146,74 @@ CLAIMS = [(c, _mbify(t)) for c, t in CLAIMS] + SIZE_NEW
 UNCHANGED = [(lrx, r"4\{,\}400(-page| calls)|about 4\{,\}400 or 480|\$\\approx\$4400", why)
              if why == "Dump set size (hotset)" else (lrx, srx, why)
              for lrx, srx, why in UNCHANGED if "unified_v5/grace_check" not in why]
+
+
+# ------------------------------------------- Tables 3 to 5 regenerated from raw (2026-10-20)
+# Table 3 (one instance, absolute us) became Figure boundary, Table 4 became Table matched, and
+# Table 5 gained CIs and a Tail-Hit block. The two tables are now written from raw.csv by
+# paper/tables/gen_tables.py, so their cell claims go. Sentences that cited the removed tables
+# now cite the figure, and the boundary paragraph states ten-instance values.
+B4 = ("layers_5", "2d", "2e_K10", "2f_slru")
+
+
+def shift(v, i):
+    """Points of the baseline that the external-warmer boundary adds, over the dumbbell sets."""
+    return lohi([v.u(w, s, metric="e2e_us") - v.u(w, s) for w in ALL4 for s in B4], i)
+
+
+def noise(v, w, s, metric):
+    assert v.ulo(w, s, metric=metric) < 0 < v.uhi(w, s, metric=metric), f"{w} {s} {metric} is not within noise"
+    return ""
+
+
+def same_order(v):
+    """'the open cost does not change the order among strategies' (means, every workload)."""
+    for w in ALL4:
+        warm = sorted(B4, key=lambda s: v.u(w, s))
+        ext = sorted(B4, key=lambda s: v.u(w, s, metric="e2e_us"))
+        assert warm == ext, f"{w}: order changes between the boundaries"
+    return ""
+
+
+def open_range(v, i):
+    """Open-cost median per (instance, workload, set) over the dumbbell sets, per-page."""
+    cells = {}
+    for r in v._raw():
+        if r["db"] == "orig" and r["arm"] == "async" and r["open_us"] and r["strategy"] in B4 and r["workload"] in ALL4:
+            cells.setdefault((r["seed"], r["workload"], r["strategy"]), []).append(float(r["open_us"]))
+    return lohi([statistics.median(x) for x in cells.values()], i)
+
+
+_GONE = ("s5-boundary", "s5-open-range")
+_REFS = (("(Table~\\ref{tab:competitive}, lower block)", "(Figure~\\ref{fig:reversal})"),
+         ("(Table~\\ref{tab:competitive})", "(Figure~\\ref{fig:reversal})"),
+         ("measured in the same batch as Table~\\ref{tab:e2e-ac},", "measured in the same batch as Figure~\\ref{fig:reversal},"),
+         ("fixed before the comparison.", "fixed before the comparison (Table~\\ref{tab:matched})."))
+
+
+def _retarget(cid, t):
+    for old, new in _REFS:
+        t = t.replace(old, new)
+    if cid == "s7-sampling":
+        cut = t.index("The single instance in Table~\\ref{tab:e2e-ac}")
+        t = t[:cut] + ("The baselines quoted in Section~\\ref{sec:methodology} come from one instance, an instantiation outlier on "
+                       "Scattered-Zipf-100K: its «us(v.base1('A'))»~\\textmu s baseline is far below the cross-instance median of "
+                       "«us(v.med('A','baseline'))»~\\textmu s.")
+    return t
+
+
+TABLES_NEW = [
+    ("s5-boundary-ten", T(r"Adding the database-open cost shifts every set by 22 to 25 points of the baseline, so across instances \strat{Skel} on Scattered-Zipf-100K moves from 28\% below baseline in the warm-process model to 3\% below, within noise, in the external-warmer model. On Tail-Mixed, whose cold query is longer, \strat{Skel} remains 14\% below baseline, whereas \strat{Dump} moves from 6\% below to 17\% above. Thus, in the cost model the open cost does not change the order among strategies,§0 but it can make no prefetch the better choice. The open cost is an uncontrolled term: its median ranges from 125 to 234~\textmu s across instances and sets",
+        ("22", "shift(v,0)"), ("25", "shift(v,1)"), ("28", "red(v.u('A','2d'))"),
+        ("3", "red(v.u('A','2d',metric='e2e_us')) + noise(v,'A','2d','e2e_us')"),
+        ("14", "red(v.u('C','2d',metric='e2e_us'))"), ("6", "red(v.u('C','2f_slru'))"),
+        ("17", "inc(v.u('C','2f_slru',metric='e2e_us'))"), ("§0", "same_order(v)"),
+        ("125", "open_range(v,0)"), ("234", "open_range(v,1)"))),
+]
+OLD_LITERAL.update({"s5-boundary-ten": "In one Scattered-Zipf-100K instance, adding the"})
+CLAIMS = [(c, _retarget(c, t)) for c, t in CLAIMS
+          if not c.startswith(("tab-e2e-", "tab-comp-", "tab-abl-")) and c not in _GONE] + TABLES_NEW
+UNCHANGED += [
+    (r"^\\caption\{The deployment boundary\.", ALL, "figure caption, no batch number"),
+    (r"^\\caption\{Matched budgets:", ALL, "table caption: margin, workload names, no batch number"),
+]

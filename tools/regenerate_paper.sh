@@ -13,7 +13,7 @@
 #      check reads the matched hotsets, the only work/ files committed (git add -f)
 #   4b. results/ow_native_e2e: summaries, uncertainty and host_comparison (the second host)
 #   4c. results/grace_check_v7: summaries of the grace-period check (v7 code)
-#   5. the data figures in paper/figures/            each figure's script
+#   5. the data figures in paper/figures/ and the two generated tables in paper/tables/
 #   6. every number in the text and tables           tools/paper_refresh.py check + inventory
 #
 # Every output is a committed file, so after a run `git status` lists exactly what did not
@@ -84,6 +84,8 @@ aggregate results/grace_check_v7 "sleep*ms/raw.csv"
 echo "== 5. figures"
 python3 paper/figures/gen_headline.py "$B"
 python3 paper/figures/gen_reversal.py "$B"
+python3 paper/figures/gen_boundary.py "$B"
+python3 paper/tables/gen_tables.py "$B"     # Tables matched and ablation, tabular bodies
 python3 paper/figures/gen_portability_scatter.py    # OpenWhisk comparison table, not the batch
 python3 figures/16_ram_pressure_sweep.py && cp figures/out/16_ram_pressure_sweep.png paper/figures/
 python3 figures/20_lambda_residency.py && cp figures/out/20_lambda_residency.png paper/figures/
