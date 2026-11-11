@@ -1,0 +1,16 @@
+A N=    0: predicted interior hit 0/10
+A N=    1: predicted interior hit 1/10
+A N=   10: predicted interior hit 8/10
+A N=  100: predicted interior hit 10/10
+A N= 1000: predicted interior hit 10/10
+B N=    0: predicted interior hit 0/10
+B N=    1: predicted interior hit 1/10
+B N=   10: predicted interior hit 8/10
+B N=  100: predicted interior hit 10/10
+B N= 1000: predicted interior hit 10/10
+C N=    0: predicted interior hit 0/10
+C N=    1: predicted interior hit 10/10
+C N=   10: predicted interior hit 10/10
+C N=  100: predicted interior hit 10/10
+C N= 1000: predicted interior hit 10/10
+capacity-sensitive rows: 0/150

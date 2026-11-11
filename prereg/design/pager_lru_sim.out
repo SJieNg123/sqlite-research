@@ -1,0 +1,9 @@
+== workload A: 1000000 reads, level-2 pages touched 9/50, distinct leaves 3316
+  C=450: N=0: root 0.000 L2 0.000 (min seed 0.000) | N=1: root 1.000 L2 0.127 (min seed 0.119) | N=10: root 1.000 L2 0.723 (min seed 0.703) | N=100: root 1.000 L2 0.998 (min seed 0.996) | N=1000: root 1.000 L2 1.000 (min seed 1.000) | N=10000: root 1.000 L2 1.000 (min seed 1.000)
+  C=483: N=0: root 0.000 L2 0.000 (min seed 0.000) | N=1: root 1.000 L2 0.127 (min seed 0.119) | N=10: root 1.000 L2 0.723 (min seed 0.703) | N=100: root 1.000 L2 0.998 (min seed 0.996) | N=1000: root 1.000 L2 1.000 (min seed 1.000) | N=10000: root 1.000 L2 1.000 (min seed 1.000)
+== workload B: 1000000 reads, level-2 pages touched 9/50, distinct leaves 3316
+  C=450: N=0: root 0.000 L2 0.000 (min seed 0.000) | N=1: root 1.000 L2 0.120 (min seed 0.118) | N=10: root 1.000 L2 0.718 (min seed 0.717) | N=100: root 1.000 L2 0.998 (min seed 0.997) | N=1000: root 1.000 L2 1.000 (min seed 1.000) | N=10000: root 1.000 L2 1.000 (min seed 1.000)
+  C=483: N=0: root 0.000 L2 0.000 (min seed 0.000) | N=1: root 1.000 L2 0.120 (min seed 0.118) | N=10: root 1.000 L2 0.718 (min seed 0.717) | N=100: root 1.000 L2 0.998 (min seed 0.997) | N=1000: root 1.000 L2 1.000 (min seed 1.000) | N=10000: root 1.000 L2 1.000 (min seed 1.000)
+== workload C: 1000000 reads, level-2 pages touched 1/50, distinct leaves 334
+  C=450: N=0: root 0.000 L2 0.000 (min seed 0.000) | N=1: root 1.000 L2 1.000 (min seed 1.000) | N=10: root 1.000 L2 1.000 (min seed 1.000) | N=100: root 1.000 L2 1.000 (min seed 1.000) | N=1000: root 1.000 L2 1.000 (min seed 1.000) | N=10000: root 1.000 L2 1.000 (min seed 1.000)
+  C=483: N=0: root 0.000 L2 0.000 (min seed 0.000) | N=1: root 1.000 L2 1.000 (min seed 1.000) | N=10: root 1.000 L2 1.000 (min seed 1.000) | N=100: root 1.000 L2 1.000 (min seed 1.000) | N=1000: root 1.000 L2 1.000 (min seed 1.000) | N=10000: root 1.000 L2 1.000 (min seed 1.000)
