@@ -63,7 +63,7 @@ legacy/                    # 已退場的早期實驗(multiprocess / prefetch_va
 三個 C binary 必須先編譯好(本 checkout 已附):
 
 ```bash
-cd pipeline/engine/benchmark_harness && gcc -O2 -o benchmark_harness benchmark_harness.c sqlite3.c -lpthread -ldl -lm && cd -
+cd pipeline/engine/benchmark_harness && gcc -O2 -I. -o benchmark_harness benchmark_harness.c sqlite3.c -lpthread -ldl -lm && cd -
 gcc -O2 -o pipeline/engine/prefetch_warmer/src/warmer        pipeline/engine/prefetch_warmer/src/warmer.c
 gcc -O2 -o pipeline/engine/residency_checker/residency_checker pipeline/engine/residency_checker/residency_checker.c
 ```
