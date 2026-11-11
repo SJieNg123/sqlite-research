@@ -516,7 +516,7 @@ def _discard_records(recdir, args):
     cache."""
     if not getattr(args, "discard_records", False):
         return
-    for pattern in ("ops*.csv", "run-*.log"):
+    for pattern in ("ops*.csv", "run-*.log", "run-*.memstat.csv"):
         for p in Path(recdir).glob(pattern):
             p.unlink(missing_ok=True)
 
